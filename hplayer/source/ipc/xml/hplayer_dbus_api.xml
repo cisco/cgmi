@@ -1,0 +1,276 @@
+<node>
+    <interface name="org.Cisco.Sail">
+        <!-- MEDIA PLAYER API -->
+        <!-- tAspectRatio:
+                 AR_4x3,
+                 AR_16x9,
+                 AR_4x3LB,
+                 AR_16x9PB,
+                 AR_4x3CCO,
+                 INVALID_AR
+          -->
+        <!-- tVideoCodec:
+                 VIDEO_CODEC_MPEG1,
+                 VIDEO_CODEC_MPEG2,
+                 VIDEO_CODEC_MPEG4,
+                 VIDEO_CODEC_H263,
+                 VIDEO_CODEC_H264,
+                 VIDEO_CODEC_H264SVC,
+                 VIDEO_CODEC_H264MVC,
+                 VIDEO_CODEC_VC1,
+                 VIDEO_CODEC_VC1ADV,
+                 VIDEO_CODEC_DIVX311,
+                 VIDEO_CODEC_AVS,
+                 VIDEO_CODEC_RV40,
+                 VIDEO_CODEC_VP6,
+                 VIDEO_CODEC_UNKNOWN
+          --> 
+        <method name="SailMediaPlayerGetVideoProperties">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="xRes" direction="out" type="u"/>
+            <arg name="yRes" direction="out" type="u"/>
+            <arg name="AspectRatio" direction="out" type="i"/>
+            <arg name="VideoCodec" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerOpen">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerClose">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerSetSource">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="source" direction="in" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerGetSource"> <!-- Returns incorrect source. -->
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="source" direction="out" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerCloseSource">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerSetSink">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="sink" direction="in" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerGetSink">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="sink" direction="out" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerSetPlaySpeed">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="speed" direction="in" type="d"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerGetPlaySpeed">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="speed" direction="out" type="d"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerGetSupportedSpeeds">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="speeds" direction="out" type="ad"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerSeek">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="offset" direction="in" type="x"/>
+            <arg name="whence" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerPlaybackInfo"> <!-- Only works on DVR. -->
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="ActualPlayPosition" direction="out" type="t"/>
+            <arg name="SizeInMS" direction="out" type="t"/>
+            <arg name="SizeInByte" direction="out" type="t"/>
+            <arg name="IsActiveRecording" direction="out" type="b"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- These next two don't seem to do much at the moment. -->
+        <method name="SailMediaPlayerSetEnabled">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="enabled" direction="in" type="b"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerIsEnabled">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="enabled" direction="out" type="b"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- Rectangle: x, y, width, height -->
+        <method name="SailMediaPlayerVideoScale">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="sourceRectangle" direction="in" type="ai"/>
+            <arg name="destinationRectangle" direction="in" type="ai"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerVideoFullScale">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="sourceRectangle" direction="in" type="ai"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- Audio -->
+        <method name="SailMediaPlayerGetNumberOfAudioStreams">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="Count" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerGetAudioStreamInfo">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="audioIndex" direction="in" type="i"/>
+            <arg name="AudioLanguage" direction="out" type="s"/>
+            <arg name="AudioType" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerGetSelectedAudioStream">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="AudioIndex" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerSelectAudioStream">
+            <arg name="playerId" direction="in" type="i"/>
+            <arg name="AudioIndex" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- This does not appear to work at this time.  You can set volume
+             to 0 though. -->
+        <method name="SailMediaPlayerAudioMute">
+            <arg name="enable" direction="in" type="b"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerGetVolume">
+            <arg name="left" direction="out" type="i"/>
+            <arg name="right" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerSetVolume">
+            <arg name="left" direction="in" type="i"/>
+            <arg name="right" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaPlayerIsAudioMuted">
+            <arg name="IsAudioMuted" direction="out" type="b"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- MEDIA RECORDER API -->
+        <method name="SailIsMediaRecorderAvailable">
+            <arg name="available" direction="out" type="b"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaRecorderStartAssetRecord">
+            <arg name="asset" direction="in" type="s"/>
+            <arg name="source" direction="in" type="s"/>
+            <arg name="time_len_ms" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaRecorderStopAssetRecord">
+            <arg name="asset" direction="in" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaRecorderDeleteAssetRecord">
+            <arg name="asset" direction="in" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaRecorderGetAssetRecordInfo">
+            <arg name="asset" direction="in" type="s"/>
+            <arg name="SizeInMS" direction="out" type="t"/>
+            <arg name="SizeInByte" direction="out" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- These Timeshift functions don't appear to be working. -->
+        <method name="SailMediaRecorderStartTimeshift">
+            <arg name="mediaPlayerId" direction="in" type="i"/>
+            <arg name="bufferSizeInMs" direction="in" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaRecorderStopTimeshift">
+            <arg name="mediaPlayerId" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaRecorderGetNumberOfAssets">
+            <arg name="Count" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="SailMediaRecorderGetAssetInfo">
+            <arg name="recordIndex" direction="in" type="i"/>
+            <arg name="seconds" direction="out" type="u"/>
+            <arg name="size" direction="out" type="t"/>
+            <arg name="path" direction="out" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- Signals -->
+        <!-- MediaEvent Signals:
+                 NOTIFY_STREAMING_OK,
+                 NOTIFY_STREAMING_NOT_OK,
+                 NOTIFY_SYNCHRONIZED,
+                 NOTIFY_START_OF_FILE,
+                 NOTIFY_END_OF_FILE,
+                 NOTIFY_END_OF_STREAM,
+                 NOTIFY_DECRYPTION_FAILED,
+                 NOTIFY_NO_DECRYPTION_KEY,
+                 NOTIFY_EITPF_AVAILABLE,
+                 NOTIFY_VIDEO_ASPECT_RATIO_CHANGED,
+                 NOTIFY_VIDEO_RESOLUTION_CHANGED,
+                 NOTIFY_DVB_SIGNAL_OK,
+                 NOTIFY_DVB_SIGNAL_NOT_OK,
+                 NOTIFY_DVB_TIME_SET,
+                 NOTIFY_CHANGED_LANGUAGE_AUDIO,
+                 NOTIFY_CHANGED_LANGUAGE_SUBTITLE,
+                 NOTIFY_CHANGED_LANGUAGE_TELETEXT,
+                 NOTIFY_MEDIAPLAYER_OPEN,
+                 NOTIFY_MEDIAPLAYER_SOURCE_SET,
+                 NOTIFY_MEDIAPLAYER_CLOSE,
+                 NOTIFY_MEDIAPLAYER_BITRATE_CHANGE
+          -->
+        <signal name="SailMediaPlayerNotify">
+            <arg name="playerId" type="i"/>
+            <arg name="sourceURI" type="s"/>
+            <arg name="MediaEvent" type="i" />
+            <arg name="data" type="i" /> <!-- Used to pass event-specific information. -->
+        </signal>
+
+        <property name="Verbose" type="b" access="readwrite"/>
+    </interface>
+</node>
