@@ -119,7 +119,7 @@ static tPlayerHandle *lockHandle( int Id )
 {
    if ( Id < MAX_PLAYER_HANDLES )
    {
-      LOCK( gPlayerHandle[Id].lock );
+      //LOCK( gPlayerHandle[Id].lock );
       return &gPlayerHandle[Id];
    }
 
@@ -128,7 +128,7 @@ static tPlayerHandle *lockHandle( int Id )
 
 static void unlockHandle( tPlayerHandle *handle )
 {
-   UNLOCK( handle->lock );
+   //UNLOCK( handle->lock );
 }
 
 SailError MediaPlayerOpen( int mediaPlayerId, MediaPlayerCallback callback, void *userParam )
