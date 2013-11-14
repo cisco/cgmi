@@ -79,7 +79,7 @@ cgmi_Status cgmi_Play    (void *pSession);
 cgmi_Status cgmi_SetRate      (void *pSession,  float rate);
 cgmi_Status cgmi_SetPosition  (void *pSession,  float position);
 cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition);
-cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionType *type);
+cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionType type);
 cgmi_Status cgmi_GetRateRange (void *pSession,  float *pRewind, float *pFFoward );
 
 cgmi_Status cgmi_GetNumAudioStreams (void *pSession,  int *count);

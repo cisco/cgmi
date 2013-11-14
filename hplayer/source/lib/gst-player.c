@@ -10,144 +10,79 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
 #include "gst_player.h"
-
-typedef void* ciscoGstFilter;
-
-#define MAX_NUM_SECTION_FILTERS   3
-#define FILTER_DATA_SIZE          16
-#define FILTER_MASK_SIZE          16
-
-typedef enum
-{
-    FILTER_TYPE_IP,
-    FILTER_TYPE_TUNER
-} ciscoGstFilterType;
-
-typedef enum
-{
-    FILTER_OPEN  = 1,
-    FILTER_START = 2, 
-    FILTER_STOP  = 4,
-    FILTER_CLOSE = 8,
-    FILTER_SET   = 16
-} ciscoGstFilterAction;
-
-typedef enum
-{
-    FILTER_COMP_EQ,
-    FILTER_COMP_NE
-} ciscoGstFilterComp;
-
-typedef struct 
-{
-    gint pid;
-    struct
-    {
-        guchar *value;
-        guchar *mask;
-        guint offset;
-        ciscoGstFilterComp comparitor;
-        gint length;
-    }filter;
-} ciscoGstFilterParam;
-
-typedef struct
-{
-   gchar          *playbackURI; /* URI to playback */
-   GMainLoop      *loop;
-   GstElement     *pipeline;
-   GstElement     *source;
-   GstElement     *videoSink;
-   GstElement     *demux;
-   GstElement     *appsink;
-   GstBus         *bus;
-   GstMessage     *msg;
-   gint64         rate; //Default to play speed
-
-} ciscoGstOptions;
+#include "cgmiPlayerApi.h"
 
 
-typedef enum {
-   GST_PLAY_FLAG_VIDEO                = 0x1,
-   GST_PLAY_FLAG_AUDIO                = 0x2,
-   GST_PLAY_FLAG_NATIVE_VIDEO         = 0x20,
-   GST_PLAY_FLAG_NATIVE_AUDIO         = 0x40,
-   GST_PLAY_FLAG_BUFFER_AFTER_DEMUX   = 0x100        
-} ciscoGstPlayFlags;
+
 
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
-static gpointer cisco_gst_launch_gmainloop (gpointer data)
-{
-   tSession *pSession = (tSession*) data;
-   GMainContext *thread_context;
 
-    thread_context = g_main_context_new ();
-   pSession->loop = g_main_loop_new (thread_context, FALSE);
-   if (pSession->loop == NULL)
+static void* cisco_gst_launch_gmainloop (void* data)
+{
+   tSession *pSess = (tSession*) data;
+
+   pSess->loop = g_main_loop_new (NULL, FALSE);
+   if (pSess->loop == NULL)
    {
-      g_print("Error Cereating a new Loop\n");
+      GST_WARNING("Error creating a new Loop\n");
    }
-   g_main_context_push_thread_default (thread_context);
-   // save this context for later use.
-   pSession->thread_context = g_main_context_ref_thread_default(); 
-   //add the bus watch
-   gst_bus_add_watch( pSession->bus, cisco_gst_handle_msg, pSession );
-   g_print("about to start the loop\n");
-   g_main_loop_run(pSession->loop);
-   g_print("Exiting gmainloop\n");
+   GST_INFO("about to start the loop\n");
+   g_main_loop_run(pSess->loop);
+   GST_WARNING("Exiting gmainloop\n");
+   return NULL;
 }
 
-static void cisco_gst_setState( tSession *pSession, GstState state )
+static void cisco_gst_setState( tSession *pSess, GstState state )
 {
    GstStateChangeReturn sret;
 
-   sret = gst_element_set_state( pSession->pipeline, state );
+   sret = gst_element_set_state( pSess->pipeline, state );
    switch ( sret )
    {
       case GST_STATE_CHANGE_FAILURE:
-         g_print("Set NULL State Failure\n");
+         GST_WARNING("Set NULL State Failure\n");
          break;
       case GST_STATE_CHANGE_NO_PREROLL:
-         g_print("Set NULL State No Preroll\n");
+         GST_WARNING("Set NULL State No Preroll\n");
          break;
       case GST_STATE_CHANGE_ASYNC:
-         g_print("Set NULL State Async\n");
+         GST_WARNING("Set NULL State Async\n");
          break;
       case GST_STATE_CHANGE_SUCCESS:
-         g_print("Set NULL State Succeeded\n");
+         GST_INFO("Set NULL State Succeeded\n");
          break;
       default:
-         g_print("Set NULL State Unknown\n");
+         GST_WARNING("Set NULL State Unknown\n");
          break;
    }
 
    return;
 }
-void debug_cisco_gst_streamDurPos( tSession *pSession )
+void debug_cisco_gst_streamDurPos( tSession *pSess )
 {
    
    gint64 curPos = 0, curDur = 0;
    GstFormat gstFormat = GST_FORMAT_TIME;
  
-   gst_element_query_position( pSession->pipeline, &gstFormat, &curPos );
-   gst_element_query_duration( pSession->pipeline, &gstFormat, &curDur );
+   gst_element_query_position( pSess->pipeline, &gstFormat, &curPos );
+   gst_element_query_duration( pSess->pipeline, &gstFormat, &curDur );
 
-   g_print("Stream: %s\n", pSession->playbackURI );
-   g_print("Position: %lld (seconds)\n", (curPos/GST_SECOND), gstFormat );
-   g_print("Duration: %lld (seconds)\n", (curDur/GST_SECOND), gstFormat );
+   GST_INFO("Stream: %s\n", pSess->playbackURI );
+   GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND), gstFormat );
+   GST_INFO("Duration: %lld (seconds)\n", (curDur/GST_SECOND), gstFormat );
  
 }
 
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data )
 {
-   tSession *pSession = (tSession*)data;
+   tSession *pSess = (tSession*)data;
 
    switch( GST_MESSAGE_TYPE(msg) )
    {
-      g_print("Got bus message of type: %s\n", GST_MESSAGE_SRC_NAME(msg));
+      GST_INFO("Got bus message of type: %s\n", GST_MESSAGE_SRC_NAME(msg));
       
       case GST_MESSAGE_EOS:
-         g_print("End of Stream\n");
+         GST_INFO("End of Stream\n");
          break;
       case GST_MESSAGE_ERROR:
          {
@@ -157,7 +92,7 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
             gst_message_parse_error( msg, &error, &debug );
             g_free( debug );
 
-            g_printerr("Error: %s\n", error->message);
+            GST_WARNING("Error: %s\n", error->message);
             g_error_free( error );
 
             break;
@@ -165,18 +100,18 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
       case GST_MESSAGE_STATE_CHANGED:
          {
             /* only check message from the pipeline */
-            if( GST_MESSAGE_SRC(msg) == GST_OBJECT(pSession->pipeline) )
+            if( GST_MESSAGE_SRC(msg) == GST_OBJECT(pSess->pipeline) )
             {
                GstState old_state, new_state, pending_state;
 
                gst_message_parse_state_changed( msg, &old_state, &new_state, &pending_state );
-               g_print("Pipeline state change from %s to %s\n", gst_element_state_get_name(old_state), gst_element_state_get_name(new_state));
+               GST_INFO("Pipeline state change from %s to %s\n", gst_element_state_get_name(old_state), gst_element_state_get_name(new_state));
 
 
                /* Print position and duration when in playing state */
                if( GST_STATE_PLAYING == new_state )
                {
-                  debug_cisco_gst_streamDurPos(pSession);
+                  debug_cisco_gst_streamDurPos(pSess);
                }
             }
          }
@@ -190,12 +125,14 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
 }
 
 
-
-gboolean cisco_gst_init( int argc, char *argv[] )
+cgmi_Status cgmi_Init(void)
 {
-   gboolean bReturn     = TRUE;
+   cgmi_Status   stat = CGMI_ERROR_SUCCESS; 
    gchar    *strVersion = NULL;
    GError   *error      = NULL;
+   int argc =0;
+   char **argv;
+   argv=0;
    
    do 
    {
@@ -203,7 +140,7 @@ gboolean cisco_gst_init( int argc, char *argv[] )
       if( !gst_init_check( &argc, &argv, &error ) )
       {
          g_critical("Failed to initialize gstreamer :%s\n", error->message);
-         bReturn = FALSE;
+         stat = CGMI_ERROR_NOT_INITIALIZED;
          break;
       }
 
@@ -211,7 +148,7 @@ gboolean cisco_gst_init( int argc, char *argv[] )
       if( !g_thread_supported() )
       {
          g_critical("GLib Thread system not initialized\n");
-         bReturn = FALSE;
+         stat = CGMI_ERROR_NOT_SUPPORTED;
          break;
       }
 
@@ -220,67 +157,74 @@ gboolean cisco_gst_init( int argc, char *argv[] )
       g_message("GStreamer Initialized with Version: %s\n", strVersion);
       g_free( strVersion );
 
-   
    } while(0);
 
-   return bReturn;
+   return stat;
 }
-
-void cisco_gst_deinit( void )
+cgmi_Status cgmi_Term (void)
 {
+
    gst_deinit();
 
-   return;
+   return CGMI_ERROR_SUCCESS;
 }
 
 
-tSession*  cisco_create_session(void * usrParam)
+cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, void **pSession )
 {
-   tSession *pSession = NULL;
+   tSession *pSess = NULL;
 
-   pSession = g_malloc0(sizeof(tSession));
-   if (pSession == NULL){return NULL;}
-   pSession->usrParam = usrParam;
-   pSession->playbackURI = NULL;
-   pSession->manualPipeline = NULL;
+   pSess = g_malloc0(sizeof(tSession));
+   if (pSess == NULL)
+   {
+      return CGMI_ERROR_OUT_OF_MEMORY;
+   }
+   *pSession = pSess; 
+   pSess->usrParam = pUserData;
+   pSess->playbackURI = NULL;
+   pSess->manualPipeline = NULL;
 
+   if (0!= pthread_create(&(pSess->thread), NULL, cisco_gst_launch_gmainloop, (void*)pSess))
+   {
+      GST_INFO("Error launching thread for gmainloop\n");
+   }
 
-  // if ((pSession->thread =g_thread_create (cisco_gst_launch_gmainloop, pSession, TRUE, &err1)) == NULL)
-//   {
-//      GST_ERROR("Not able to launch the gmainloop thread: %s\n", err1->message);
-//      //How do we handle this failure?
-//      //
-//   }
    //need a blocking semaphore here
    // but instead I will spin until the 
    // gmainloop is running
+   while (FALSE == g_main_loop_is_running(pSess->loop))
+   {
+      g_usleep(100); 
+   }
+   GST_INFO("ok the gmainloop for the thread ctx is running\n");
 
-   return pSession;
+   return CGMI_ERROR_SUCCESS;
 }
 
-void cisco_delete_session(tSession *pSession)
+cgmi_Status cgmi_DestroySession (void *pSession)
 {
+   tSession *pSess = (tSession*)pSession;
    GstState curState, pendState;
 
-   gst_element_get_state( pSession->pipeline, &curState, &pendState, GST_CLOCK_TIME_NONE );
+   gst_element_get_state( pSess->pipeline, &curState, &pendState, GST_CLOCK_TIME_NONE );
    if( GST_STATE_NULL != curState )
    {
-      g_print("The pipeline is in the wrong state to delete this session. Are you still playing?\n");
-      return;
+      GST_WARNING("The pipeline is in the wrong state to delete this session. Are you still playing?\n");
+      return CGMI_ERROR_NOT_READY;
    }
 
-   g_main_loop_quit (pSession->loop);
-   g_thread_join (pSession->thread);
-   if (pSession->playbackURI) {g_free(pSession->playbackURI);}
-   if (pSession->manualPipeline) {g_free(pSession->manualPipeline);}
-   if (pSession->pipeline) {gst_object_unref (GST_OBJECT (pSession->pipeline));}
-   if (pSession->loop) {g_main_loop_unref(pSession->loop);}
-   g_free(pSession);
+   g_main_loop_quit (pSess->loop);
+   pthread_join (pSess->thread, NULL);
+   if (pSess->playbackURI) {g_free(pSess->playbackURI);}
+   if (pSess->manualPipeline) {g_free(pSess->manualPipeline);}
+   if (pSess->pipeline) {gst_object_unref (GST_OBJECT (pSess->pipeline));}
+   if (pSess->loop) {g_main_loop_unref(pSess->loop);}
+   g_free(pSess);
 
 }
 
 
-gint cisco_gst_set_pipeline(tSession *pSession, char *uri, const char *manualPipeline )
+cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 {
    GError *g_error_str =NULL; 
    GstParseFlags flags;
@@ -289,31 +233,35 @@ gint cisco_gst_set_pipeline(tSession *pSession, char *uri, const char *manualPip
    gint ret =0;
    gchar *pPipeline;
    GError   *err1 = NULL ;
-
+   cgmi_Status stat;
+   tSession *pSess = (tSession*)pSession;
 
    pPipeline = g_strnfill(1024, '\0');
    if (pPipeline == NULL)
    {
-      g_print("Error allocating memory\n");
-      return -1;
+      GST_WARNING("Error allocating memory\n");
+      return CGMI_ERROR_OUT_OF_MEMORY;
    }
    
 
-    pSession->playbackURI = g_strdup(uri);
-    if (pSession->playbackURI == NULL)
+    pSess->playbackURI = g_strdup(uri);
+    if (pSess->playbackURI == NULL)
     {
        printf("Not able to allocate memory\n");
+      return CGMI_ERROR_OUT_OF_MEMORY;
     }
-    printf("URI: %s\n", pSession->playbackURI);
+    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
 
-   if (manualPipeline)
-   {
-      GST_INFO("Setting up a manual Pipeline %s \n", manualPipeline);
-      g_strlcpy(pPipeline, manualPipeline, 1024);
-      pSession->manualPipeline = g_strdup(manualPipeline);
-   }
-   else
+
+
+//rms    if (manualPipeline)
+//rms    {
+//rms       GST_INFO("Setting up a manual Pipeline %s \n", manualPipeline);
+//rms       g_strlcpy(pPipeline, manualPipeline, 1024);
+//rms       pSess->manualPipeline = g_strdup(manualPipeline);
+//rms    }
+//rms    else
    {
       g_strlcpy(pPipeline, "playbin2 uri=", 1024);
       g_strlcat(pPipeline, uri, 1024);
@@ -322,14 +270,14 @@ gint cisco_gst_set_pipeline(tSession *pSession, char *uri, const char *manualPip
 
    do
    {
-      g_print("Launching the pipeline with :\n%s\n",pPipeline);
+      GST_INFO("Launching the pipeline with :\n%s\n",pPipeline);
 
       ctx = gst_parse_context_new ();
-      pSession->pipeline = gst_parse_launch_full(pPipeline,
+      pSess->pipeline = gst_parse_launch_full(pPipeline,
                                            ctx,
                                            GST_PARSE_FLAG_FATAL_ERRORS,
                                            &g_error_str);
-      if (pSession->pipeline == NULL)
+      if (pSess->pipeline == NULL)
       {
          GST_WARNING("PipeLine was not able to be created\n");
          if (g_error_str)
@@ -351,27 +299,20 @@ gint cisco_gst_set_pipeline(tSession *pSession, char *uri, const char *manualPip
             }
             g_strfreev(arr);
          }
-         ret = -1;
+         stat = CGMI_ERROR_NOT_IMPLEMENTED;
          break;
       }
-   }while(0);
-
    /* Add bus watch for events and messages */
-   pSession->bus = gst_element_get_bus( pSession->pipeline );
-   if (pSession->bus == NULL)
+   pSess->bus = gst_element_get_bus( pSess->pipeline );
+   if (pSess->bus == NULL)
    {
       GST_ERROR("THe bus is null in the pipeline\n");
    }
-   if ((pSession->thread =g_thread_create (cisco_gst_launch_gmainloop, pSession, TRUE, &err1)) == NULL)
-   {
-      GST_ERROR("Not able to launch the gmainloop thread: %s\n", err1->message);
-      //
-   }
-   while (FALSE == g_main_loop_is_running(pSession->loop))
-   {
-      g_usleep(100); 
-   }
-   g_print("ok the gmainloop for the thread ctx is running\n");
+   //add the bus watch
+   gst_bus_add_watch( pSess->bus, cisco_gst_handle_msg, pSess );
+
+   }while(0);
+
    // free memory
    gst_parse_context_free(ctx);
    if(g_error_str){g_error_free(g_error_str);}
@@ -379,15 +320,122 @@ gint cisco_gst_set_pipeline(tSession *pSession, char *uri, const char *manualPip
 }
 
 
-
-gint cisco_gst_play(tSession *pSession  )
+cgmi_Status cgmi_Unload  (void *pSession )
 {
-   cisco_gst_setState( pSession, GST_STATE_PLAYING);
-   return 0;
+   
+   tSession *pSess = (tSession*)pSession;
+   cgmi_Status stat = CGMI_ERROR_SUCCESS;
+   // we need to tear down the pipeline
+
+   do
+   {
+      gst_element_set_state (pSess->pipeline, GST_STATE_NULL);
+      gst_bus_remove_signal_watch(pSess->bus);
+
+      g_print ("Deleting pipeline\n");
+      gst_object_unref (GST_OBJECT (pSess->pipeline));
+
+   }while (0);
+   return stat;
 }
-gint cisco_gst_pause(tSession *pSession  )
+cgmi_Status cgmi_Play    (void *pSession)
 {
-   cisco_gst_setState( pSession, GST_STATE_PAUSED);
-   return 0;
+   tSession *pSess = (tSession*)pSession;
+   cgmi_Status stat = CGMI_ERROR_SUCCESS;
+
+   cisco_gst_setState( pSess, GST_STATE_PLAYING);
+   return stat;
+}
+cgmi_Status cgmi_SetRate (void *pSession,  float rate)
+{
+
+   tSession *pSess = (tSession*)pSession;
+   cgmi_Status stat = CGMI_ERROR_SUCCESS;
+
+   if (rate == 0.0)
+   {
+      cisco_gst_setState( pSess, GST_STATE_PAUSED);
+   }
+   else if ( rate == 1.0)
+   {
+      cisco_gst_setState( pSess, GST_STATE_PLAYING);
+   }
+   else
+   {
+      GST_WARNING("This rate is not supported\n");
+      stat = CGMI_ERROR_NOT_SUPPORTED;
+   }
+
+   return stat;
 }
 
+cgmi_Status cgmi_SetPosition  (void *pSession,  float position)
+{
+
+   tSession *pSess = (tSession*)pSession;
+   cgmi_Status stat = CGMI_ERROR_SUCCESS;
+
+   do
+   {
+
+   } while (0);
+   return stat;
+
+}
+
+cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition)
+{
+
+   tSession *pSess = (tSession*)pSession;
+   gint64 curPos = 0; 
+   GstFormat gstFormat = GST_FORMAT_TIME;
+   cgmi_Status stat = CGMI_ERROR_SUCCESS;
+
+   // this returns nano seconds, change it to seconds.
+   do
+   {
+
+      gst_element_query_position( pSess->pipeline, &gstFormat, &curPos );
+
+      GST_INFO("Stream: %s\n", pSess->playbackURI );
+      GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND) );
+      *pPosition = (curPos/GST_SECOND);
+
+   } while (0);
+   return stat;
+
+}
+cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionType type)
+{
+
+   tSession *pSess = (tSession*)pSession;
+   cgmi_Status stat = CGMI_ERROR_SUCCESS;
+   gint64 Duration = 0; 
+   GstFormat gstFormat = GST_FORMAT_TIME;
+
+   do
+   {
+      gst_element_query_duration( pSess->pipeline, &gstFormat, &Duration );
+
+      GST_INFO("Stream: %s\n", pSess->playbackURI );
+      GST_INFO("Position: %lld (seconds)\n", (Duration/GST_SECOND) );
+      *pDuration = (Duration/GST_SECOND);
+
+   } while (0);
+   return stat;
+
+}
+cgmi_Status cgmi_GetRateRange (void *pSession,  float *pRewind, float *pFFoward )
+{
+
+   tSession *pSess = (tSession*)pSession;
+   cgmi_Status stat =CGMI_ERROR_NOT_IMPLEMENTED ;
+
+   do
+   {
+
+
+   } while (0);
+   return stat;
+
+}

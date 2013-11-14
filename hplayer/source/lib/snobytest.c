@@ -8,45 +8,89 @@
 #include <unistd.h>
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
-#include "gst_player.h"
+#include "cgmiPlayerApi.h"
 
 
+void EventCallback(void *pUserData, void* pSession, tcgmi_Event event )
+{
+
+}
 
 
 int main( int argc, char *argv[] )
 {
-   gboolean bOK;
-   tSession *pSession = NULL;
+   void *pSession = NULL;
+   cgmi_Status stat = CGMI_ERROR_SUCCESS;
    int ch;
+   float curPos;
+   float Duration;
 
-   bOK = cisco_gst_init( argc, argv );
-   pSession =  cisco_create_session(NULL );
+   cgmi_Init( );
+
+   stat  =  cgmi_CreateSession(EventCallback, NULL, &pSession );
+   if (stat != CGMI_ERROR_SUCCESS)
+   {
+      printf("Error creating the sesion\n");
+      return -1;
+   }
 
    //cisco_gst_set_pipeline(pSession, "file:///var/www/vegas.ts", "filesrc location=///var/www/vegas.ts ! tsdemux name=d ! queue max-size-buffers=0 max-size-time=0 ! aacparse ! faad ! audioconvert ! audioresample ! autoaudiosink d. ! queue max-size-buffers=0 max-size-time=0 ! ffdec_h264 ! ffmpegcolorspace ! videoscale ! autovideosink");
-   cisco_gst_set_pipeline(pSession, "file:///var/www/vegas.ts",NULL );
+   stat  =  cgmi_Load(pSession, "file:///var/www/vegas.ts");
+   if (stat != CGMI_ERROR_SUCCESS)
+   {
+      printf("Error Loading the sesion\n");
+      return -1;
+   }
 
 
-   cisco_gst_play(pSession);
+   stat = cgmi_Play(pSession);
+   if (stat != CGMI_ERROR_SUCCESS)
+   {
+      printf("Error attemtping to play\n");
+      return -1;
+   }
 
 
    while(1)
    {
+
       printf("hit any key to quit\n");
       printf("hit p to play\n");
       printf("hit r to pause\n");
       ch = getchar();
 
       if (ch == 'q'){break;}
-      if (ch == 'p'){cisco_gst_play(pSession);}
-      if (ch == 'r'){cisco_gst_pause(pSession);}
+      if (ch == 'p'){cgmi_SetRate(pSession, 1);}
+      if (ch == 'r'){cgmi_SetRate(pSession, 0);}
 
-  
-      debug_cisco_gst_streamDurPos( pSession );
+
+      stat = cgmi_GetPosition(pSession, &curPos);
+      if (stat != CGMI_ERROR_SUCCESS)
+      {
+         printf("Error Getting Position\n");
+         return -1;
+      }
+      printf("Current Position: %f (seconds) \n",curPos);
+
+      stat = cgmi_GetDuration(pSession, &Duration, FIXED);
+      if (stat != CGMI_ERROR_SUCCESS)
+      {
+         printf("Error Getting the duration \n");
+         return -1;
+      }
+      printf("Duration: %f (seconds) \n",Duration);
    }
 
-   
+   printf("unloading\n");
+   stat = cgmi_Unload(pSession);
+   if (stat != CGMI_ERROR_SUCCESS)
+   {
+      printf("Error unloading \n");
+      return -1;
+   }
 
-   cisco_delete_session(pSession);
-   cisco_gst_deinit( );
+
+
+   cgmi_Term( );
 
 }

@@ -8,8 +8,7 @@ extern "C"
 #endif
 typedef struct
 {
-   GThread        *thread;
-   GMainContext   *thread_context;
+   pthread_t      thread;
    gchar          *playbackURI; /* URI to playback */
    gchar          *manualPipeline; /* URI to playback */
    GMainLoop      *loop;
