@@ -1,0 +1,164 @@
+<node>
+    <interface name="org.cisco.cgmi">
+
+        <method name="init">
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="term">
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="createSession">
+            <arg name="sessionId" direction="out" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="destroySession">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="canPlayType">
+            <arg name="type" direction="in" type="s"/>
+            <arg name="pbCanPlay" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="load">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="uri" direction="in" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="unload">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="play">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="setRate">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="rate" direction="in" type="d"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="setPosition">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="position" direction="in" type="d"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getPosition">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="position" direction="out" type="d"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getDuration">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="type" direction="in" type="i"/>
+            <arg name="duration" direction="out" type="d"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getRateRange">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="rewind" direction="out" type="d"/>
+            <arg name="fForward" direction="out" type="d"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- Audio APIs -->
+        <method name="getNumAudioStreams">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="count" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getAudioStreamInfo">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="index" direction="in" type="i"/>
+            <arg name="bufSize" direction="in" type="i"/>
+            <arg name="buffer" direction="out" type="ay"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="setAudioStream">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="index" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="setDefaultAudioLang">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="language" direction="in" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- Section Filter APIs -->
+        <method name="createSectionFilter">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="filterPriv" direction="in" type="t"/>
+            <arg name="filterId" direction="out" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="destroySectionFilter">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="filterId" direction="in" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="setSectionFilter">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="filterId" direction="in" type="t"/>
+            <arg name="filter" direction="in" type="ay"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="startSectionFilter">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="filterId" direction="in" type="t"/>
+            <arg name="timeout" direction="in" type="i"/>
+            <arg name="oneShot" direction="in" type="i"/>
+            <arg name="enableCRC" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="stopSectionFilter">
+            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="filterId" direction="in" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- Section Filter callbacks -->
+        <signal name="queryBufferNotify">
+            <arg name="userData" type="t"/>
+            <arg name="filterPriv" type="t"/>
+            <arg name="filterId" type="t"/>
+        </signal>
+
+        <signal name="sectionBufferNotify">
+            <arg name="userData" type="t"/>
+            <arg name="filterPriv" type="t"/>
+            <arg name="filterId" type="t"/>
+            <arg name="sectionStatus" type="i"/>
+            <arg name="section" type="ay"/>
+            <arg name="sectionSize" type="i" />
+        </signal>
+
+        <!-- Player callback -->
+        <signal name="playerNotify">
+            <arg name="sessionHandle" type="t"/>
+            <arg name="event" type="i" />
+            <arg name="data" type="i" />
+        </signal>
+
+        <property name="Verbose" type="b" access="readwrite"/>
+    </interface>
+</node>
