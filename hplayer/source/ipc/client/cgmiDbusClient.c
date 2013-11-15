@@ -218,6 +218,8 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
             break;
         }
 
+        *pSession = sessionId;
+
         eventCbData = g_malloc0(sizeof(tcgmi_PlayerEventCallbackData));
         if (eventCbData == NULL)
         {

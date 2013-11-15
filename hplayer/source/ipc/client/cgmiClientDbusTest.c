@@ -88,6 +88,7 @@ static gpointer sanity(gpointer user_data)
     g_print("Calling cgmi_CreateSession...\n");
     stat = cgmi_CreateSession( cgmiCallback, NULL, &pSessionId );
     CHECK_ERROR(stat);
+    g_print("create session returned sessionId = (%lx)\n", (guint64)pSessionId);
 
     g_print("Calling cgmi_Load...\n");
     stat = cgmi_Load( pSessionId, url );
