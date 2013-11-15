@@ -439,3 +439,57 @@ cgmi_Status cgmi_GetRateRange (void *pSession,  float *pRewind, float *pFFoward 
    return stat;
 
 }
+
+cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay )
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+
+cgmi_Status cgmi_GetNumAudioStreams (void *pSession,  int *count)
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+cgmi_Status cgmi_GetAudioStreamInfo (void *pSession,  int index, char* buf, int bufSize)
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+cgmi_Status cgmi_SetAudioStream (void *pSession,  int index )
+
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language )
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** pFilterId  )
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId  )
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterData *pFilter  )
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+cgmi_Status cgmi_StartSectionFilter(void *pSession, void* pFilterId, int timeout, int bOneShot , int bEnableCRC, queryBufferCB bufferCB,  sectionBufferCB sectionCB)
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+cgmi_Status cgmi_StopSectionFilter(void *pSession, void* pFilterId )
+{
+   return CGMI_ERROR_NOT_IMPLEMENTED;
+}
+
+

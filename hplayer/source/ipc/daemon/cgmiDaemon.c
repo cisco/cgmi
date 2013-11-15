@@ -16,9 +16,9 @@
 
 #ifdef LOGGING_ENABLED
 #define LOG_LEVEL(level, ...) g_print("CGMI_DAEMON %s:%d - %s %s :: ", \
-    __FILE__, __LINE__, __FUNCTION__, level); g_print(__VA_ARGS__)
+                                      __FILE__, __LINE__, __FUNCTION__, level); g_print(__VA_ARGS__)
 #define LOG_TRACE_ENTER()    g_print("%s:%d - %s >>>> Enter\n", \
-    __FILE__, __LINE__, __FUNCTION__);
+                                     __FILE__, __LINE__, __FUNCTION__);
 
 #else
 #define LOG_LEVEL(level, ...)
@@ -37,45 +37,50 @@ void cgmiEventCallback( void *pUserData, void *pSession, tcgmi_Event event )
 {
 
     org_cisco_cgmi_emit_player_notify( (OrgCiscoCgmi *) pUserData,
-                                       (guint64)pSession, 
+                                       (guint64)pSession,
                                        event,
                                        0 );
 
-    g_print("cgmiEventCallback -- pSession: %lu, event%d \n", 
-        (guint64)pSession, event);
+    g_print("cgmiEventCallback -- pSession: %lu, event%d \n",
+            (guint64)pSession, event);
 }
 
-static cgmi_Status cgmiQueryBufferCallback(void *pUserData, void *pFilterPriv, 
-    void* pFilterId, char **ppBuffer, int* pBufferSize )
+static cgmi_Status cgmiQueryBufferCallback(
+    void *pUserData,
+    void *pFilterPriv,
+    void *pFilterId,
+    char **ppBuffer,
+    int *pBufferSize )
 {
 
     org_cisco_cgmi_emit_query_buffer_notify( (OrgCiscoCgmi *) pUserData,
-                                       0,
-                                       (guint64)pFilterPriv,
-                                       (guint64)pFilterId);
+            0,
+            (guint64)pFilterPriv,
+            (guint64)pFilterId);
 
-    g_print("cgmiQueryBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n", 
-        (guint64)pFilterId, (guint64)pFilterPriv);
+    g_print("cgmiQueryBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
+            (guint64)pFilterId, (guint64)pFilterPriv);
 }
 
-static cgmi_Status cgmiSectionBufferCallback(void *pUserData, 
-    void *pFilterPriv, 
-    void* pFilterId, 
-    cgmi_Status sectionStatus, 
-    const char *pSection, 
+static cgmi_Status cgmiSectionBufferCallback(
+    void *pUserData,
+    void *pFilterPriv,
+    void *pFilterId,
+    cgmi_Status sectionStatus,
+    const char *pSection,
     int sectionSize)
 {
 
     org_cisco_cgmi_emit_section_buffer_notify( (OrgCiscoCgmi *) pUserData,
-                                        0,
-                                       (guint64)pFilterPriv, 
-                                       (guint64)pFilterId,
-                                       (gint)sectionStatus,
-                                       pSection,
-                                       sectionSize );
+            0,
+            (guint64)pFilterPriv,
+            (guint64)pFilterId,
+            (gint)sectionStatus,
+            pSection,
+            sectionSize );
 
-    g_print("cgmiSectionBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n", 
-        (guint64)pFilterId, (guint64)pFilterPriv);
+    g_print("cgmiSectionBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
+            (guint64)pFilterId, (guint64)pFilterPriv);
 
 }
 
@@ -94,10 +99,10 @@ on_handle_cgmi_init (
     stat = cgmi_Init( );
 
     org_cisco_cgmi_complete_init (object,
-                                    invocation,
-                                    stat);
+                                  invocation,
+                                  stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -112,10 +117,10 @@ on_handle_cgmi_term (
     stat = cgmi_Term( );
 
     org_cisco_cgmi_complete_term (object,
-                                    invocation,
-                                    stat);
+                                  invocation,
+                                  stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -131,11 +136,11 @@ on_handle_cgmi_create_session (
     stat = cgmi_CreateSession( cgmiEventCallback, (void *)object, &pSessionId );
 
     org_cisco_cgmi_complete_create_session (object,
-                                    invocation,
-                                    (guint64)pSessionId,
-                                    stat);
+                                            invocation,
+                                            (guint64)pSessionId,
+                                            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -151,10 +156,10 @@ on_handle_cgmi_destroy_session (
     stat = cgmi_DestroySession( (void *)arg_sessionId );
 
     org_cisco_cgmi_complete_destroy_session (object,
-                                    invocation,
-                                    stat);
+            invocation,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -171,11 +176,11 @@ on_handle_cgmi_can_play_type (
     stat = cgmi_canPlayType( arg_type, &bCanPlay );
 
     org_cisco_cgmi_complete_can_play_type (object,
-                                    invocation,
-                                    bCanPlay,
-                                    stat);
+                                           invocation,
+                                           bCanPlay,
+                                           stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -192,10 +197,10 @@ on_handle_cgmi_load (
     stat = cgmi_Load( (void *)arg_sessionId, uri );
 
     org_cisco_cgmi_complete_load (object,
-                                    invocation,
-                                    stat);
+                                  invocation,
+                                  stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -211,10 +216,10 @@ on_handle_cgmi_unload (
     stat = cgmi_Unload( (void *)arg_sessionId );
 
     org_cisco_cgmi_complete_load (object,
-                                    invocation,
-                                    stat);
+                                  invocation,
+                                  stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -230,10 +235,10 @@ on_handle_cgmi_play (
     stat = cgmi_Play( (void *)arg_sessionId );
 
     org_cisco_cgmi_complete_play (object,
-                                    invocation,
-                                    stat);
+                                  invocation,
+                                  stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -250,10 +255,10 @@ on_handle_cgmi_set_rate (
     stat = cgmi_SetRate( (void *)arg_sessionId, arg_rate );
 
     org_cisco_cgmi_complete_set_rate (object,
-                                    invocation,
-                                    stat);
+                                      invocation,
+                                      stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -270,10 +275,10 @@ on_handle_cgmi_set_position (
     stat = cgmi_SetPosition( (void *)arg_sessionId, arg_position );
 
     org_cisco_cgmi_complete_set_position (object,
-                                    invocation,
-                                    stat);
+                                          invocation,
+                                          stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -290,11 +295,11 @@ on_handle_cgmi_get_position (
     stat = cgmi_GetPosition( (void *)arg_sessionId, &position );
 
     org_cisco_cgmi_complete_get_position (object,
-                                    invocation,
-                                    position,
-                                    stat);
+                                          invocation,
+                                          position,
+                                          stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -313,11 +318,11 @@ on_handle_cgmi_get_duration (
     //stat = cgmi_GetDuration( (void *)arg_sessionId, &duration, arg_type );
 
     org_cisco_cgmi_complete_get_duration (object,
-                                    invocation,
-                                    duration,
-                                    stat);
+                                          invocation,
+                                          duration,
+                                          stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -335,12 +340,12 @@ on_handle_cgmi_get_rate_range (
     stat = cgmi_GetRateRange( (void *)arg_sessionId, &rewindRate, &fForwardRate );
 
     org_cisco_cgmi_complete_get_rate_range (object,
-                                    invocation,
-                                    rewindRate,
-                                    fForwardRate,
-                                    stat);
+                                            invocation,
+                                            rewindRate,
+                                            fForwardRate,
+                                            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -357,11 +362,11 @@ on_handle_cgmi_get_num_audio_streams (
     stat = cgmi_GetNumAudioStreams( (void *)arg_sessionId, &count );
 
     org_cisco_cgmi_complete_get_num_audio_streams (object,
-                                    invocation,
-                                    count,
-                                    stat);
+            invocation,
+            count,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -380,11 +385,11 @@ on_handle_cgmi_get_audio_stream_info (
     stat = cgmi_GetAudioStreamInfo( (void *)arg_sessionId, index, buffer, bufSize );
 
     org_cisco_cgmi_complete_get_audio_stream_info (object,
-                                    invocation,
-                                    buffer,
-                                    stat);
+            invocation,
+            buffer,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -401,10 +406,10 @@ on_handle_cgmi_set_audio_stream (
     stat = cgmi_SetAudioStream( (void *)arg_sessionId, index );
 
     org_cisco_cgmi_complete_set_audio_stream (object,
-                                    invocation,
-                                    stat);
+            invocation,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -421,10 +426,10 @@ on_handle_cgmi_set_default_audio_lang (
     stat = cgmi_SetDefaultAudioLang( (void *)arg_sessionId, language );
 
     org_cisco_cgmi_complete_set_audio_stream (object,
-                                    invocation,
-                                    stat);
+            invocation,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -435,20 +440,20 @@ on_handle_cgmi_create_section_filter (
     const guint64 arg_filterPriv )
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
-    void* pFilterId;
+    void *pFilterId;
 
     LOG_TRACE_ENTER();
 
-    stat = cgmi_CreateSectionFilter( (void *)arg_sessionId, 
-        (void *)arg_filterPriv, 
-        &pFilterId );
+    stat = cgmi_CreateSectionFilter( (void *)arg_sessionId,
+                                     (void *)arg_filterPriv,
+                                     &pFilterId );
 
     org_cisco_cgmi_complete_create_section_filter (object,
-                                    invocation,
-                                    (guint64)pFilterId,
-                                    stat);
+            invocation,
+            (guint64)pFilterId,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -462,14 +467,14 @@ on_handle_cgmi_destroy_section_filter (
 
     LOG_TRACE_ENTER();
 
-    stat = cgmi_DestroySectionFilter( (void *)arg_sessionId, 
-        (void *)arg_filterId );
+    stat = cgmi_DestroySectionFilter( (void *)arg_sessionId,
+                                      (void *)arg_filterId );
 
     org_cisco_cgmi_complete_destroy_section_filter (object,
-                                    invocation,
-                                    stat);
+            invocation,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -486,14 +491,14 @@ on_handle_cgmi_set_section_filter (
 
     // TODO:  Update to match tcgmi_FilterData data structure
 
-    stat = cgmi_SetSectionFilter( (void *)arg_sessionId, 
-        (void *)arg_filterId, NULL );
+    stat = cgmi_SetSectionFilter( (void *)arg_sessionId,
+                                  (void *)arg_filterId, NULL );
 
     org_cisco_cgmi_complete_set_section_filter (object,
-                                    invocation,
-                                    stat);
+            invocation,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -512,19 +517,19 @@ on_handle_cgmi_start_section_filter (
 
     //TODO handle callbacks
 
-    stat = cgmi_StartSectionFilter( (void *)arg_sessionId, 
-        (void *)arg_filterId,
-        timeout,
-        oneShot,
-        enableCRC,
-        cgmiQueryBufferCallback,
-        cgmiSectionBufferCallback );
+    stat = cgmi_StartSectionFilter( (void *)arg_sessionId,
+                                    (void *)arg_filterId,
+                                    timeout,
+                                    oneShot,
+                                    enableCRC,
+                                    cgmiQueryBufferCallback,
+                                    cgmiSectionBufferCallback );
 
     org_cisco_cgmi_complete_start_section_filter (object,
-                                    invocation,
-                                    stat);
+            invocation,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 static gboolean
@@ -540,14 +545,14 @@ on_handle_cgmi_stop_section_filter (
 
     //TODO handle callbacks
 
-    stat = cgmi_StopSectionFilter( (void *)arg_sessionId, 
-        (void *)arg_filterId );
+    stat = cgmi_StopSectionFilter( (void *)arg_sessionId,
+                                   (void *)arg_filterId );
 
     org_cisco_cgmi_complete_start_section_filter (object,
-                                    invocation,
-                                    stat);
+            invocation,
+            stat);
 
-   return TRUE;
+    return TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -577,7 +582,7 @@ on_bus_acquired (GDBusConnection *connection,
     GError *error = NULL;
     OrgCiscoCgmi *interface = org_cisco_cgmi_skeleton_new();
 
-    if( NULL == interface )
+    if ( NULL == interface )
     {
         g_print("org_cisco_dbustest_skeleton_new() FAILED.\n");
         return;
@@ -738,15 +743,12 @@ int main( int argc, char *argv[] )
     /* Fork into background depending on args provided */
     if ( foreground == FALSE )
     {
-        if( 0 != daemon( 0, 0 ) )
+        if ( 0 != daemon( 0, 0 ) )
         {
             g_print( "Failed to fork background daemon. Abort." );
             return errno;
         }
     }
-
-    //TODO: put the gstreamer system init here.
-
 
     /* DBUS Code */
     loop = g_main_loop_new( NULL, FALSE );
@@ -762,6 +764,7 @@ int main( int argc, char *argv[] )
                          on_name_lost,
                          loop,
                          NULL );
+
 
     g_main_loop_run( loop );
 
