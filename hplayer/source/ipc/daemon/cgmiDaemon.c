@@ -15,18 +15,18 @@
 #define LOGGING_ENABLED
 
 #ifdef LOGGING_ENABLED
-#define LOG_LEVEL(level, ...) g_print("CGMI_DAEMON %s:%d - %s %s :: ", \
-                                      __FILE__, __LINE__, __FUNCTION__, level); g_print(__VA_ARGS__)
+#define LOG_INFO(...) g_print("CGMI_DAEMON %s:%d - %s INFO :: ", \
+                                      __FILE__, __LINE__, __FUNCTION__); g_print(__VA_ARGS__)
+#define LOG_ERROR(...) g_print("CGMI_DAEMON %s:%d - %s ERROR :: ", \
+                                      __FILE__, __LINE__, __FUNCTION__); g_print(__VA_ARGS__)
 #define LOG_TRACE_ENTER()    g_print("%s:%d - %s >>>> Enter\n", \
                                      __FILE__, __LINE__, __FUNCTION__);
-
 #else
-#define LOG_LEVEL(level, ...)
+#define LOG_INFO(...)
+#define LOG_ERROR(...)
 #define LOG_TRACE_ENTER()
 #endif
 
-#define LOG_INFO(...)  LOG_LEVEL("INFO", __VA_ARGS_)
-#define LOG_ERROR(...) LOG_LEVEL("ERROR", __VA_ARGS_)
 
 
 
@@ -41,7 +41,7 @@ void cgmiEventCallback( void *pUserData, void *pSession, tcgmi_Event event )
                                        event,
                                        0 );
 
-    g_print("cgmiEventCallback -- pSession: %lu, event%d \n",
+    LOG_INFO("cgmiEventCallback -- pSession: %lu, event%d \n",
             (guint64)pSession, event);
 }
 
@@ -58,7 +58,7 @@ static cgmi_Status cgmiQueryBufferCallback(
             (guint64)pFilterPriv,
             (guint64)pFilterId);
 
-    g_print("cgmiQueryBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
+    LOG_INFO("cgmiQueryBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
             (guint64)pFilterId, (guint64)pFilterPriv);
 }
 
@@ -79,7 +79,7 @@ static cgmi_Status cgmiSectionBufferCallback(
             pSection,
             sectionSize );
 
-    g_print("cgmiSectionBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
+    LOG_INFO("cgmiSectionBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
             (guint64)pFilterId, (guint64)pFilterPriv);
 
 }
@@ -563,7 +563,7 @@ on_name_acquired (GDBusConnection *connection,
                   const gchar     *name,
                   gpointer         user_data)
 {
-    g_print("Acquired the name %s\n", name);
+    LOG_INFO("Acquired the name %s\n", name);
 }
 
 static void
@@ -571,7 +571,7 @@ on_name_lost (GDBusConnection *connection,
               const gchar     *name,
               gpointer         user_data)
 {
-    g_print("Lost the name %s\n", name);
+    LOG_INFO("Lost the name %s\n", name);
 }
 
 static void
@@ -584,13 +584,13 @@ on_bus_acquired (GDBusConnection *connection,
 
     if ( NULL == interface )
     {
-        g_print("org_cisco_dbustest_skeleton_new() FAILED.\n");
+        LOG_ERROR("org_cisco_dbustest_skeleton_new() FAILED.\n");
         return;
     }
 
     org_cisco_cgmi_set_verbose (interface, TRUE);
 
-    g_print("bus acquired\n");
+    LOG_INFO("Bus acquired\n");
 
     g_signal_connect (interface,
                       "handle-init",
@@ -708,7 +708,7 @@ on_bus_acquired (GDBusConnection *connection,
                                            &error))
     {
         /* handle error ?*/
-        g_print( "Failed in g_dbus_interface_skeleton_export.\n" );
+        LOG_ERROR( "Failed in g_dbus_interface_skeleton_export.\n" );
     }
 }
 
@@ -736,7 +736,7 @@ int main( int argc, char *argv[] )
             foreground = TRUE;
             break;
         default:
-            g_print( "Invalid option (%c).\n", c );
+            LOG_ERROR( "Invalid option (%c).\n", c );
         }
     }
 
@@ -745,7 +745,7 @@ int main( int argc, char *argv[] )
     {
         if ( 0 != daemon( 0, 0 ) )
         {
-            g_print( "Failed to fork background daemon. Abort." );
+            LOG_ERROR( "Failed to fork background daemon. Abort." );
             return errno;
         }
     }

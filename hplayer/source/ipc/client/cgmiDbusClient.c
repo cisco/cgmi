@@ -1,6 +1,7 @@
 #include <glib.h>
 #include <string.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 #include "cgmiPlayerApi.h"
 #include "cgmi_dbus_client_generated.h"
@@ -40,9 +41,12 @@ typedef struct
 ////////////////////////////////////////////////////////////////////////////////
 // Globals
 ////////////////////////////////////////////////////////////////////////////////
-static OrgCiscoCgmi *gProxy = NULL;
-static GHashTable *gPlayerEventCallbacks = NULL;
-static pthread_mutex_t gEventCallbackMutex;
+static GMainLoop        *gLoop                  = NULL;
+static OrgCiscoCgmi     *gProxy                 = NULL;
+static GHashTable       *gPlayerEventCallbacks  = NULL;
+static pthread_t        gMainLoopThread;
+static sem_t            gMainThreadStartSema;
+static pthread_mutex_t  gEventCallbackMutex;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -102,6 +106,50 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
 // DBUS client specific setup and tear down APIs
 ////////////////////////////////////////////////////////////////////////////////
 
+/* This callback posts the semaphore to indicate the main loop is running */
+static gboolean cgmi_DbusMainLoopStarted( gpointer user_data )
+{
+    sem_post(&gMainThreadStartSema);
+    return FALSE;
+}
+
+/* This is spawned as a thread and starts the glib main loop for dbus. */
+static void *cgmi_DbusMainLoop(void *data)
+{
+    GError *error = NULL;
+
+    g_type_init();
+
+    gLoop = g_main_loop_new (NULL, FALSE);
+    if ( gLoop == NULL )
+    {
+        g_print("Error creating a new main_loop\n");
+        return;
+    }
+
+    gProxy = org_cisco_cgmi_proxy_new_for_bus_sync( G_BUS_TYPE_SESSION,
+             G_DBUS_PROXY_FLAGS_NONE, "org.cisco.cgmi", "/org/cisco/cgmi", NULL, &error );
+
+    if (error)
+    {
+        g_print("Failed in dbus proxy call: %s\n", error->message);
+        g_error_free(error);
+        return NULL;
+    }
+
+    g_signal_connect( gProxy, "player-notify",
+                      G_CALLBACK (on_handle_notification), NULL );
+
+    gPlayerEventCallbacks = g_hash_table_new(g_direct_hash, g_direct_equal);
+
+
+    /* This timeout will be called by the main loop after it starts */
+    g_timeout_add( 5, cgmi_DbusMainLoopStarted, NULL );
+    g_main_loop_run( gLoop );
+
+    return NULL;
+}
+
 /**
  *  Needs to be called prior to any DBUS APIs (called by CGMI Init)
  */
@@ -115,21 +163,16 @@ cgmi_Status cgmi_DbusInterfaceInit()
         return CGMI_ERROR_WRONG_STATE;
     }
 
-    g_type_init();
-    gProxy = org_cisco_cgmi_proxy_new_for_bus_sync( G_BUS_TYPE_SESSION,
-             G_DBUS_PROXY_FLAGS_NONE, "org.cisco.cgmi", "/org/cisco/cgmi", NULL, &error );
+    sem_init(&gMainThreadStartSema, 0, 0);
 
-    if (error)
+    if ( 0 != pthread_create(&gMainLoopThread, NULL, cgmi_DbusMainLoop, NULL) )
     {
-        g_print("Failed in dbus proxy call: %s\n", error->message);
-        g_error_free(error);
+        g_print("Error launching thread for gmainloop\n");
         return CGMI_ERROR_FAILED;
     }
 
-    g_signal_connect( gProxy, "player-notify",
-                      G_CALLBACK (on_handle_notification), NULL );
-
-    gPlayerEventCallbacks = g_hash_table_new(g_direct_hash, g_direct_equal);
+    sem_wait(&gMainThreadStartSema);
+    sem_destroy(&gMainThreadStartSema);
 
     return CGMI_ERROR_SUCCESS;
 }
@@ -148,6 +191,11 @@ void cgmi_DbusInterfaceTerm()
         gPlayerEventCallbacks = NULL;
     }
     pthread_mutex_unlock(&gEventCallbackMutex);
+
+    // Kill the dbus thread
+    g_main_loop_quit( gLoop );
+    pthread_join (gMainLoopThread, NULL);
+    if ( gLoop ) g_main_loop_unref( gLoop );
 
     g_object_unref(gProxy);
     gProxy = NULL;
@@ -218,7 +266,7 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
             break;
         }
 
-        *pSession = sessionId;
+        *pSession = (void *)sessionId;
 
         eventCbData = g_malloc0(sizeof(tcgmi_PlayerEventCallbackData));
         if (eventCbData == NULL)

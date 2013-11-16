@@ -39,35 +39,12 @@ const char *strError[] =
     if( err != CGMI_ERROR_SUCCESS ) return;
 
 
-////////////////////////////////////////////////////////////////////////////////
-// Globals
-////////////////////////////////////////////////////////////////////////////////
-
-static GMainLoop *gLoop = NULL;
-
-
 /**
  * CGMI DBUS callback.
  */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
 {
     g_print( "CGMI Player Event Recevied : %d \n", event );
-}
-
-/**
- * Wrapper function used to start glib main loop and thread to handle callbacks.
- */
-static void startDbusAndRunFunc( GThreadFunc testFunc, gpointer user_data )
-{
-    GThread *gThread = NULL;
-
-    gLoop = g_main_loop_new (NULL, FALSE);
-
-    gThread = g_thread_new( "cmgi-client-dbus-test", (GThreadFunc)testFunc, user_data );
-
-    g_main_loop_run (gLoop);
-    g_main_loop_unref (gLoop);
-    g_thread_unref( gThread );
 }
 
 /**
@@ -127,13 +104,11 @@ static gpointer sanity(gpointer user_data)
     g_print("cgmi_GetPosition : curPosition = (%f)\n", curPosition);
 
 
-    /* //Disabled until api is updated.
     float duration;
     g_print("Calling cgmi_GetDuration...\n");
     stat = cgmi_GetDuration( pSessionId, &duration, FIXED );
     CHECK_ERROR(stat);
     g_print("cgmi_GetDuration : duration = (%f)\n", duration);
-    */
 
 
     float rewindSpeed, fastForwardSpeed;
@@ -213,20 +188,16 @@ static gpointer sanity(gpointer user_data)
     stat = cgmi_Term();
     CHECK_ERROR(stat);
 
-    if ( gLoop != NULL) g_main_loop_quit( gLoop );
-
     return NULL;
 }
 
 /**
  * Make all the calls to start playing video
  */
-static gpointer play(gpointer user_data)
+static gpointer play( char *uri )
 {
     cgmi_Status stat = CGMI_ERROR_SUCCESS;
     void *pSessionId;
-
-    char *url = (char *)user_data;
 
     g_print("Calling cgmi_Init...\n");
     stat = cgmi_Init();
@@ -236,14 +207,8 @@ static gpointer play(gpointer user_data)
     stat = cgmi_CreateSession( cgmiCallback, NULL, &pSessionId );
     CHECK_ERROR(stat);
 
-    int bCanPlay = 0  ;
-    g_print("Calling cgmi_canPlayType...\n");
-    stat = cgmi_canPlayType( "fakeType", &bCanPlay );
-    g_print("cgmi_canPlayType : bCanPlay = (%d)\n", bCanPlay);
-    CHECK_ERROR(stat);
-
     g_print("Calling cgmi_Load...\n");
-    stat = cgmi_Load( pSessionId, url );
+    stat = cgmi_Load( pSessionId, uri );
     CHECK_ERROR(stat);
 
     g_print("Calling cgmi_Play...\n");
@@ -252,7 +217,6 @@ static gpointer play(gpointer user_data)
 
     // Sleep for a moment to catch any signals
     g_usleep(500 * 1000);
-    if ( gLoop != NULL) g_main_loop_quit( gLoop );
 
     return NULL;
 }
@@ -273,7 +237,7 @@ int main(int argc, char **argv)
             printf("usage: %s sanity <url>\n", argv[0]);
             return -1;
         }
-        startDbusAndRunFunc( sanity, argv[2] );
+        sanity(argv[2]);
 
     }
     else if (strcmp(argv[1], "play") == 0)
@@ -283,7 +247,7 @@ int main(int argc, char **argv)
             printf("usage: %s play <url>\n", argv[0]);
             return -1;
         }
-        startDbusAndRunFunc( play, argv[2] );
+        play(argv[2]);
     }
 
     return 0;
