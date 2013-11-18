@@ -9,29 +9,10 @@
 // Logging stuff
 ////////////////////////////////////////////////////////////////////////////////
 
-const char *strError[] =
-{
-    "CGMI_ERROR_SUCCESS",
-    "CGMI_ERROR_FAILED",
-    "CGMI_ERROR_NOT_IMPLEMENTED",
-    "CGMI_ERROR_NOT_SUPPORTED",
-    "CGMI_ERROR_BAD_PARAM",
-    "CGMI_ERROR_OUT_OF_MEMORY",
-    "CGMI_ERROR_TIMEOUT",
-    "CGMI_ERROR_INVALID_HANDLE",
-    "CGMI_ERROR_NOT_INITIALIZED",
-    "CGMI_ERROR_NOT_OPEN",
-    "CGMI_ERROR_NOT_ACTIVE",
-    "CGMI_ERROR_NOT_READY",
-    "CGMI_ERROR_NOT_CONNECTED",
-    "CGMI_ERROR_URI_NOTFOUND",
-    "CGMI_ERROR_WRONG_STATE"
-};
-
 #define CHECK_ERROR(err) \
     if( err != CGMI_ERROR_SUCCESS ) \
     { \
-        g_print("CGMI_CLIENT_TEST %s:%d - %s :: Failed with %s \n", __FILE__, __LINE__, __FUNCTION__, strError[err]); \
+        g_print("CGMI_CLIENT_TEST %s:%d - %s :: Failed with %s \n", __FILE__, __LINE__, __FUNCTION__, cgmi_ErrorString(err) ); \
     }
 
 #define CHECK_ERROR_RETURN(err) \

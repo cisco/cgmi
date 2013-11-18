@@ -235,6 +235,30 @@ cgmi_Status cgmi_Term (void)
     return stat;
 }
 
+char* cgmi_ErrorString ( cgmi_Status stat )
+{
+    gchar *statusString = NULL;
+    GError *error = NULL;
+
+    if ( gProxy == NULL )
+    {
+        g_print("%s:%d - %s Error CGMI not initialized.\n",
+                __FILE__, __LINE__, __FUNCTION__);
+        return NULL;
+    }
+
+    org_cisco_cgmi_call_error_string_sync( gProxy, stat, &statusString, NULL, &error );
+
+    if(error)
+    {
+        g_print("%s,%d: Failed in the client call: %s\n", __FUNCTION__, __LINE__, error->message);
+        g_error_free (error);
+        return  NULL;   
+    }
+
+    return statusString;
+}
+
 cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
                                  void *pUserData,
                                  void **pSession )

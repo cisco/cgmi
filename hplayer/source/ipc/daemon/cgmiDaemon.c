@@ -124,6 +124,25 @@ on_handle_cgmi_term (
 }
 
 static gboolean
+on_handle_cgmi_error_string (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    const gint arg_status )
+{
+    gchar *statusString = NULL;
+
+    LOG_TRACE_ENTER();
+
+    statusString = cgmi_ErrorString( arg_status );
+
+    org_cisco_cgmi_complete_error_string ( object,
+                                  invocation,
+                                  statusString) ;
+
+    return TRUE;
+}
+
+static gboolean
 on_handle_cgmi_create_session (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation )
@@ -600,6 +619,11 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-term",
                       G_CALLBACK (on_handle_cgmi_term),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-error-string",
+                      G_CALLBACK (on_handle_cgmi_error_string),
                       NULL);
 
     g_signal_connect (interface,

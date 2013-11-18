@@ -9,6 +9,11 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
+        <method name="errorString">
+            <arg name="status" direction="in" type="i"/>
+            <arg name="statusString" direction="out" type="s"/>
+        </method>
+
         <method name="createSession">
             <arg name="sessionId" direction="out" type="t"/>
             <arg name="status" direction="out" type="i"/>
