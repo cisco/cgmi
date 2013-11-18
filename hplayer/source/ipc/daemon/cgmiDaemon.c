@@ -28,6 +28,10 @@
 #endif
 
 
+////////////////////////////////////////////////////////////////////////////////
+// Globals
+////////////////////////////////////////////////////////////////////////////////
+static gboolean cgmiInited = FALSE;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -92,11 +96,21 @@ on_handle_cgmi_init (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status stat = CGMI_ERROR_SUCCESS;
 
     LOG_TRACE_ENTER();
 
-    stat = cgmi_Init( );
+    /* We only call core Init on first IPC Init call.  Because Init and Deinit
+     * were designed to be called only once in an app context the deamon must
+     * maintain this state.
+     */
+    if( cgmiInited == TRUE )
+    {
+        LOG_INFO("cgmi_Init already called.\n");
+    }else{
+        stat = cgmi_Init( );
+        if( stat == CGMI_ERROR_SUCCESS ) { cgmiInited = TRUE; }
+    }
 
     org_cisco_cgmi_complete_init (object,
                                   invocation,
@@ -110,15 +124,17 @@ on_handle_cgmi_term (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    //cgmi_Status stat = CGMI_ERROR_FAILED;
 
     LOG_TRACE_ENTER();
 
-    stat = cgmi_Term( );
+    // MZW:  The deamon shouldn't call Term (which calls gst_deinit breaking 
+    // all gstreamer apis), so just nod and smile (return success).
+    //stat = cgmi_Term( );
 
     org_cisco_cgmi_complete_term (object,
                                   invocation,
-                                  stat);
+                                  CGMI_ERROR_SUCCESS);
 
     return TRUE;
 }
@@ -791,11 +807,11 @@ int main( int argc, char *argv[] )
 
     g_main_loop_run( loop );
 
+    // Call term for CGMI core when daemon is stopped.
+    cgmi_Term( );
+
     g_bus_unown_name( id );
     g_main_loop_unref( loop );
-
-
-    //TODO: shutdown gstreamer here.
 
     return 0;
 }
