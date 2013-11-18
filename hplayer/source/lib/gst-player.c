@@ -8,6 +8,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <gst/gst.h>
+#include <glib.h>
+#include <glib/gprintf.h>
 #include <gst/app/gstappsink.h>
 #include "gst_player.h"
 #include "cgmiPlayerApi.h"
@@ -110,7 +112,33 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
    return TRUE;
 }
 
-
+char* cgmi_ErrorString(cgmi_Status stat)
+{
+   const char *errorString[] = 
+   {
+   "CGMI_ERROR_SUCCESS",           ///<Success
+   "CGMI_ERROR_FAILED",            ///<General Error
+   "CGMI_ERROR_NOT_IMPLEMENTED",   ///<This feature or function has not yet been implmented
+   "CGMI_ERROR_NOT_SUPPORTED",     ///<This feature or funtion is not supported
+   "CGMI_ERROR_BAD_PARAM",         ///<One of the parameters passed in is invalid
+   "CGMI_ERROR_OUT_OF_MEMORY",     ///<An allocation of memory has failed.
+   "CGMI_ERROR_TIMEOUT",           ///<A time out on a filter has occured.
+   "CGMI_ERROR_INVALID_HANDLE",    ///<A session handle or filter handle passed in is not correct.
+   "CGMI_ERROR_NOT_INITIALIZED",   ///<A function is being called when the system is not ready.
+   "CGMI_ERROR_NOT_OPEN",          ///<The Interface has yet to be opened.
+   "CGMI_ERROR_NOT_ACTIVE",        ///<This feature is not currently active
+   "CGMI_ERROR_NOT_READY",         ///<The feature requested can not be provided at this time.
+   "CGMI_ERROR_NOT_CONNECTED",     ///<The pipeline is currently not connected for the request.
+   "CGMI_ERROR_URI_NOTFOUND",      ///<The URL passed in could not be resolved.
+   "CGMI_ERROR_WRONG_STATE",       ///<The Requested state could not be set
+   "CGMI_ERROR_NUM_ERRORS "        ///<Place Holder to know how many errors there are in the struct enum.
+   };
+   if ((stat > CGMI_ERROR_NUM_ERRORS) || (stat < 0))
+   {
+      return errorString[CGMI_ERROR_NUM_ERRORS];
+   }
+   return errorString[stat];
+}
 cgmi_Status cgmi_Init(void)
 {
    cgmi_Status   stat = CGMI_ERROR_SUCCESS; 
@@ -196,15 +224,10 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
 
 cgmi_Status cgmi_DestroySession (void *pSession)
 {
+   cgmi_Status stat = CGMI_ERROR_SUCCESS;
    tSession *pSess = (tSession*)pSession;
    GstState curState, pendState;
 
-   gst_element_get_state( pSess->pipeline, &curState, &pendState, GST_CLOCK_TIME_NONE );
-   if( GST_STATE_NULL != curState )
-   {
-      GST_WARNING("The pipeline is in the wrong state to delete this session. Are you still playing?\n");
-      return CGMI_ERROR_NOT_READY;
-   }
 
    g_main_loop_quit (pSess->loop);
    //TODO fix
@@ -214,6 +237,7 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    if (pSess->pipeline) {gst_object_unref (GST_OBJECT (pSess->pipeline));}
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
    g_free(pSess);
+   return stat;
 
 }
 
@@ -221,14 +245,13 @@ cgmi_Status cgmi_DestroySession (void *pSession)
 cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 {
    GError *g_error_str =NULL; 
-   GstParseFlags flags;
    GstParseContext *ctx;
    gchar **arr;
-   gint ret =0;
    gchar *pPipeline;
-   GError   *err1 = NULL ;
-   cgmi_Status stat;
+   cgmi_Status stat = CGMI_ERROR_SUCCESS;
    GSource *source;
+   gchar manualPipeline[1024];
+
    tSession *pSess = (tSession*)pSession;
 
    pPipeline = g_strnfill(1024, '\0');
@@ -248,19 +271,30 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
 
-
-
-   //rms    if (manualPipeline)
-   //rms    {
-   //rms       GST_INFO("Setting up a manual Pipeline %s \n", manualPipeline);
-   //rms       g_strlcpy(pPipeline, manualPipeline, 1024);
-   //rms       pSess->manualPipeline = g_strdup(manualPipeline);
-   //rms    }
-   //rms    else
+   //
+   // This section makes DLNA content hardcoded.  Need to optimize.
+   //
+   if (g_str_has_suffix(pSess->playbackURI, "mpeg"))
    {
+      // This url is pointing to DLNA content, build a manual pipeline.
+      memset(manualPipeline, 0, 1024);
+      g_print("DLNA content, using Manual Pipeline");
+      g_sprintf(manualPipeline, "rovidmp location=%s %s", pSess->playbackURI,"! decodebin2 name=dec ! brcmvideosink dec. ! brcmaudiosink");
+      g_strlcpy(pPipeline, manualPipeline,1024);
+      pSess->manualPipeline = g_strdup(manualPipeline);
+   }
+   else
+   {
+      // let's see if we are running on broadcom hardware if we are let's see if we can find there
+      // video sink.  If it's there we need to set the flags variable so the pipeline knows to do 
+      // color transformation and scaling in hardware
       g_strlcpy(pPipeline, "playbin2 uri=", 1024);
       g_strlcat(pPipeline, uri, 1024);
-      //TODO: set teh flags=0x63 here if it's running on real hardware.
+      if (gst_registry_find_plugin( gst_registry_get_default() , "brcmvideosink"))
+      {
+        g_print("Autoplugging on real broadcom hardware\n");
+        g_strlcat(pPipeline," flags= 0x63", 1024);
+      }
    }
 
    do
@@ -316,7 +350,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    // free memory
    gst_parse_context_free(ctx);
    if(g_error_str){g_error_free(g_error_str);}
-   return ret;
+   return stat;
 }
 
 
@@ -336,6 +370,7 @@ cgmi_Status cgmi_Unload  (void *pSession )
 
       g_print ("Deleting pipeline\n");
       gst_object_unref (GST_OBJECT (pSess->pipeline));
+      pSess->pipeline = NULL;
 
    }while (0);
    return stat;

@@ -106,6 +106,20 @@ typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* p
 typedef cgmi_Status (*sectionBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, cgmi_Status SectionStatus, const char *pSection, int sectionSize);
 
 /**
+ *  \brief \b cgmi_ErrorString
+ *
+ *  For Debugging returns a string for the error status 
+ *
+ * \param   stat
+ *
+ * \return  String of the error status passed in 
+ *
+ *
+ *  \ingroup CGMI
+ *
+ */
+char* cgmi_ErrorString(cgmi_Status stat);
+/**
  *  \brief \b cgmi_Init
  *
  *  Initialize the gstreamer subsystem This should not get called by anyone but the main process.

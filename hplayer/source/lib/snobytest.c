@@ -25,17 +25,21 @@ int main( int argc, char *argv[] )
    float curPos;
    float Duration;
 
+   printf("About to try and play %s\n", argv[1]);
+
    cgmi_Init( );
 
    stat  =  cgmi_CreateSession(EventCallback, NULL, &pSession );
    if (stat != CGMI_ERROR_SUCCESS)
    {
-      printf("Error creating the sesion\n");
+      printf("Error creating the sesion: %s\n", cgmi_ErrorString(stat));
       return -1;
    }
 
    //cisco_gst_set_pipeline(pSession, "file:///var/www/vegas.ts", "filesrc location=///var/www/vegas.ts ! tsdemux name=d ! queue max-size-buffers=0 max-size-time=0 ! aacparse ! faad ! audioconvert ! audioresample ! autoaudiosink d. ! queue max-size-buffers=0 max-size-time=0 ! ffdec_h264 ! ffmpegcolorspace ! videoscale ! autovideosink");
-   stat  =  cgmi_Load(pSession, "file:///var/www/vegas.ts");
+
+   stat  =  cgmi_Load(pSession, argv[1]); 
+//   stat  =  cgmi_Load(pSession, "file:///var/www/vegas.ts");
    if (stat != CGMI_ERROR_SUCCESS)
    {
       printf("Error Loading the sesion\n");
@@ -85,10 +89,16 @@ int main( int argc, char *argv[] )
    stat = cgmi_Unload(pSession);
    if (stat != CGMI_ERROR_SUCCESS)
    {
-      printf("Error unloading \n");
+      printf("Error unloading: %s \n",cgmi_ErrorString(stat) );
       return -1;
    }
 
+   stat = cgmi_DestroySession(pSession );
+   if (stat != CGMI_ERROR_SUCCESS)
+   {
+      printf("Error Destroying Seession :%s \n",cgmi_ErrorString(stat) );
+      return -1;
+   }
 
 
    cgmi_Term( );
