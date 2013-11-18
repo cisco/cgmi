@@ -17,20 +17,6 @@
 
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
 
-static void* cisco_gst_launch_gmainloop (void* data)
-{
-   tSession *pSess = (tSession*) data;
-
-   pSess->loop = g_main_loop_new (NULL, FALSE);
-   if (pSess->loop == NULL)
-   {
-      GST_WARNING("Error creating a new Loop\n");
-   }
-   GST_INFO("about to start the loop\n");
-   g_main_loop_run(pSess->loop);
-   GST_WARNING("Exiting gmainloop\n");
-   return NULL;
-}
 
 static void cisco_gst_setState( tSession *pSess, GstState state )
 {
@@ -49,7 +35,7 @@ static void cisco_gst_setState( tSession *pSess, GstState state )
          GST_WARNING("Set NULL State Async\n");
          break;
       case GST_STATE_CHANGE_SUCCESS:
-         GST_INFO("Set NULL State Succeeded\n");
+         GST_WARNING("Set NULL State Succeeded\n");
          break;
       default:
          GST_WARNING("Set NULL State Unknown\n");
@@ -105,7 +91,7 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                GstState old_state, new_state, pending_state;
 
                gst_message_parse_state_changed( msg, &old_state, &new_state, &pending_state );
-               GST_INFO("Pipeline state change from %s to %s\n", gst_element_state_get_name(old_state), gst_element_state_get_name(new_state));
+               g_print("Pipeline state change from %s to %s\n", gst_element_state_get_name(old_state), gst_element_state_get_name(new_state));
 
 
                /* Print position and duration when in playing state */
@@ -184,11 +170,18 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->playbackURI = NULL;
    pSess->manualPipeline = NULL;
 
-   if (0!= pthread_create(&(pSess->thread), NULL, cisco_gst_launch_gmainloop, (void*)pSess))
+   pSess->thread_ctx = g_main_context_new();
+   pSess->loop = g_main_loop_new (pSess->thread_ctx, FALSE);
+   if (pSess->loop == NULL)
+   {
+      GST_WARNING("Error creating a new Loop\n");
+   }
+
+   pSess->thread =  g_thread_create ((GThreadFunc) g_main_loop_run,(void*)pSess->loop, TRUE, NULL); 
+   if (!pSess->thread)
    {
       GST_INFO("Error launching thread for gmainloop\n");
    }
-
    //need a blocking semaphore here
    // but instead I will spin until the 
    // gmainloop is running
@@ -214,7 +207,8 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    }
 
    g_main_loop_quit (pSess->loop);
-   pthread_join (pSess->thread, NULL);
+   //TODO fix
+   g_thread_join (pSess->thread);
    if (pSess->playbackURI) {g_free(pSess->playbackURI);}
    if (pSess->manualPipeline) {g_free(pSess->manualPipeline);}
    if (pSess->pipeline) {gst_object_unref (GST_OBJECT (pSess->pipeline));}
@@ -234,6 +228,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    gchar *pPipeline;
    GError   *err1 = NULL ;
    cgmi_Status stat;
+   GSource *source;
    tSession *pSess = (tSession*)pSession;
 
    pPipeline = g_strnfill(1024, '\0');
@@ -242,26 +237,26 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       GST_WARNING("Error allocating memory\n");
       return CGMI_ERROR_OUT_OF_MEMORY;
    }
-   
 
-    pSess->playbackURI = g_strdup(uri);
-    if (pSess->playbackURI == NULL)
-    {
-       printf("Not able to allocate memory\n");
+
+   pSess->playbackURI = g_strdup(uri);
+   if (pSess->playbackURI == NULL)
+   {
+      printf("Not able to allocate memory\n");
       return CGMI_ERROR_OUT_OF_MEMORY;
-    }
-    g_print("URI: %s\n", pSess->playbackURI);
+   }
+   g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
 
 
 
-//rms    if (manualPipeline)
-//rms    {
-//rms       GST_INFO("Setting up a manual Pipeline %s \n", manualPipeline);
-//rms       g_strlcpy(pPipeline, manualPipeline, 1024);
-//rms       pSess->manualPipeline = g_strdup(manualPipeline);
-//rms    }
-//rms    else
+   //rms    if (manualPipeline)
+   //rms    {
+   //rms       GST_INFO("Setting up a manual Pipeline %s \n", manualPipeline);
+   //rms       g_strlcpy(pPipeline, manualPipeline, 1024);
+   //rms       pSess->manualPipeline = g_strdup(manualPipeline);
+   //rms    }
+   //rms    else
    {
       g_strlcpy(pPipeline, "playbin2 uri=", 1024);
       g_strlcat(pPipeline, uri, 1024);
@@ -274,9 +269,9 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 
       ctx = gst_parse_context_new ();
       pSess->pipeline = gst_parse_launch_full(pPipeline,
-                                           ctx,
-                                           GST_PARSE_FLAG_FATAL_ERRORS,
-                                           &g_error_str);
+                                              ctx,
+                                              GST_PARSE_FLAG_FATAL_ERRORS,
+                                              &g_error_str);
       if (pSess->pipeline == NULL)
       {
          GST_WARNING("PipeLine was not able to be created\n");
@@ -302,14 +297,19 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
          stat = CGMI_ERROR_NOT_IMPLEMENTED;
          break;
       }
-   /* Add bus watch for events and messages */
-   pSess->bus = gst_element_get_bus( pSess->pipeline );
-   if (pSess->bus == NULL)
-   {
-      GST_ERROR("THe bus is null in the pipeline\n");
-   }
-   //add the bus watch
-   gst_bus_add_watch( pSess->bus, cisco_gst_handle_msg, pSess );
+      /* Add bus watch for events and messages */
+      pSess->bus = gst_element_get_bus( pSess->pipeline );
+      if (pSess->bus == NULL)
+      {
+         GST_ERROR("THe bus is null in the pipeline\n");
+      }
+
+      // enable the notifications.
+      source = gst_bus_create_watch(pSess->bus);
+      g_source_set_callback(source, (GSourceFunc)cisco_gst_handle_msg, pSess, NULL);
+      g_source_attach(source, pSess->thread_ctx);
+      g_source_unref(source);
+
 
    }while(0);
 
@@ -330,7 +330,9 @@ cgmi_Status cgmi_Unload  (void *pSession )
    do
    {
       gst_element_set_state (pSess->pipeline, GST_STATE_NULL);
-      gst_bus_remove_signal_watch(pSess->bus);
+      // I dont' think that we have to free any memory associated
+      // with the source ( for the bus watch as I already freed it when I set
+      // it up.  Once the reference count goes to 0 it should be freed
 
       g_print ("Deleting pipeline\n");
       gst_object_unref (GST_OBJECT (pSess->pipeline));
