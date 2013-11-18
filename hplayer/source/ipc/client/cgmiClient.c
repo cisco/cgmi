@@ -469,7 +469,7 @@ cgmi_Status cgmi_GetPosition( void *pSession, float *pPosition )
 
     org_cisco_cgmi_call_get_position_sync( gProxy,
                                            (guint64)pSession,
-                                           (gdouble *)pPosition,
+                                           &localPosition,
                                            (gint *)&stat,
                                            NULL,
                                            &error );

@@ -333,8 +333,7 @@ on_handle_cgmi_get_duration (
 
     LOG_TRACE_ENTER();
 
-    // MZW - disabled until the API is updated
-    //stat = cgmi_GetDuration( (void *)arg_sessionId, &duration, arg_type );
+    stat = cgmi_GetDuration( (void *)arg_sessionId, &duration, arg_type );
 
     org_cisco_cgmi_complete_get_duration (object,
                                           invocation,
