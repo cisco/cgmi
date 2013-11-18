@@ -8,7 +8,7 @@ noinst_programs = gdbus-codegen
 
 lib_LTLIBRARIES = libcgmi-client.la
 
-libcgmi_client_la_SOURCES= cgmiDbusClient.c
+libcgmi_client_la_SOURCES= cgmiClient.c
 nodist_libcgmi_client_la_SOURCES = cgmi_dbus_client_generated.c cgmi_dbus_client_generated.h
 
 # cgmi_dbus_client_generated.c  is a built source that must be cleaned
@@ -28,12 +28,13 @@ BUILT_SOURCES= $(builddir)/cgmi_dbus_client_generated.h
 libcgmi_client_la_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 
 libcgmi_client_la_LDFLAGS= $(LDFLAGS) = -no-undefined  
 
-bin_PROGRAMS = cgmi-client-dbus-test cgmi_cli
-cgmi_client_dbus_test_SOURCES= cgmiClientDbusTest.c
-cgmi_client_dbus_test_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 
-cgmi_client_dbus_test_LDFLAGS = $(LDFLAGS) 
-cgmi_client_dbus_test_DEPENDENCIES = libcgmi-client.la 
-cgmi_client_dbus_test_LDADD = $(LDFLAGS) $(top_builddir)/source/ipc/client/libcgmi-client.la
+bin_PROGRAMS = cgmi-client-test cgmi_cli
+
+cgmi_client_test_SOURCES= cgmiClientTest.c
+cgmi_client_test_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 
+cgmi_client_test_LDFLAGS = $(LDFLAGS) 
+cgmi_client_test_DEPENDENCIES = libcgmi-client.la 
+cgmi_client_test_LDADD = $(LDFLAGS) $(top_builddir)/source/ipc/client/libcgmi-client.la
 
 cgmi_cli_SOURCES= cgmi_cli.c
 cgmi_cli_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 

@@ -24,7 +24,7 @@ Makefile.in
 
 # Project specific
 /source/ipc/*/*generated.*
-/source/ipc/client/cgmi-client-dbus-test
+/source/ipc/client/cgmi-client-test
 /source/ipc/daemon/cgmi-daemon
 /source/lib/snobytest
 
