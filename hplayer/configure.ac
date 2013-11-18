@@ -22,6 +22,7 @@ AM_INIT_AUTOMAKE([ -Wall parallel-tests color-tests silent-rules foreign])
 #This will hide the compiler and linker line by default
 # If you want this shown just do a make with the arguement "V=1"
 AM_SILENT_RULES([yes])
+AM_PROG_AR
 
 #This indicates that we want to use minimum version 2.2 for our libtool
 LT_PREREQ([2.2])

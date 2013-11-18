@@ -28,11 +28,17 @@ BUILT_SOURCES= $(builddir)/cgmi_dbus_client_generated.h
 libcgmi_client_la_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 
 libcgmi_client_la_LDFLAGS= $(LDFLAGS) = -no-undefined  
 
-bin_PROGRAMS = cgmi-client-dbus-test
+bin_PROGRAMS = cgmi-client-dbus-test cgmi_cli
 cgmi_client_dbus_test_SOURCES= cgmiClientDbusTest.c
 cgmi_client_dbus_test_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 
 cgmi_client_dbus_test_LDFLAGS = $(LDFLAGS) 
 cgmi_client_dbus_test_DEPENDENCIES = libcgmi-client.la 
 cgmi_client_dbus_test_LDADD = $(LDFLAGS) $(top_builddir)/source/ipc/client/libcgmi-client.la
 
-
+cgmi_cli_SOURCES= cgmi_cli.c
+cgmi_cli_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 
+cgmi_cli_LDFLAGS = $(LDFLAGS) 
+cgmi_cli_DEPENDENCIES = libcgmi-client.la 
+cgmi_cli_LDADD = $(LDFLAGS) $(top_builddir)/source/ipc/client/libcgmi-client.la
+#cgmi_cli_DEPENDENCIES = $(top_builddir)/source/lib/libhplayer.la
+#cgmi_cli_LDADD = $(LDFLAGS) $(top_builddir)/source/lib/libhplayer.la
