@@ -11,7 +11,7 @@
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <gst/app/gstappsink.h>
-#include "gst_player.h"
+#include "cgmi-priv-player.h"
 #include "cgmiPlayerApi.h"
 
 

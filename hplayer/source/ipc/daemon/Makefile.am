@@ -25,5 +25,5 @@ cgmi_daemon_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include
 cgmi_daemon_LDFLAGS= $(LDFLAGS) 
 # Add the library for the actual player here.
 #
-cgmi_daemon_LDADD= $(LDFLAGS) $(top_builddir)/source/lib/libhplayer.la
+cgmi_daemon_LDADD= $(LDFLAGS) $(top_builddir)/source/lib/libcgmiPlayer.la
 

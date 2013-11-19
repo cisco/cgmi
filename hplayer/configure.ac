@@ -1,7 +1,7 @@
 #This is the minimum version of autoconf that is required to execute these scripts
 AC_PREREQ([2.61])
 #Here we show that the name of the project "example_template", the version "1.0" and the string used for bug reports "example_template_support@cisco.com"
-AC_INIT([hplayer], [0.00.10.0],[snobym@cisco.com])
+AC_INIT([cgmiPlayer], [0.00.11.0],[snobym@cisco.com])
 #
 # If the OS is Linux then enable the GNU system extentions
 #
@@ -31,7 +31,7 @@ LT_INIT([dlopen disable-static ])
 #This is just used to get some configuration data it's aslo so that the 
 #configure script knows the directory on which it is being executed 
 #on is actually the project directory
-AC_CONFIG_SRCDIR([source/lib/player.c])
+AC_CONFIG_SRCDIR([source/lib/cgmi-player.c])
 
 #this tells autoconf where to find the makefiles to execute.
 AC_CONFIG_FILES([ Makefile          
@@ -102,7 +102,21 @@ PKG_CHECK_MODULES([GST],     [gstreamer-0.10 >= 0.10.30])
 CFLAGS="$CFLAGS $GLIB_CFLAGS $GOBJECT_CFLAGS $GMODULE_CFLAGS $GTHREAD_CFLAGS $GIO_CFLAGS $GST_CFLAGS"
 LDFLAGS="$LDFLAG $GLIB_LIBS $GOBJECT_LIBS $GMODULE_LIBS $GTHREAD_LIBS $GIO_LIBS $GST_LIBS"
 
+#
+# Check for Doxygen for the documentation generation
+#
+AC_CHECK_PROGS([DOXYGEN], [doxygen])
+if test -z "$DOXYGEN";
+   then AC_MSG_WARN([Doxygen not found - continuing without Doxygen support])
+fi
+
+AM_CONDITIONAL([HAVE_DOXYGEN], 
+               [test -n "$DOXYGEN"])AM_COND_IF([HAVE_DOXYGEN], [AC_CONFIG_FILES([doc/Doxyfile doc/Makefile])])
+
+AC_SUBST([DOXYGEN])
+#
 # make sure the dbus code generator is available
+#
 AC_PATH_PROG([GDBUS_CODEGEN], [gdbus-codegen], AC_MSG_ERROR([gdbus-codegen is required but was not found]))
 
 # Must have AC_OUTPUT to have 
