@@ -328,7 +328,7 @@ cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition);
  *  \param[in] pSession  This is a handle to the active session.
  *
  *  \param[out] pDuration  The Duration of the file in seconds shall be populated in this variable.
- *  \param[in]  type       Type of asset we are getting the duration for.
+ *  \param[out]  type       Type of asset we are getting the duration for.
  *
  *  \pre    The Session must be open the the url must be loaded
  *
@@ -337,7 +337,7 @@ cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition);
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionType type);
+cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionType *type);
 
 /**
  *  \brief \b cgmi_GetRateRange

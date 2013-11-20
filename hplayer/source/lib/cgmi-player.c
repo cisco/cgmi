@@ -442,14 +442,14 @@ cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition)
    return stat;
 
 }
-cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionType type)
+cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionType *type)
 {
 
    tSession *pSess = (tSession*)pSession;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    gint64 Duration = 0; 
    GstFormat gstFormat = GST_FORMAT_TIME;
-
+   *type = FIXED;
    do
    {
       gst_element_query_duration( pSess->pipeline, &gstFormat, &Duration );
