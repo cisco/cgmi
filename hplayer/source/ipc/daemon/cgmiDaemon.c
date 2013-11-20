@@ -62,6 +62,15 @@ static void cgmiDaemonLog( const char *open, int priority, const char *format, .
     g_free (message);
 }
 
+static void gPrintToSylog(const gchar *message)
+{
+    syslog(LOG_INFO, "%-20s - %s", "CGMI", message);
+}
+static void gPrintErrToSylog(const gchar *message)
+{
+    syslog(LOG_INFO, "%-20s - %s", "CGMI ERROR", message);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Callbacks called by CGMI core to message client via DBUS
 ////////////////////////////////////////////////////////////////////////////////
@@ -812,6 +821,8 @@ int main( int argc, char *argv[] )
     {
         /* Setup syslog when in background */
         openlog( DAEMON_NAME, LOG_CONS | LOG_PID | LOG_NDELAY, LOG_DAEMON );
+        g_set_print_handler(gPrintToSylog);
+        g_set_printerr_handler(gPrintErrToSylog);
 
         if ( 0 != daemon( 0, 0 ) )
         {
