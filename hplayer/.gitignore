@@ -23,10 +23,15 @@ Makefile.in
 /depcomp
 /ar-lib
 
+# Docs
+Doxyfile
+/doc/latex
+/doc/html
+/doc/doxyfile.stamp
+
 # Project specific
 /source/ipc/*/*generated.*
 /source/ipc/client/cgmi_cli
 /source/ipc/client/cgmi-client-test
 /source/ipc/daemon/cgmi-daemon
-/source/lib/snobytest
 

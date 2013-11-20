@@ -482,7 +482,7 @@ cgmi_Status cgmi_GetPosition( void *pSession, float *pPosition )
 }
 
 cgmi_Status cgmi_GetDuration( void *pSession,  float *pDuration,
-                              cgmi_SessionType type )
+                              cgmi_SessionType *type )
 {
     cgmi_Status stat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -493,8 +493,8 @@ cgmi_Status cgmi_GetDuration( void *pSession,  float *pDuration,
 
     org_cisco_cgmi_call_get_duration_sync( gProxy,
                                            (guint64)pSession,
-                                           type,
                                            &localDuration,
+                                           type,
                                            (gint *)&stat,
                                            NULL,
                                            &error );

@@ -66,8 +66,8 @@
 
         <method name="getDuration">
             <arg name="sessionId" direction="in" type="t"/>
-            <arg name="type" direction="in" type="i"/>
             <arg name="duration" direction="out" type="d"/>
+            <arg name="type" direction="out" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 

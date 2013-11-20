@@ -4,6 +4,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <glib.h>
+#include <syslog.h>
 
 #include "cgmiPlayerApi.h"
 #include "cgmi_dbus_server_generated.h"
@@ -12,32 +13,59 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Logging for daemon.  TODO:  Send to syslog when in background
 ////////////////////////////////////////////////////////////////////////////////
+#define DAEMON_NAME "CGMI_DAEMON"
+
 #define LOGGING_ENABLED
 
 #ifdef LOGGING_ENABLED
-#define LOG_INFO(...) g_print("CGMI_DAEMON %s:%d - %s INFO :: ", \
-                                      __FILE__, __LINE__, __FUNCTION__); g_print(__VA_ARGS__)
-#define LOG_ERROR(...) g_print("CGMI_DAEMON %s:%d - %s ERROR :: ", \
-                                      __FILE__, __LINE__, __FUNCTION__); g_print(__VA_ARGS__)
-#define LOG_TRACE_ENTER()    g_print("%s:%d - %s >>>> Enter\n", \
-                                     __FILE__, __LINE__, __FUNCTION__);
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define CGMID_AT DAEMON_NAME ":" TOSTRING(__LINE__)
+
+#define CGMID_INFO(...)   cgmiDaemonLog( CGMID_AT, LOG_INFO, __VA_ARGS__);
+#define CGMID_ERROR(...)  cgmiDaemonLog( CGMID_AT, LOG_ERR, __VA_ARGS__);
+#define CGMID_ENTER()     cgmiDaemonLog( CGMID_AT, LOG_DEBUG, \
+                            ">>>> Enter %s()\n", __FUNCTION__);
 #else
-#define LOG_INFO(...)
-#define LOG_ERROR(...)
-#define LOG_TRACE_ENTER()
+#define CGMID_INFO(...)
+#define CGMID_ERROR(...)
+#define CGMID_ENTER()
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // Globals
 ////////////////////////////////////////////////////////////////////////////////
-static gboolean cgmiInited = FALSE;
+static gboolean gCgmiInited = FALSE;
+static gboolean gInForeground = FALSE;
 
+
+////////////////////////////////////////////////////////////////////////////////
+// Logging
+////////////////////////////////////////////////////////////////////////////////
+static void cgmiDaemonLog( const char *open, int priority, const char *format, ... )
+{
+    gchar *message;
+
+    va_list args;
+    va_start (args, format);
+    message = g_strdup_vprintf (format, args);
+    va_end (args);
+
+    if( gInForeground == TRUE )
+    {
+        printf("%-20s - %s", open, message);
+    }else{
+        syslog(priority, "%-20s - %s", open, message);
+    }
+
+    g_free (message);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Callbacks called by CGMI core to message client via DBUS
 ////////////////////////////////////////////////////////////////////////////////
-void cgmiEventCallback( void *pUserData, void *pSession, tcgmi_Event event )
+static void cgmiEventCallback( void *pUserData, void *pSession, tcgmi_Event event )
 {
 
     org_cisco_cgmi_emit_player_notify( (OrgCiscoCgmi *) pUserData,
@@ -45,7 +73,7 @@ void cgmiEventCallback( void *pUserData, void *pSession, tcgmi_Event event )
                                        event,
                                        0 );
 
-    LOG_INFO("cgmiEventCallback -- pSession: %lu, event%d \n",
+    CGMID_INFO("cgmiEventCallback -- pSession: %lu, event%d \n",
             (guint64)pSession, event);
 }
 
@@ -62,7 +90,7 @@ static cgmi_Status cgmiQueryBufferCallback(
             (guint64)pFilterPriv,
             (guint64)pFilterId);
 
-    LOG_INFO("cgmiQueryBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
+    CGMID_INFO("cgmiQueryBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
             (guint64)pFilterId, (guint64)pFilterPriv);
 }
 
@@ -83,7 +111,7 @@ static cgmi_Status cgmiSectionBufferCallback(
             pSection,
             sectionSize );
 
-    LOG_INFO("cgmiSectionBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
+    CGMID_INFO("cgmiSectionBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
             (guint64)pFilterId, (guint64)pFilterPriv);
 
 }
@@ -98,18 +126,18 @@ on_handle_cgmi_init (
 {
     cgmi_Status stat = CGMI_ERROR_SUCCESS;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     /* We only call core Init on first IPC Init call.  Because Init and Deinit
      * were designed to be called only once in an app context the deamon must
      * maintain this state.
      */
-    if( cgmiInited == TRUE )
+    if( gCgmiInited == TRUE )
     {
-        LOG_INFO("cgmi_Init already called.\n");
+        CGMID_INFO("cgmi_Init already called.\n");
     }else{
         stat = cgmi_Init( );
-        if( stat == CGMI_ERROR_SUCCESS ) { cgmiInited = TRUE; }
+        if( stat == CGMI_ERROR_SUCCESS ) { gCgmiInited = TRUE; }
     }
 
     org_cisco_cgmi_complete_init (object,
@@ -126,7 +154,7 @@ on_handle_cgmi_term (
 {
     //cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     // MZW:  The deamon shouldn't call Term (which calls gst_deinit breaking 
     // all gstreamer apis), so just nod and smile (return success).
@@ -147,7 +175,7 @@ on_handle_cgmi_error_string (
 {
     gchar *statusString = NULL;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     statusString = cgmi_ErrorString( arg_status );
 
@@ -166,7 +194,7 @@ on_handle_cgmi_create_session (
     cgmi_Status stat = CGMI_ERROR_FAILED;
     void *pSessionId = NULL;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_CreateSession( cgmiEventCallback, (void *)object, &pSessionId );
 
@@ -186,7 +214,7 @@ on_handle_cgmi_destroy_session (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_DestroySession( (void *)arg_sessionId );
 
@@ -206,7 +234,7 @@ on_handle_cgmi_can_play_type (
     cgmi_Status stat = CGMI_ERROR_FAILED;
     gint bCanPlay = 0;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_canPlayType( arg_type, &bCanPlay );
 
@@ -227,7 +255,7 @@ on_handle_cgmi_load (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_Load( (void *)arg_sessionId, uri );
 
@@ -246,7 +274,7 @@ on_handle_cgmi_unload (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_Unload( (void *)arg_sessionId );
 
@@ -265,7 +293,7 @@ on_handle_cgmi_play (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_Play( (void *)arg_sessionId );
 
@@ -285,7 +313,7 @@ on_handle_cgmi_set_rate (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_SetRate( (void *)arg_sessionId, arg_rate );
 
@@ -305,7 +333,7 @@ on_handle_cgmi_set_position (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_SetPosition( (void *)arg_sessionId, arg_position );
 
@@ -325,7 +353,7 @@ on_handle_cgmi_get_position (
     cgmi_Status stat = CGMI_ERROR_FAILED;
     float position = 0;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_GetPosition( (void *)arg_sessionId, &position );
 
@@ -341,19 +369,20 @@ static gboolean
 on_handle_cgmi_get_duration (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const gint arg_type )
+    const guint64 arg_sessionId )
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
     float duration = 0;
+    cgmi_SessionType type = 0;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
-    stat = cgmi_GetDuration( (void *)arg_sessionId, &duration, arg_type );
+    stat = cgmi_GetDuration( (void *)arg_sessionId, &duration, &type );
 
     org_cisco_cgmi_complete_get_duration (object,
                                           invocation,
                                           duration,
+                                          type,
                                           stat);
 
     return TRUE;
@@ -369,7 +398,7 @@ on_handle_cgmi_get_rate_range (
     float rewindRate = 0;
     float fForwardRate = 0;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_GetRateRange( (void *)arg_sessionId, &rewindRate, &fForwardRate );
 
@@ -391,7 +420,7 @@ on_handle_cgmi_get_num_audio_streams (
     cgmi_Status stat = CGMI_ERROR_FAILED;
     int count = 0;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_GetNumAudioStreams( (void *)arg_sessionId, &count );
 
@@ -414,7 +443,7 @@ on_handle_cgmi_get_audio_stream_info (
     cgmi_Status stat = CGMI_ERROR_FAILED;
     char buffer[bufSize];
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_GetAudioStreamInfo( (void *)arg_sessionId, index, buffer, bufSize );
 
@@ -435,7 +464,7 @@ on_handle_cgmi_set_audio_stream (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_SetAudioStream( (void *)arg_sessionId, index );
 
@@ -455,7 +484,7 @@ on_handle_cgmi_set_default_audio_lang (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_SetDefaultAudioLang( (void *)arg_sessionId, language );
 
@@ -476,7 +505,7 @@ on_handle_cgmi_create_section_filter (
     cgmi_Status stat = CGMI_ERROR_FAILED;
     void *pFilterId;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_CreateSectionFilter( (void *)arg_sessionId,
                                      (void *)arg_filterPriv,
@@ -499,7 +528,7 @@ on_handle_cgmi_destroy_section_filter (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     stat = cgmi_DestroySectionFilter( (void *)arg_sessionId,
                                       (void *)arg_filterId );
@@ -521,7 +550,7 @@ on_handle_cgmi_set_section_filter (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     // TODO:  Update to match tcgmi_FilterData data structure
 
@@ -547,7 +576,7 @@ on_handle_cgmi_start_section_filter (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     //TODO handle callbacks
 
@@ -575,7 +604,7 @@ on_handle_cgmi_stop_section_filter (
 {
     cgmi_Status stat = CGMI_ERROR_FAILED;
 
-    LOG_TRACE_ENTER();
+    CGMID_ENTER();
 
     //TODO handle callbacks
 
@@ -597,7 +626,7 @@ on_name_acquired (GDBusConnection *connection,
                   const gchar     *name,
                   gpointer         user_data)
 {
-    LOG_INFO("Acquired the name %s\n", name);
+    CGMID_INFO("Acquired the name %s\n", name);
 }
 
 static void
@@ -605,7 +634,7 @@ on_name_lost (GDBusConnection *connection,
               const gchar     *name,
               gpointer         user_data)
 {
-    LOG_INFO("Lost the name %s\n", name);
+    CGMID_INFO("Lost the name %s\n", name);
 }
 
 static void
@@ -618,13 +647,13 @@ on_bus_acquired (GDBusConnection *connection,
 
     if ( NULL == interface )
     {
-        LOG_ERROR("org_cisco_dbustest_skeleton_new() FAILED.\n");
+        CGMID_ERROR("org_cisco_dbustest_skeleton_new() FAILED.\n");
         return;
     }
 
     org_cisco_cgmi_set_verbose (interface, TRUE);
 
-    LOG_INFO("Bus acquired\n");
+    CGMID_INFO("Bus acquired\n");
 
     g_signal_connect (interface,
                       "handle-init",
@@ -747,7 +776,7 @@ on_bus_acquired (GDBusConnection *connection,
                                            &error))
     {
         /* handle error ?*/
-        LOG_ERROR( "Failed in g_dbus_interface_skeleton_export.\n" );
+        CGMID_ERROR( "Failed in g_dbus_interface_skeleton_export.\n" );
     }
 }
 
@@ -756,7 +785,6 @@ on_bus_acquired (GDBusConnection *connection,
 ////////////////////////////////////////////////////////////////////////////////
 int main( int argc, char *argv[] )
 {
-    gboolean foreground = FALSE;
     int c = 0;
     GMainLoop *loop;
     guint id;
@@ -772,19 +800,22 @@ int main( int argc, char *argv[] )
         switch (c)
         {
         case 'f':
-            foreground = TRUE;
+            gInForeground = TRUE;
             break;
         default:
-            LOG_ERROR( "Invalid option (%c).\n", c );
+            printf( "Invalid option (%c).\n", c );
         }
     }
 
     /* Fork into background depending on args provided */
-    if ( foreground == FALSE )
+    if ( gInForeground == FALSE )
     {
+        /* Setup syslog when in background */
+        openlog( DAEMON_NAME, LOG_CONS | LOG_PID | LOG_NDELAY, LOG_DAEMON );
+
         if ( 0 != daemon( 0, 0 ) )
         {
-            LOG_ERROR( "Failed to fork background daemon. Abort." );
+            CGMID_ERROR( "Failed to fork background daemon. Abort." );
             return errno;
         }
     }
@@ -807,7 +838,7 @@ int main( int argc, char *argv[] )
 
     g_main_loop_run( loop );
 
-    // Call term for CGMI core when daemon is stopped.
+    /* Call term for CGMI core when daemon is stopped. */
     cgmi_Term( );
 
     g_bus_unown_name( id );
