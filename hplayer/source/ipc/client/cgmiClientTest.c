@@ -86,10 +86,12 @@ static gpointer sanity(gpointer user_data)
 
 
     float duration;
+    cgmi_SessionType type;
+
     g_print("Calling cgmi_GetDuration...\n");
-    stat = cgmi_GetDuration( pSessionId, &duration, FIXED );
+    stat = cgmi_GetDuration( pSessionId, &duration, &type );
     CHECK_ERROR(stat);
-    g_print("cgmi_GetDuration : duration = (%f)\n", duration);
+    g_print("cgmi_GetDuration : duration = (%f), type = (%d)\n", duration, type);
 
 
     float rewindSpeed, fastForwardSpeed;
