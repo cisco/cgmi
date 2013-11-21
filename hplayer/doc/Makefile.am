@@ -10,4 +10,7 @@ all-local: doxyfile.stamp
 clean-local:
 	@rm -rf $(top_srcdir)/doc/html
 	@rm -rf $(top_srcdir)/doc/latex
+else
+	all-local:
+	echo "Not building docs"
 endif
