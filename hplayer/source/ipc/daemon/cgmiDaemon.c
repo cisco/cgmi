@@ -68,7 +68,7 @@ static void gPrintToSylog(const gchar *message)
 }
 static void gPrintErrToSylog(const gchar *message)
 {
-    syslog(LOG_INFO, "%-20s - %s", "CGMI ERROR", message);
+    syslog(LOG_ERR, "%-20s - %s", "CGMI ERROR", message);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
