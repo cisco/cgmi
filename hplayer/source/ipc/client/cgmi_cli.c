@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <sys/time.h>
+
 #include "cgmiPlayerApi.h"
 
 /* Prototypes */
@@ -144,6 +146,13 @@ int main(int argc, char **argv)
     cgmi_SessionType type = cgmi_Session_Type_UNKNOWN;
     gint pbCanPlay = 0;
 
+    gchar url1[128], url2[128];
+    gchar *str = NULL;
+    gint interval = 0;
+    gint duration = 0;
+    struct timeval start, current;
+    int i = 0;
+
     /* Init CGMI. */
     retCode = cgmi_Init();
     if(retCode != CGMI_ERROR_SUCCESS)
@@ -168,6 +177,7 @@ int main(int argc, char **argv)
     printf("CGMI CLI Ready...\n");
 
     printf("Supported commands:\n"
+            "Single APIs:\n"
            "\tplay <url>\n"
            "\tstop (or unload)\n"
            "\n"
@@ -178,6 +188,11 @@ int main(int argc, char **argv)
            "\tsetposition <position (seconds) (float)>\n"
            "\n"
            "\tgetduration\n"
+           "\n"
+           "Tests:\n"
+           "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
+           "\t\tChannel Change Test - Change channels between <url #1> and\n"
+           "\t\t<url#2> at interval <interval> for duration <duration>.\n"
            "\n"
            "\tquit\n\n");
 
@@ -296,6 +311,77 @@ int main(int argc, char **argv)
                         break;
                 }
             }
+        }
+        /* Channel Change Test */
+        else if (strncmp(command, "cct", 3) == 0)
+        {
+            /* command */
+            str = strtok( command, " " );
+            if ( str == NULL ) continue;
+
+            /* url1 */
+            str = strtok( NULL, " " );
+            if ( str == NULL ) continue;
+            strncpy( url1, str, 128 );
+
+            /* url2 */
+            str = strtok( NULL, " " );
+            if ( str == NULL ) continue;
+            strncpy( url2, str, 128 );
+
+            /* interval */
+            str = strtok( NULL, " " );
+            if ( str == NULL ) continue;
+            interval = atoi( str );
+
+            /* duration */
+            str = strtok( NULL, " " );
+            if ( str == NULL ) continue;
+            duration = atoi( str );
+
+            retCode = cgmi_canPlayType( url1, &pbCanPlay );
+            if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
+            {
+                printf( "cgmi_canPlayType Not Implemented\n" );
+            } else if ( retCode || !pbCanPlay )
+            {
+                printf( "Cannot play %s\n", url1 );
+                continue;
+            }
+
+            retCode = cgmi_canPlayType( url2, &pbCanPlay );
+            if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
+            {
+                printf( "cgmi_canPlayType Not Implemented\n" );
+            } else if ( retCode || !pbCanPlay )
+            {
+                printf( "Cannot play %s\n", url2 );
+                continue;
+            }
+
+            /* Run test. */
+            gettimeofday( &start, NULL );
+            gettimeofday( &current, NULL );
+            str = url1;
+            i = 0;
+            while ( (current.tv_sec - start.tv_sec) < duration )
+            {
+                i++;
+                printf( "(%d) Playing %s...\n", i, str );
+                retCode = play(pSessionId, str);
+                sleep( interval );
+                retCode = stop(pSessionId);
+
+                if ( str == url1 )
+                    str = url2;
+                else
+                    str = url1;
+
+                gettimeofday( &current, NULL );
+            }
+
+            printf( "Played for %d seconds. %d channels.\n",
+                    (int) (current.tv_sec - start.tv_sec), i );
         }
         /* quit */
         else if (strncmp(command, "quit", 4) == 0)
