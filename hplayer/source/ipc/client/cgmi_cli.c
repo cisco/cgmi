@@ -189,6 +189,8 @@ int main(int argc, char **argv)
            "\n"
            "\tgetduration\n"
            "\n"
+           "\tnewsession\n"
+           "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
@@ -312,6 +314,38 @@ int main(int argc, char **argv)
                 }
             }
         }
+        /* New Session */
+        else if (strncmp(command, "newsession", 10) == 0)
+        {
+            /* If we were playing, stop. */
+            if ( playing )
+            {
+                printf("Stopping playback.\n");
+                retCode = stop(pSessionId);
+                playing = 0;
+            }
+
+            /* Destroy the created session. */
+            retCode = cgmi_DestroySession( pSessionId );
+            if (retCode != CGMI_ERROR_SUCCESS)
+            {
+                printf("CGMI DestroySession Failed: %s\n",
+                        cgmi_ErrorString( retCode ));
+                break;
+            } else {
+                printf("CGMI DestroySession Success!\n");
+            }
+
+            /* Create a playback session. */
+            retCode = cgmi_CreateSession( cgmiCallback, NULL, &pSessionId );
+            if (retCode != CGMI_ERROR_SUCCESS)
+            {
+                printf("CGMI CreateSession Failed: %s\n", cgmi_ErrorString( retCode ));
+                break;;
+            } else {
+                printf("CGMI CreateSession Success!\n");
+            }
+        }
         /* Channel Change Test */
         else if (strncmp(command, "cct", 3) == 0)
         {
@@ -399,6 +433,7 @@ int main(int argc, char **argv)
     /* If we were playing, stop. */
     if ( playing )
     {
+        printf("Stopping playback.\n");
         retCode = stop(pSessionId);
     }
 
