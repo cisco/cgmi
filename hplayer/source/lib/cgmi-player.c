@@ -283,6 +283,15 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       g_strlcpy(pPipeline, manualPipeline,1024);
       pSess->manualPipeline = g_strdup(manualPipeline);
    }
+   if (g_str_has_suffix(pSess->playbackURI, "ts"))
+   {
+      // This url is pointing to DLNA content, build a manual pipeline.
+      memset(manualPipeline, 0, 1024);
+      g_print("Test with Transport stream content, using Manual Pipeline");
+      g_sprintf(manualPipeline, "filesrc location=%s %s", pSess->playbackURI," ! tsdemux name=d ! queue max-size-buffers=0 max-size-time=0 ! aacparse ! faad ! audioconvert ! audioresample ! autoaudiosink d. ! queue max-size-buffers=0 max-size-time=0 ! ffdec_h264 ! ffmpegcolorspace ! videoscale ! autovideosink");
+      g_strlcpy(pPipeline, manualPipeline,1024);
+      pSess->manualPipeline = g_strdup(manualPipeline);
+   }
    else
    {
       // let's see if we are running on broadcom hardware if we are let's see if we can find there
@@ -363,6 +372,7 @@ cgmi_Status cgmi_Unload  (void *pSession )
 
    do
    {
+      g_print ("Changing state of pipeline to NULL \n");
       gst_element_set_state (pSess->pipeline, GST_STATE_NULL);
       // I dont' think that we have to free any memory associated
       // with the source ( for the bus watch as I already freed it when I set
@@ -373,6 +383,7 @@ cgmi_Status cgmi_Unload  (void *pSession )
       pSess->pipeline = NULL;
 
    }while (0);
+   g_print("Exiting %s pipeline is now null\n",__FUNCTION__);
    return stat;
 }
 cgmi_Status cgmi_Play    (void *pSession)
@@ -414,6 +425,17 @@ cgmi_Status cgmi_SetPosition  (void *pSession,  float position)
 
    do
    {
+      if( !gst_element_seek( pSess->pipeline,
+                             1.0,
+                             GST_FORMAT_TIME,
+                             GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
+                             GST_SEEK_TYPE_SET,
+                             (position*GST_SECOND),
+                             GST_SEEK_TYPE_NONE,
+                             GST_CLOCK_TIME_NONE ))
+      {
+         GST_ERROR("Seek Failed\n");
+      }
 
    } while (0);
    return stat;
