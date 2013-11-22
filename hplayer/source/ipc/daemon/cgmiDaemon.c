@@ -133,7 +133,7 @@ on_handle_cgmi_init (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
 
     CGMID_ENTER();
 
@@ -145,13 +145,13 @@ on_handle_cgmi_init (
     {
         CGMID_INFO("cgmi_Init already called.\n");
     }else{
-        stat = cgmi_Init( );
-        if( stat == CGMI_ERROR_SUCCESS ) { gCgmiInited = TRUE; }
+        retStat = cgmi_Init( );
+        if( retStat == CGMI_ERROR_SUCCESS ) { gCgmiInited = TRUE; }
     }
 
     org_cisco_cgmi_complete_init (object,
                                   invocation,
-                                  stat);
+                                  retStat);
 
     return TRUE;
 }
@@ -161,13 +161,13 @@ on_handle_cgmi_term (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation )
 {
-    //cgmi_Status stat = CGMI_ERROR_FAILED;
+    //cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
     // MZW:  The deamon shouldn't call Term (which calls gst_deinit breaking 
     // all gstreamer apis), so just nod and smile (return success).
-    //stat = cgmi_Term( );
+    //retStat = cgmi_Term( );
 
     org_cisco_cgmi_complete_term (object,
                                   invocation,
@@ -180,7 +180,7 @@ static gboolean
 on_handle_cgmi_error_string (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const gint arg_status )
+    gint arg_status )
 {
     gchar *statusString = NULL;
 
@@ -200,17 +200,17 @@ on_handle_cgmi_create_session (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
     void *pSessionId = NULL;
 
     CGMID_ENTER();
 
-    stat = cgmi_CreateSession( cgmiEventCallback, (void *)object, &pSessionId );
+    retStat = cgmi_CreateSession( cgmiEventCallback, (void *)object, &pSessionId );
 
     org_cisco_cgmi_complete_create_session (object,
                                             invocation,
                                             (guint64)pSessionId,
-                                            stat);
+                                            retStat);
 
     return TRUE;
 }
@@ -219,17 +219,17 @@ static gboolean
 on_handle_cgmi_destroy_session (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId )
+    guint64 arg_sessionId )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
-    stat = cgmi_DestroySession( (void *)arg_sessionId );
+    retStat = cgmi_DestroySession( (void *)arg_sessionId );
 
     org_cisco_cgmi_complete_destroy_session (object,
             invocation,
-            stat);
+            retStat);
 
     return TRUE;
 }
@@ -240,17 +240,17 @@ on_handle_cgmi_can_play_type (
     GDBusMethodInvocation *invocation,
     const gchar *arg_type )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
     gint bCanPlay = 0;
 
     CGMID_ENTER();
 
-    stat = cgmi_canPlayType( arg_type, &bCanPlay );
+    retStat = cgmi_canPlayType( arg_type, &bCanPlay );
 
     org_cisco_cgmi_complete_can_play_type (object,
                                            invocation,
                                            bCanPlay,
-                                           stat);
+                                           retStat);
 
     return TRUE;
 }
@@ -259,18 +259,18 @@ static gboolean
 on_handle_cgmi_load (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
+    guint64 arg_sessionId,
     const gchar *uri )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
-    stat = cgmi_Load( (void *)arg_sessionId, uri );
+    retStat = cgmi_Load( (void *)arg_sessionId, uri );
 
     org_cisco_cgmi_complete_load (object,
                                   invocation,
-                                  stat);
+                                  retStat);
 
     return TRUE;
 }
@@ -279,17 +279,17 @@ static gboolean
 on_handle_cgmi_unload (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId )
+    guint64 arg_sessionId )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
-    stat = cgmi_Unload( (void *)arg_sessionId );
+    retStat = cgmi_Unload( (void *)arg_sessionId );
 
     org_cisco_cgmi_complete_load (object,
                                   invocation,
-                                  stat);
+                                  retStat);
 
     return TRUE;
 }
@@ -298,17 +298,17 @@ static gboolean
 on_handle_cgmi_play (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId )
+    guint64 arg_sessionId )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
-    stat = cgmi_Play( (void *)arg_sessionId );
+    retStat = cgmi_Play( (void *)arg_sessionId );
 
     org_cisco_cgmi_complete_play (object,
                                   invocation,
-                                  stat);
+                                  retStat);
 
     return TRUE;
 }
@@ -317,18 +317,18 @@ static gboolean
 on_handle_cgmi_set_rate (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const gdouble arg_rate )
+    guint64 arg_sessionId,
+    gdouble arg_rate )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
-    stat = cgmi_SetRate( (void *)arg_sessionId, arg_rate );
+    retStat = cgmi_SetRate( (void *)arg_sessionId, arg_rate );
 
     org_cisco_cgmi_complete_set_rate (object,
                                       invocation,
-                                      stat);
+                                      retStat);
 
     return TRUE;
 }
@@ -337,18 +337,18 @@ static gboolean
 on_handle_cgmi_set_position (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const gdouble arg_position )
+    guint64 arg_sessionId,
+    gdouble arg_position )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
-    stat = cgmi_SetPosition( (void *)arg_sessionId, arg_position );
+    retStat = cgmi_SetPosition( (void *)arg_sessionId, arg_position );
 
     org_cisco_cgmi_complete_set_position (object,
                                           invocation,
-                                          stat);
+                                          retStat);
 
     return TRUE;
 }
@@ -357,19 +357,19 @@ static gboolean
 on_handle_cgmi_get_position (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId )
+    guint64 arg_sessionId )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
     float position = 0;
 
     CGMID_ENTER();
 
-    stat = cgmi_GetPosition( (void *)arg_sessionId, &position );
+    retStat = cgmi_GetPosition( (void *)arg_sessionId, &position );
 
     org_cisco_cgmi_complete_get_position (object,
                                           invocation,
                                           position,
-                                          stat);
+                                          retStat);
 
     return TRUE;
 }
@@ -378,21 +378,21 @@ static gboolean
 on_handle_cgmi_get_duration (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId )
+    guint64 arg_sessionId )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
     float duration = 0;
     cgmi_SessionType type = 0;
 
     CGMID_ENTER();
 
-    stat = cgmi_GetDuration( (void *)arg_sessionId, &duration, &type );
+    retStat = cgmi_GetDuration( (void *)arg_sessionId, &duration, &type );
 
     org_cisco_cgmi_complete_get_duration (object,
                                           invocation,
                                           duration,
                                           type,
-                                          stat);
+                                          retStat);
 
     return TRUE;
 }
@@ -401,21 +401,21 @@ static gboolean
 on_handle_cgmi_get_rate_range (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId )
+    guint64 arg_sessionId )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
     float rewindRate = 0;
     float fForwardRate = 0;
 
     CGMID_ENTER();
 
-    stat = cgmi_GetRateRange( (void *)arg_sessionId, &rewindRate, &fForwardRate );
+    retStat = cgmi_GetRateRange( (void *)arg_sessionId, &rewindRate, &fForwardRate );
 
     org_cisco_cgmi_complete_get_rate_range (object,
                                             invocation,
                                             rewindRate,
                                             fForwardRate,
-                                            stat);
+                                            retStat);
 
     return TRUE;
 }
@@ -424,19 +424,19 @@ static gboolean
 on_handle_cgmi_get_num_audio_streams (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId )
+    guint64 arg_sessionId )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
     int count = 0;
 
     CGMID_ENTER();
 
-    stat = cgmi_GetNumAudioStreams( (void *)arg_sessionId, &count );
+    retStat = cgmi_GetNumAudioStreams( (void *)arg_sessionId, &count );
 
     org_cisco_cgmi_complete_get_num_audio_streams (object,
             invocation,
             count,
-            stat);
+            retStat);
 
     return TRUE;
 }
@@ -445,21 +445,21 @@ static gboolean
 on_handle_cgmi_get_audio_stream_info (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const gint index,
-    const gint bufSize )
+    guint64 arg_sessionId,
+    gint index,
+    gint bufSize )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
     char buffer[bufSize];
 
     CGMID_ENTER();
 
-    stat = cgmi_GetAudioStreamInfo( (void *)arg_sessionId, index, buffer, bufSize );
+    retStat = cgmi_GetAudioStreamInfo( (void *)arg_sessionId, index, buffer, bufSize );
 
     org_cisco_cgmi_complete_get_audio_stream_info (object,
             invocation,
             buffer,
-            stat);
+            retStat);
 
     return TRUE;
 }
@@ -468,18 +468,18 @@ static gboolean
 on_handle_cgmi_set_audio_stream (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const gint index )
+    guint64 arg_sessionId,
+    gint index )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
-    stat = cgmi_SetAudioStream( (void *)arg_sessionId, index );
+    retStat = cgmi_SetAudioStream( (void *)arg_sessionId, index );
 
     org_cisco_cgmi_complete_set_audio_stream (object,
             invocation,
-            stat);
+            retStat);
 
     return TRUE;
 }
@@ -488,18 +488,18 @@ static gboolean
 on_handle_cgmi_set_default_audio_lang (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
+    guint64 arg_sessionId,
     const char *language )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
-    stat = cgmi_SetDefaultAudioLang( (void *)arg_sessionId, language );
+    retStat = cgmi_SetDefaultAudioLang( (void *)arg_sessionId, language );
 
     org_cisco_cgmi_complete_set_audio_stream (object,
             invocation,
-            stat);
+            retStat);
 
     return TRUE;
 }
@@ -508,22 +508,22 @@ static gboolean
 on_handle_cgmi_create_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const guint64 arg_filterPriv )
+    guint64 arg_sessionId,
+    guint64 arg_filterPriv )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
     void *pFilterId;
 
     CGMID_ENTER();
 
-    stat = cgmi_CreateSectionFilter( (void *)arg_sessionId,
+    retStat = cgmi_CreateSectionFilter( (void *)arg_sessionId,
                                      (void *)arg_filterPriv,
                                      &pFilterId );
 
     org_cisco_cgmi_complete_create_section_filter (object,
             invocation,
             (guint64)pFilterId,
-            stat);
+            retStat);
 
     return TRUE;
 }
@@ -532,19 +532,19 @@ static gboolean
 on_handle_cgmi_destroy_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const guint64 arg_filterId )
+    guint64 arg_sessionId,
+    guint64 arg_filterId )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
-    stat = cgmi_DestroySectionFilter( (void *)arg_sessionId,
+    retStat = cgmi_DestroySectionFilter( (void *)arg_sessionId,
                                       (void *)arg_filterId );
 
     org_cisco_cgmi_complete_destroy_section_filter (object,
             invocation,
-            stat);
+            retStat);
 
     return TRUE;
 }
@@ -553,22 +553,35 @@ static gboolean
 on_handle_cgmi_set_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const guint64 arg_filterId,
-    GVariant *filter )
+    guint64 arg_sessionId,
+    guint64 arg_filterId,
+    gint arg_filterPid,
+    gchar *arg_filterValue,
+    gchar *arg_filterMask,
+    gint arg_filterLength,
+    guint arg_filterOffset,
+    gint arg_filterComparitor )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    tcgmi_FilterData pFilter;
 
     CGMID_ENTER();
 
-    // TODO:  Update to match tcgmi_FilterData data structure
+    // Populate the filter struct
+    pFilter.pid = arg_filterPid;
+    pFilter.value = arg_filterValue;
+    pFilter.mask = arg_filterMask;
+    pFilter.length = arg_filterLength;
+    pFilter.offset = arg_filterOffset;
+    pFilter.comparitor = arg_filterComparitor;
 
-    stat = cgmi_SetSectionFilter( (void *)arg_sessionId,
-                                  (void *)arg_filterId, NULL );
+    retStat = cgmi_SetSectionFilter( (void *)arg_sessionId,
+                                  (void *)arg_filterId, 
+                                  &pFilter );
 
     org_cisco_cgmi_complete_set_section_filter (object,
             invocation,
-            stat);
+            retStat);
 
     return TRUE;
 }
@@ -577,19 +590,19 @@ static gboolean
 on_handle_cgmi_start_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const guint64 arg_filterId,
-    const gint timeout,
-    const gint oneShot,
-    const gint enableCRC )
+    guint64 arg_sessionId,
+    guint64 arg_filterId,
+    gint timeout,
+    gint oneShot,
+    gint enableCRC )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
     //TODO handle callbacks
 
-    stat = cgmi_StartSectionFilter( (void *)arg_sessionId,
+    retStat = cgmi_StartSectionFilter( (void *)arg_sessionId,
                                     (void *)arg_filterId,
                                     timeout,
                                     oneShot,
@@ -599,7 +612,7 @@ on_handle_cgmi_start_section_filter (
 
     org_cisco_cgmi_complete_start_section_filter (object,
             invocation,
-            stat);
+            retStat);
 
     return TRUE;
 }
@@ -611,18 +624,18 @@ on_handle_cgmi_stop_section_filter (
     const guint64 arg_sessionId,
     const guint64 arg_filterId )
 {
-    cgmi_Status stat = CGMI_ERROR_FAILED;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
 
     CGMID_ENTER();
 
     //TODO handle callbacks
 
-    stat = cgmi_StopSectionFilter( (void *)arg_sessionId,
+    retStat = cgmi_StopSectionFilter( (void *)arg_sessionId,
                                    (void *)arg_filterId );
 
     org_cisco_cgmi_complete_start_section_filter (object,
             invocation,
-            stat);
+            retStat);
 
     return TRUE;
 }

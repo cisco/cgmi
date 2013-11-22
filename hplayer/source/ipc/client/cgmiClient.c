@@ -12,7 +12,7 @@
 #define dbus_check_error(error) \
     do{\
         if (error)\
-        {   g_print("%s,%d: Failed in the client call: %s\n", __FUNCTION__, __LINE__, error->message);\
+        {   g_print("%s:%d: IPC failure: %s\n", __FUNCTION__, __LINE__, error->message);\
             g_error_free (error);\
             return  CGMI_ERROR_FAILED;\
         }\
@@ -21,9 +21,18 @@
 #define enforce_dbus_preconditions() \
     if ( gProxy == NULL ) \
     { \
-        g_print("%s:%d - %s Error CGMI not initialized.\n", \
+        g_print("%s:%d - %s Error CGMI DBUS-IPC not connected.\n", \
                 __FILE__, __LINE__, __FUNCTION__); \
         return CGMI_ERROR_WRONG_STATE; \
+    }
+
+#define enforce_session_preconditions(pSess) \
+    if ( pSess == NULL || \
+        g_hash_table_lookup(gPlayerEventCallbacks, (gpointer)pSess) == NULL ) \
+    { \
+        g_print("%s:%d - %s Error invalid sessionId %lu.\n", \
+                __FILE__, __LINE__, __FUNCTION__, (guint64)pSess); \
+        return CGMI_ERROR_BAD_PARAM; \
     }
 
 
@@ -41,9 +50,11 @@ typedef struct
 ////////////////////////////////////////////////////////////////////////////////
 // Globals
 ////////////////////////////////////////////////////////////////////////////////
+static gboolean         gClientInited           = FALSE;
 static GMainLoop        *gLoop                  = NULL;
 static OrgCiscoCgmi     *gProxy                 = NULL;
 static GHashTable       *gPlayerEventCallbacks  = NULL;
+static cgmi_Status      gInitStatus             = CGMI_ERROR_NOT_INITIALIZED;
 static pthread_t        gMainLoopThread;
 static sem_t            gMainThreadStartSema;
 static pthread_mutex_t  gEventCallbackMutex;
@@ -71,7 +82,6 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
 
     do
     {
-
         if ( gPlayerEventCallbacks == NULL )
         {
             g_print("Internal error:  Callback hash table not initialized.\n");
@@ -106,17 +116,95 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
 // DBUS client specific setup and tear down APIs
 ////////////////////////////////////////////////////////////////////////////////
 
+static void cgmi_ResetClientState()
+{
+    /* Forget known sessions and callbacks */
+    pthread_mutex_lock(&gEventCallbackMutex);
+    if ( gPlayerEventCallbacks != NULL )
+    {
+        g_hash_table_destroy(gPlayerEventCallbacks);
+        gPlayerEventCallbacks = NULL;
+    }
+    pthread_mutex_unlock(&gEventCallbackMutex);
+
+    /* Destroy the DBUS connection */
+    g_object_unref(gProxy);
+    gProxy = NULL;
+}
+
+/* Called whem the server aquires name on dbus */
+static void on_name_appeared (GDBusConnection *connection,
+                  const gchar     *name,
+                  const gchar     *name_owner,
+                  gpointer         user_data)
+{
+    GError *error = NULL;
+
+    g_print ("Name %s on the session bus is owned by %s\n", name, name_owner);
+
+    // Connect proxy to the server 
+    gProxy = org_cisco_cgmi_proxy_new_for_bus_sync( G_BUS_TYPE_SESSION,
+             G_DBUS_PROXY_FLAGS_NONE, "org.cisco.cgmi", "/org/cisco/cgmi", NULL, &error );
+
+    if (error)
+    {
+        g_print("Failed in dbus proxy call: %s\n", error->message);
+        g_error_free(error);
+        gProxy = NULL;
+        gInitStatus = CGMI_ERROR_FAILED;
+        return;
+    }
+
+    // Listen for player callbacks 
+    g_signal_connect( gProxy, "player-notify",
+                      G_CALLBACK (on_handle_notification), NULL );
+
+    // Create hash table for tracking sessions and callbacks 
+    gPlayerEventCallbacks = g_hash_table_new(g_direct_hash, g_direct_equal);
+
+    // Call init when the server comes on the dbus.
+    org_cisco_cgmi_call_init_sync( gProxy, (gint *)&gInitStatus, NULL, &error );
+
+    if (error)
+    {   g_print("%s,%d: Failed to init CGMI: %s\n", __FUNCTION__, __LINE__, error->message);
+        g_error_free (error);
+        return;
+    }
+
+    gInitStatus = CGMI_ERROR_SUCCESS;
+}
+
+/* Called whem the server losses name on dbus */
+static void on_name_vanished (GDBusConnection *connection,
+                  const gchar     *name,
+                  gpointer         user_data)
+{
+    g_print ("Name %s does not exist on the session bus\n", name);
+
+    cgmi_ResetClientState();
+}
+
+
 /* This callback posts the semaphore to indicate the main loop is running */
 static gboolean cgmi_DbusMainLoopStarted( gpointer user_data )
 {
-    sem_post(&gMainThreadStartSema);
+    // If dbus server hasn't been found yet wait a while
+    if( gProxy == NULL && user_data == NULL )
+    {
+        g_timeout_add( 200, cgmi_DbusMainLoopStarted, 
+            (gpointer *)&gMainThreadStartSema );
+    }else
+    {
+        sem_post(&gMainThreadStartSema);
+    }
+    
     return FALSE;
 }
 
 /* This is spawned as a thread and starts the glib main loop for dbus. */
 static void *cgmi_DbusMainLoop(void *data)
 {
-    GError *error = NULL;
+    guint watcher_id;
 
     g_type_init();
 
@@ -127,20 +215,14 @@ static void *cgmi_DbusMainLoop(void *data)
         return;
     }
 
-    gProxy = org_cisco_cgmi_proxy_new_for_bus_sync( G_BUS_TYPE_SESSION,
-             G_DBUS_PROXY_FLAGS_NONE, "org.cisco.cgmi", "/org/cisco/cgmi", NULL, &error );
-
-    if (error)
-    {
-        g_print("Failed in dbus proxy call: %s\n", error->message);
-        g_error_free(error);
-        return NULL;
-    }
-
-    g_signal_connect( gProxy, "player-notify",
-                      G_CALLBACK (on_handle_notification), NULL );
-
-    gPlayerEventCallbacks = g_hash_table_new(g_direct_hash, g_direct_equal);
+    // Add callbacks for when the dbus server goes up/down
+    watcher_id = g_bus_watch_name ( G_BUS_TYPE_SESSION,
+                                 "org.cisco.cgmi",
+                                 G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                 on_name_appeared,
+                                 on_name_vanished,
+                                 NULL,
+                                 NULL);
 
 
     /* This timeout will be called by the main loop after it starts */
@@ -157,7 +239,7 @@ cgmi_Status cgmi_DbusInterfaceInit()
 {
     GError *error = NULL;
 
-    if (gProxy != NULL)
+    if ( gClientInited == TRUE )
     {
         g_print("Dbus proxy is already open.\n");
         return CGMI_ERROR_WRONG_STATE;
@@ -174,6 +256,8 @@ cgmi_Status cgmi_DbusInterfaceInit()
     sem_wait(&gMainThreadStartSema);
     sem_destroy(&gMainThreadStartSema);
 
+    gClientInited = TRUE;
+
     return CGMI_ERROR_SUCCESS;
 }
 
@@ -182,23 +266,19 @@ cgmi_Status cgmi_DbusInterfaceInit()
  */
 void cgmi_DbusInterfaceTerm()
 {
-    if ( gProxy == NULL ) return;
+    if ( gClientInited == FALSE ) return;
 
-    pthread_mutex_lock(&gEventCallbackMutex);
-    if ( gPlayerEventCallbacks != NULL )
-    {
-        g_hash_table_destroy(gPlayerEventCallbacks);
-        gPlayerEventCallbacks = NULL;
+    // Reset the state of client session IDs and callbacks.
+    cgmi_ResetClientState();
+
+    // Kill the thread/loop utilzied by dbus
+    if( gLoop != NULL ) {
+        g_main_loop_quit( gLoop );
+        pthread_join (gMainLoopThread, NULL);
+        g_main_loop_unref( gLoop );
     }
-    pthread_mutex_unlock(&gEventCallbackMutex);
 
-    // Kill the dbus thread
-    g_main_loop_quit( gLoop );
-    pthread_join (gMainLoopThread, NULL);
-    if ( gLoop ) g_main_loop_unref( gLoop );
-
-    g_object_unref(gProxy);
-    gProxy = NULL;
+    gClientInited = FALSE;
 }
 
 
@@ -207,35 +287,30 @@ void cgmi_DbusInterfaceTerm()
 ////////////////////////////////////////////////////////////////////////////////
 cgmi_Status cgmi_Init (void)
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     cgmi_DbusInterfaceInit();
 
-    org_cisco_cgmi_call_init_sync( gProxy, (gint *)&stat, NULL, &error );
-
-    dbus_check_error(error);
-
-    return stat;
+    return gInitStatus;
 }
 
 cgmi_Status cgmi_Term (void)
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     enforce_dbus_preconditions();
 
-    org_cisco_cgmi_call_term_sync( gProxy, (gint *)&stat, NULL, &error );
+    org_cisco_cgmi_call_term_sync( gProxy, (gint *)&retStat, NULL, &error );
 
     dbus_check_error(error);
 
     cgmi_DbusInterfaceTerm();
 
-    return stat;
+    return retStat;
 }
 
-char* cgmi_ErrorString ( cgmi_Status stat )
+char* cgmi_ErrorString ( cgmi_Status retStat )
 {
     gchar *statusString = NULL;
     GError *error = NULL;
@@ -247,7 +322,7 @@ char* cgmi_ErrorString ( cgmi_Status stat )
         return NULL;
     }
 
-    org_cisco_cgmi_call_error_string_sync( gProxy, stat, &statusString, NULL, &error );
+    org_cisco_cgmi_call_error_string_sync( gProxy, retStat, &statusString, NULL, &error );
 
     if(error)
     {
@@ -263,7 +338,7 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
                                  void *pUserData,
                                  void **pSession )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
     guint64 sessionId;
     tcgmi_PlayerEventCallbackData *eventCbData = NULL;
@@ -285,7 +360,7 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
 
         org_cisco_cgmi_call_create_session_sync( gProxy,
                 &sessionId,
-                (gint *)&stat,
+                (gint *)&retStat,
                 NULL,
                 &error );
 
@@ -294,7 +369,7 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
             g_print("%s,%d: Failed in the client call: %s\n", __FUNCTION__, __LINE__,
                     error->message);
             g_error_free (error);
-            stat = CGMI_ERROR_FAILED;
+            retStat = CGMI_ERROR_FAILED;
             break;
         }
 
@@ -303,7 +378,7 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
         eventCbData = g_malloc0(sizeof(tcgmi_PlayerEventCallbackData));
         if (eventCbData == NULL)
         {
-            stat = CGMI_ERROR_OUT_OF_MEMORY;
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
             break;
         }
 
@@ -313,7 +388,7 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
         if ( gPlayerEventCallbacks == NULL )
         {
             g_print("Internal error:  Callback hash table not initialized.\n");
-            stat = CGMI_ERROR_FAILED;
+            retStat = CGMI_ERROR_FAILED;
             break;
         }
 
@@ -325,12 +400,12 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
 
     pthread_mutex_unlock(&gEventCallbackMutex);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_DestroySession( void *pSession )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -339,12 +414,14 @@ cgmi_Status cgmi_DestroySession( void *pSession )
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_destroy_session_sync( gProxy,
             (guint64)pSession,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
@@ -360,12 +437,12 @@ cgmi_Status cgmi_DestroySession( void *pSession )
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_canPlayType( const char *type, int *pbCanPlay )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -379,18 +456,18 @@ cgmi_Status cgmi_canPlayType( const char *type, int *pbCanPlay )
     org_cisco_cgmi_call_can_play_type_sync( gProxy,
                                             (const gchar *)type,
                                             (gint *)pbCanPlay,
-                                            (gint *)&stat,
+                                            (gint *)&retStat,
                                             NULL,
                                             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_Load( void *pSession, const char *uri )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -399,24 +476,26 @@ cgmi_Status cgmi_Load( void *pSession, const char *uri )
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_load_sync( gProxy,
                                    (guint64)pSession,
                                    (const gchar *)uri,
-                                   (gint *)&stat,
+                                   (gint *)&retStat,
                                    NULL,
                                    &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_Unload( void *pSession )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -424,24 +503,26 @@ cgmi_Status cgmi_Unload( void *pSession )
     {
         return CGMI_ERROR_BAD_PARAM;
     }
+
+    enforce_session_preconditions(pSession);
 
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_unload_sync( gProxy,
                                      (guint64)pSession,
-                                     (gint *)&stat,
+                                     (gint *)&retStat,
                                      NULL,
                                      &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_Play( void *pSession )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -449,24 +530,26 @@ cgmi_Status cgmi_Play( void *pSession )
     {
         return CGMI_ERROR_BAD_PARAM;
     }
+
+    enforce_session_preconditions(pSession);
 
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_play_sync( gProxy,
                                    (guint64)pSession,
-                                   (gint *)&stat,
+                                   (gint *)&retStat,
                                    NULL,
                                    &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_SetRate( void *pSession,  float rate )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -474,6 +557,8 @@ cgmi_Status cgmi_SetRate( void *pSession,  float rate )
     {
         return CGMI_ERROR_BAD_PARAM;
     }
+
+    enforce_session_preconditions(pSession);
 
     enforce_dbus_preconditions();
 
@@ -481,18 +566,18 @@ cgmi_Status cgmi_SetRate( void *pSession,  float rate )
     org_cisco_cgmi_call_set_rate_sync( gProxy,
                                        (guint64)pSession,
                                        (gdouble)rate,
-                                       (gint *)&stat,
+                                       (gint *)&retStat,
                                        NULL,
                                        &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_SetPosition( void *pSession, float position )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -501,24 +586,26 @@ cgmi_Status cgmi_SetPosition( void *pSession, float position )
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_set_position_sync( gProxy,
                                            (guint64)pSession,
                                            (gdouble)position,
-                                           (gint *)&stat,
+                                           (gint *)&retStat,
                                            NULL,
                                            &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_GetPosition( void *pSession, float *pPosition )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
     gdouble localPosition = 0;
 
@@ -528,13 +615,15 @@ cgmi_Status cgmi_GetPosition( void *pSession, float *pPosition )
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_get_position_sync( gProxy,
                                            (guint64)pSession,
                                            &localPosition,
-                                           (gint *)&stat,
+                                           (gint *)&retStat,
                                            NULL,
                                            &error );
 
@@ -542,13 +631,13 @@ cgmi_Status cgmi_GetPosition( void *pSession, float *pPosition )
 
     *pPosition = (float)localPosition;
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_GetDuration( void *pSession,  float *pDuration,
                               cgmi_SessionType *type )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
     gdouble localDuration = 0;
 
@@ -558,6 +647,8 @@ cgmi_Status cgmi_GetDuration( void *pSession,  float *pDuration,
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
@@ -565,7 +656,7 @@ cgmi_Status cgmi_GetDuration( void *pSession,  float *pDuration,
                                            (guint64)pSession,
                                            &localDuration,
                                            (gint *)type,
-                                           (gint *)&stat,
+                                           (gint *)&retStat,
                                            NULL,
                                            &error );
 
@@ -574,12 +665,12 @@ cgmi_Status cgmi_GetDuration( void *pSession,  float *pDuration,
     //Dbus doesn't have a float type (just double), hence this funny business
     *pDuration = (float)localDuration;
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
     gdouble localRewind = 0;
     gdouble localFForward = 0;
@@ -590,6 +681,8 @@ cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward 
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
@@ -597,7 +690,7 @@ cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward 
             (guint64)pSession,
             &localRewind,
             &localFForward,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
@@ -606,12 +699,12 @@ cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward 
     *pRewind = (float)localRewind;
     *pFForward = (float)localFForward;
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_GetNumAudioStreams( void *pSession,  int *count )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -620,25 +713,27 @@ cgmi_Status cgmi_GetNumAudioStreams( void *pSession,  int *count )
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_get_num_audio_streams_sync( gProxy,
             (guint64)pSession,
             count,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_GetAudioStreamInfo( void *pSession,  int index,
                                      char *buf, int bufSize )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -646,6 +741,8 @@ cgmi_Status cgmi_GetAudioStreamInfo( void *pSession,  int index,
     {
         return CGMI_ERROR_BAD_PARAM;
     }
+
+    enforce_session_preconditions(pSession);
 
     enforce_dbus_preconditions();
 
@@ -655,18 +752,18 @@ cgmi_Status cgmi_GetAudioStreamInfo( void *pSession,  int index,
             index,
             bufSize,
             &buf,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_SetAudioStream( void *pSession,  int index )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -675,24 +772,26 @@ cgmi_Status cgmi_SetAudioStream( void *pSession,  int index )
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_set_audio_stream_sync( gProxy,
             (guint64)pSession,
             index,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_SetDefaultAudioLang( void *pSession,  const char *language )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -701,24 +800,26 @@ cgmi_Status cgmi_SetDefaultAudioLang( void *pSession,  const char *language )
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_set_default_audio_lang_sync( gProxy,
             (guint64)pSession,
             language,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_CreateSectionFilter( void *pSession, void *pFilterPriv, void **pFilterId )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -726,6 +827,8 @@ cgmi_Status cgmi_CreateSectionFilter( void *pSession, void *pFilterPriv, void **
     {
         return CGMI_ERROR_BAD_PARAM;
     }
+
+    enforce_session_preconditions(pSession);
 
     enforce_dbus_preconditions();
 
@@ -734,18 +837,18 @@ cgmi_Status cgmi_CreateSectionFilter( void *pSession, void *pFilterPriv, void **
             (guint64)pSession,
             (guint64)pFilterPriv,
             (guint64 *)pFilterId,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_DestroySectionFilter(void *pSession, void *pFilterId )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -754,25 +857,28 @@ cgmi_Status cgmi_DestroySectionFilter(void *pSession, void *pFilterId )
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_destroy_section_filter_sync( gProxy,
             (guint64)pSession,
             (guint64)pFilterId,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_SetSectionFilter(void *pSession, void *pFilterId, tcgmi_FilterData *pFilter )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
+    char *value, *mask;
 
     // Preconditions
     if( pSession == NULL || pFilterId == NULL || pFilter == NULL )
@@ -780,21 +886,42 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void *pFilterId, tcgmi_FilterD
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
+    // DBUS doesn't like NULL char* (ay) pointers, so pass an empty string instead.
+    value = pFilter->value;
+    mask = pFilter->mask;
+    if( value == NULL ) value = "";
+    if( mask == NULL ) mask = "";
 
+    //TODO:  Marshall value and mask
     org_cisco_cgmi_call_set_section_filter_sync( gProxy,
             (guint64)pSession,
             (guint64)pFilterId,
-            (gchar *)pFilter,
-            (gint *)&stat,
+            (gint)pFilter->pid,
+            value,
+            mask,
+            (gint)pFilter->length,
+            (guint)pFilter->offset,
+            (gint)pFilter->comparitor,
+            (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
+
+/*
+   gint pid;
+   guchar *value;
+   guchar *mask;
+   gint length;
+   guint offset;
+   cgmi_FilterComparitor comparitor;*/
 
 cgmi_Status cgmi_StartSectionFilter(void *pSession,
                                     void *pFilterId,
@@ -804,7 +931,7 @@ cgmi_Status cgmi_StartSectionFilter(void *pSession,
                                     queryBufferCB bufferCB,
                                     sectionBufferCB sectionCB )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -812,6 +939,8 @@ cgmi_Status cgmi_StartSectionFilter(void *pSession,
     {
         return CGMI_ERROR_BAD_PARAM;
     }
+
+    enforce_session_preconditions(pSession);
 
     enforce_dbus_preconditions();
 
@@ -823,18 +952,18 @@ cgmi_Status cgmi_StartSectionFilter(void *pSession,
             timeout,
             bOneShot,
             bEnableCRC,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }
 
 cgmi_Status cgmi_StopSectionFilter(void *pSession, void *pFilterId )
 {
-    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
 
     // Preconditions
@@ -843,17 +972,19 @@ cgmi_Status cgmi_StopSectionFilter(void *pSession, void *pFilterId )
         return CGMI_ERROR_BAD_PARAM;
     }
 
+    enforce_session_preconditions(pSession);
+
     enforce_dbus_preconditions();
 
 
     org_cisco_cgmi_call_stop_section_filter_sync( gProxy,
             (guint64)pSession,
             (guint64)pFilterId,
-            (gint *)&stat,
+            (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
 
-    return stat;
+    return retStat;
 }

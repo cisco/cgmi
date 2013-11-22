@@ -87,6 +87,7 @@ typedef enum
    NOTIFY_MEDIAPLAYER_UNKNOWN             ///<An unexpected error has occured. 
 
 }tcgmi_Event; 
+
 typedef enum
 {
    LIVE,                                  ///<This is a Live stream 
@@ -95,11 +96,24 @@ typedef enum
    cgmi_Session_Type_UNKNOWN
 
 }cgmi_SessionType; 
+
+typedef enum
+{
+    FILTER_COMP_EQUAL,
+    FILTER_COMP_NOT_EQUAL
+}cgmi_FilterComparitor;
+
 typedef struct
 {
-
+   gint pid;
+   guchar *value;
+   guchar *mask;
+   gint length;
+   guint offset;
+   cgmi_FilterComparitor comparitor;
 
 }tcgmi_FilterData; 
+
 
 typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event );
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );

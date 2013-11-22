@@ -122,7 +122,12 @@
         <method name="setSectionFilter">
             <arg name="sessionId" direction="in" type="t"/>
             <arg name="filterId" direction="in" type="t"/>
-            <arg name="filter" direction="in" type="ay"/>
+            <arg name="filterPid" direction="in" type="i"/>
+            <arg name="filterValue" direction="in" type="ay"/>
+            <arg name="filterMask" direction="in" type="ay"/>
+            <arg name="filterLength" direction="in" type="i"/>
+            <arg name="filterOffset" direction="in" type="u"/>
+            <arg name="filterComparitor" direction="in" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
