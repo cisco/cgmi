@@ -27,7 +27,7 @@
     }
 
 #define enforce_session_preconditions(pSess) \
-    if ( pSess == NULL || \
+    if ( pSess == NULL || gPlayerEventCallbacks == NULL || \
         g_hash_table_lookup(gPlayerEventCallbacks, (gpointer)pSess) == NULL ) \
     { \
         g_print("%s:%d - %s Error invalid sessionId %lu.\n", \
