@@ -287,7 +287,8 @@ on_handle_cgmi_unload (
 
     retStat = cgmi_Unload( (void *)arg_sessionId );
 
-    org_cisco_cgmi_complete_load (object,
+    //FIX Chris
+    org_cisco_cgmi_complete_unload (object,
                                   invocation,
                                   retStat);
 
