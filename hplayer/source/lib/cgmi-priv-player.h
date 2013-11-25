@@ -16,6 +16,7 @@ typedef struct
    GMainLoop      *loop;
    GstElement     *pipeline;
    GstElement     *source;
+   guint          tag;
    GstElement     *videoSink;
    GstElement     *demux;
    GstElement     *appsink;

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+// put this in a define. #include "diaglib.h"
 #include <sys/time.h>
 
 #include "cgmiPlayerApi.h"
@@ -152,6 +153,8 @@ int main(int argc, char **argv)
     gint duration = 0;
     struct timeval start, current;
     int i = 0;
+
+    // need to put this in a define diagInit (DIAGTYPE_DEFAULT, NULL, 0);
 
     /* Init CGMI. */
     retCode = cgmi_Init();
@@ -426,7 +429,7 @@ int main(int argc, char **argv)
         /* If we receive and error, print error. */
         if (retCode)
         {
-            printf( "Error: %s\n", cgmi_ErrorString( retCode ) );
+             printf( "Error: %s\n", cgmi_ErrorString( retCode ) );
         }
     }
 

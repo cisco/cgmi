@@ -23,6 +23,7 @@ nodist_cgmi_daemon_SOURCES=cgmi_dbus_server_generated.c cgmi_dbus_server_generat
 
 cgmi_daemon_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include
 cgmi_daemon_LDFLAGS= $(LDFLAGS) 
+#cgmi_daemon_LDFLAGS= $(LDFLAGS) -ldiagclient -lpthreaddiag -lstdc++ 
 # Add the library for the actual player here.
 #
 cgmi_daemon_LDADD= $(LDFLAGS) $(top_builddir)/source/lib/libcgmiPlayer.la

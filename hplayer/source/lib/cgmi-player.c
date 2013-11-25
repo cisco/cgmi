@@ -99,7 +99,8 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                /* Print position and duration when in playing state */
                if( GST_STATE_PLAYING == new_state )
                {
-                  debug_cisco_gst_streamDurPos(pSess);
+                  //debug_cisco_gst_streamDurPos(pSess);
+
                }
             }
          }
@@ -205,7 +206,8 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
       GST_WARNING("Error creating a new Loop\n");
    }
 
-   pSess->thread =  g_thread_create ((GThreadFunc) g_main_loop_run,(void*)pSess->loop, TRUE, NULL); 
+   //pSess->thread =  g_thread_create ((GThreadFunc) g_main_loop_run,(void*)pSess->loop, TRUE, NULL); 
+   pSess->thread = g_thread_new("signal_thread", g_main_loop_run, (void*)pSess->loop);
    if (!pSess->thread)
    {
       GST_INFO("Error launching thread for gmainloop\n");
@@ -228,15 +230,37 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    tSession *pSess = (tSession*)pSession;
    GstState curState, pendState;
 
+   g_print("Entered Destroy\n");
+   if (g_main_loop_is_running(pSess->loop))
+   {
+      g_print("loop is running, setting it to quit\n");
+      g_source_remove(pSess->tag);
+      //g_main_loop_unref(pSess->loop);
+      g_print("about to quit the main loop\n");
+      g_main_loop_quit (pSess->loop);
+   }
 
-   g_main_loop_quit (pSess->loop);
+
+   //g_main_loop_quit (pSess->loop);
    //TODO fix
-   g_thread_join (pSess->thread);
+   g_print("There is race condtion in the glib library, having to sleep to let glib clean up\n");
+   sleep(20);
+   if (pSess->thread)
+   {
+      g_print("about to join threads\n");
+      g_thread_join (pSess->thread);
+   }
+   else
+   {
+      g_print("No thread to free... odd\n");
+   }
+   g_print("threads have joined \n");
    if (pSess->playbackURI) {g_free(pSess->playbackURI);}
    if (pSess->manualPipeline) {g_free(pSess->manualPipeline);}
    if (pSess->pipeline) {gst_object_unref (GST_OBJECT (pSess->pipeline));}
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
    g_free(pSess);
+   g_print("exiting destroy \n");
    return stat;
 
 }
@@ -250,6 +274,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    gchar *pPipeline;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    GSource *source;
+   int length;
    gchar manualPipeline[1024];
 
    tSession *pSess = (tSession*)pSession;
@@ -274,21 +299,13 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    //
    // This section makes DLNA content hardcoded.  Need to optimize.
    //
+   //length = strlen(pSess->playbackURI);
    if (g_str_has_suffix(pSess->playbackURI, "mpeg"))
    {
       // This url is pointing to DLNA content, build a manual pipeline.
       memset(manualPipeline, 0, 1024);
       g_print("DLNA content, using Manual Pipeline");
       g_sprintf(manualPipeline, "rovidmp location=%s %s", pSess->playbackURI,"! decodebin2 name=dec ! brcmvideosink dec. ! brcmaudiosink");
-      g_strlcpy(pPipeline, manualPipeline,1024);
-      pSess->manualPipeline = g_strdup(manualPipeline);
-   }
-   if (g_str_has_suffix(pSess->playbackURI, "ts"))
-   {
-      // This url is pointing to DLNA content, build a manual pipeline.
-      memset(manualPipeline, 0, 1024);
-      g_print("Test with Transport stream content, using Manual Pipeline");
-      g_sprintf(manualPipeline, "filesrc location=%s %s", pSess->playbackURI," ! tsdemux name=d ! queue max-size-buffers=0 max-size-time=0 ! aacparse ! faad ! audioconvert ! audioresample ! autoaudiosink d. ! queue max-size-buffers=0 max-size-time=0 ! ffdec_h264 ! ffmpegcolorspace ! videoscale ! autovideosink");
       g_strlcpy(pPipeline, manualPipeline,1024);
       pSess->manualPipeline = g_strdup(manualPipeline);
    }
@@ -350,7 +367,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       // enable the notifications.
       source = gst_bus_create_watch(pSess->bus);
       g_source_set_callback(source, (GSourceFunc)cisco_gst_handle_msg, pSess, NULL);
-      g_source_attach(source, pSess->thread_ctx);
+      pSess->tag = g_source_attach(source, pSess->thread_ctx);
       g_source_unref(source);
 
 
@@ -422,9 +439,9 @@ cgmi_Status cgmi_SetPosition  (void *pSession,  float position)
 
    tSession *pSess = (tSession*)pSession;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
-
    do
    {
+         g_print("Setting position to %f(ns)  \n", (position* GST_SECOND));
       if( !gst_element_seek( pSess->pipeline,
                              1.0,
                              GST_FORMAT_TIME,
@@ -457,8 +474,8 @@ cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition)
       gst_element_query_position( pSess->pipeline, &gstFormat, &curPos );
 
       GST_INFO("Stream: %s\n", pSess->playbackURI );
-      GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND) );
-      *pPosition = (curPos/GST_SECOND);
+      GST_INFO("Position: %lld (seconds)\n", (curPos/GST_NSECOND) );
+      *pPosition = (curPos/GST_NSECOND);
 
    } while (0);
    return stat;
@@ -477,8 +494,8 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
       gst_element_query_duration( pSess->pipeline, &gstFormat, &Duration );
 
       GST_INFO("Stream: %s\n", pSess->playbackURI );
-      GST_INFO("Position: %lld (seconds)\n", (Duration/GST_SECOND) );
-      *pDuration = (Duration/GST_SECOND);
+      GST_INFO("Position: %lld (seconds)\n", (Duration/GST_NSECOND) );
+      *pDuration = (Duration/GST_NSECOND);
 
    } while (0);
    return stat;

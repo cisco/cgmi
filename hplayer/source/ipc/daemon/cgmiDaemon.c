@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <glib.h>
 #include <syslog.h>
-
+#include <glib/gprintf.h>
+// put in a #define #include "diaglib.h"
 #include "cgmiPlayerApi.h"
 #include "cgmi_dbus_server_generated.h"
 
@@ -54,7 +55,7 @@ static void cgmiDaemonLog( const char *open, int priority, const char *format, .
 
     if( gInForeground == TRUE )
     {
-        printf("%-20s - %s", open, message);
+        g_print("%-20s - %s", open, message);
     }else{
         syslog(priority, "%-20s - %s", open, message);
     }
@@ -845,6 +846,7 @@ int main( int argc, char *argv[] )
         }
     }
 
+    //rms put in to a #define diagInit (DIAGTYPE_DEFAULT, NULL, 0);
     /* DBUS Code */
     loop = g_main_loop_new( NULL, FALSE );
 
