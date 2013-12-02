@@ -40,7 +40,10 @@ cgmi_cli_SOURCES= cgmi_cli.c
 cgmi_cli_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 
 cgmi_cli_LDFLAGS = $(LDFLAGS) 
 #cgmi_cli_LDFLAGS = $(LDFLAGS) -ldiagclient -lpthreaddiag -lstdc++ 
+if CLI_NO_IPC
+cgmi_cli_DEPENDENCIES = $(top_builddir)/source/lib/libcgmiPlayer.la
+cgmi_cli_LDADD = $(LDFLAGS) $(top_builddir)/source/lib/libcgmiPlayer.la
+else
 cgmi_cli_DEPENDENCIES = libcgmi-client.la 
 cgmi_cli_LDADD = $(LDFLAGS) $(top_builddir)/source/ipc/client/libcgmi-client.la
-#cgmi_cli_DEPENDENCIES = $(top_builddir)/source/lib/libcgmiPlayer.la
-#cgmi_cli_LDADD = $(LDFLAGS) $(top_builddir)/source/lib/libcgmiPlayer.la
+endif

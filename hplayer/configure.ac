@@ -82,12 +82,27 @@ AC_TRY_COMPILE(   [#include <pthread.h>],
       AC_MSG_RESULT(yes)
    else
       AC_MSG_RESULT(no)
-   fi
+      fi
 # The following will place define in config.h   
+#
+#
+#
 AC_DEFINE_UNQUOTED(P_HAS_GNU_MUTEXES, ${P_HAS_GNU_MUTEXES},[Platform has non POSIX enhanced mutexes])
 
 
 AC_CHECK_LIB([dl], [dlopen])
+
+#
+# The following is to enable or disable IPC for the cli test app.
+#
+AC_MSG_CHECKING(Build CLI with no IPC...)
+AC_ARG_ENABLE([cli-noipc],
+              [AS_HELP_STRING([--enable-cli-noipc],
+                             [If set to =yes  the cli executable will link directly with CGMI and no IPC will be used ]) ],
+                             [AC_MSG_RESULT(yes) ],
+                             [AC_MSG_RESULT(no)])
+AM_CONDITIONAL(CLI_NO_IPC,test x$enable_cli_noipc = xyes)
+
 
 #
 # Start Checking what packages we have available.
