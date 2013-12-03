@@ -11,14 +11,27 @@
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <gst/app/gstappsink.h>
-#include "cgmi-priv-player.h"
 #include "cgmiPlayerApi.h"
+#include "cgmi-priv-player.h"
 
-
+#define MAGIC_COOKIE 0xDEADBEEF
+GST_DEBUG_CATEGORY_STATIC (cgmi); 
+#define GST_CAT_DEFAULT cgmi     
 
 
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
 
+
+static int  cgmi_CheckSessionHandle(tSession *pSess)
+{
+   if (pSess->cookie != MAGIC_COOKIE)
+   {
+      GST_ERROR("The pointer to the session handle is invalid!!!!\n");
+      return FALSE;
+   }
+   return TRUE;
+
+}
 
 static void cisco_gst_setState( tSession *pSess, GstState state )
 {
@@ -64,58 +77,118 @@ void debug_cisco_gst_streamDurPos( tSession *pSess )
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data )
 {
    tSession *pSess = (tSession*)data;
+  
+   if (cgmi_CheckSessionHandle(pSess) == FALSE) {return FALSE;}
 
    switch( GST_MESSAGE_TYPE(msg) )
    {
       GST_INFO("Got bus message of type: %s\n", GST_MESSAGE_SRC_NAME(msg));
-      
+
+      case GST_MESSAGE_ASYNC_DONE:
+      GST_INFO("Async Done message\n");
+      {
+         pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_SEEK_DONE);
+      }
+      break;
       case GST_MESSAGE_EOS:
+      {
          GST_INFO("End of Stream\n");
-         break;
+         pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_END_OF_STREAM);
+      }
+      break;
+      case GST_MESSAGE_ELEMENT:
+      // these are cisco added events.
+      if( gst_structure_has_name(msg->structure, "extended_notification"))
+      {    
+         //const GValue *ntype;
+         char  *ntype;
+         //figure out which extended notification that we have recieved.
+         GST_INFO("RECEIVED extended notification message\n"); 
+         ntype = gst_structure_get_string(msg->structure, "notification");
+
+         if (0 == strcmp(ntype, "first_pts_decoded"))
+         {    
+            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_FIRST_PTS_DECODED );
+            gst_message_unref (msg);
+         }    
+         else if (0 == strcmp(ntype, "stream_attrib_changed"))
+         {    
+            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_VIDEO_RESOLUTION_CHANGED);
+            gst_message_unref (msg);
+         }    
+         else 
+         {    
+            GST_ERROR("Do not know how to handle %s notification\n",ntype);
+            gst_message_unref (msg);
+         }    
+
+      }    
+      break;
       case GST_MESSAGE_ERROR:
+      {
+         gchar  *debug;
+         GError *error;
+
+         gst_message_parse_error( msg, &error, &debug );
+         g_free( debug );
+
+         GST_WARNING("Error:%d:%d: %s - Resource domain:%d\n",error->code, error->domain,  error->message, GST_RESOURCE_ERROR);
+         // the error could come from multiple domains.
+         if(error->domain == GST_CORE_ERROR)
          {
-            gchar  *debug;
-            GError *error;
-
-            gst_message_parse_error( msg, &error, &debug );
-            g_free( debug );
-
-            GST_WARNING("Error: %s\n", error->message);
-            g_error_free( error );
-
-            break;
          }
-      case GST_MESSAGE_STATE_CHANGED:
+         else if (error->domain ==  GST_LIBRARY_ERROR)
          {
-            /* only check message from the pipeline */
-            if( GST_MESSAGE_SRC(msg) == GST_OBJECT(pSess->pipeline) )
+         }
+         else if (error->domain == GST_RESOURCE_ERROR)
+         {
+            if (error->code == GST_RESOURCE_ERROR_NOT_FOUND)
             {
-               GstState old_state, new_state, pending_state;
-
-               gst_message_parse_state_changed( msg, &old_state, &new_state, &pending_state );
-               g_print("Pipeline state change from %s to %s\n", gst_element_state_get_name(old_state), gst_element_state_get_name(new_state));
-
-
-               /* Print position and duration when in playing state */
-               if( GST_STATE_PLAYING == new_state )
-               {
-                  //debug_cisco_gst_streamDurPos(pSess);
-
-               }
+               pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE);
             }
          }
-         break;
+         else if (error->domain == GST_STREAM_ERROR)
+         {
+         }
+         else if (error->domain == GST_ERROR_SYSTEM)
+         {
+         }
 
-       default:
+         g_error_free( error );
+
+         break;
+      }
+      case GST_MESSAGE_STATE_CHANGED:
+      {
+         /* only check message from the pipeline */
+         if( GST_MESSAGE_SRC(msg) == GST_OBJECT(pSess->pipeline) )
+         {
+            GstState old_state, new_state, pending_state;
+
+            gst_message_parse_state_changed( msg, &old_state, &new_state, &pending_state );
+            g_print("Pipeline state change from %s to %s\n", gst_element_state_get_name(old_state), gst_element_state_get_name(new_state));
+
+
+            /* Print position and duration when in playing state */
+            if( GST_STATE_PLAYING == new_state )
+            {
+               //debug_cisco_gst_streamDurPos(pSess);
+
+            }
+         }
+      }
+      break;
+
+      default:
       /* unhandled message */
       break;
-      } //end of switch
+   } //end of switch
    return TRUE;
 }
 
 char* cgmi_ErrorString(cgmi_Status stat)
 {
-   const char *errorString[] = 
+   static char *errorString[] = 
    {
    "CGMI_ERROR_SUCCESS",           ///<Success
    "CGMI_ERROR_FAILED",            ///<General Error
@@ -166,7 +239,7 @@ cgmi_Status cgmi_Init(void)
          stat = CGMI_ERROR_NOT_SUPPORTED;
          break;
       }
-
+      GST_DEBUG_CATEGORY_INIT (cgmi, "cgmi", 0, "Cisco Gstreamer Media Interface -core");
       /* print out the version */
       strVersion = gst_version_string();
       g_message("GStreamer Initialized with Version: %s\n", strVersion);
@@ -177,16 +250,7 @@ cgmi_Status cgmi_Init(void)
    return stat;
 }
 cgmi_Status cgmi_Term (void)
-{
-
-   gst_deinit();
-
-   return CGMI_ERROR_SUCCESS;
-}
-
-
-cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, void **pSession )
-{
+{ gst_deinit(); return CGMI_ERROR_SUCCESS; } cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, void **pSession ) {
    tSession *pSess = NULL;
 
    pSess = g_malloc0(sizeof(tSession));
@@ -195,9 +259,11 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
       return CGMI_ERROR_OUT_OF_MEMORY;
    }
    *pSession = pSess; 
+   pSess->cookie = (void*)MAGIC_COOKIE; 
    pSess->usrParam = pUserData;
    pSess->playbackURI = NULL;
    pSess->manualPipeline = NULL;
+   pSess->eventCB = eventCB;
 
    pSess->thread_ctx = g_main_context_new();
    pSess->loop = g_main_loop_new (pSess->thread_ctx, FALSE);
@@ -228,39 +294,34 @@ cgmi_Status cgmi_DestroySession (void *pSession)
 {
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    tSession *pSess = (tSession*)pSession;
-   GstState curState, pendState;
 
-   g_print("Entered Destroy\n");
+   GST_INFO("Entered Destroy\n");
    if (g_main_loop_is_running(pSess->loop))
    {
-      g_print("loop is running, setting it to quit\n");
+      GST_INFO("loop is running, setting it to quit\n");
       g_source_remove(pSess->tag);
-      //g_main_loop_unref(pSess->loop);
-      g_print("about to quit the main loop\n");
+      GST_INFO("about to quit the main loop\n");
       g_main_loop_quit (pSess->loop);
    }
 
 
-   //g_main_loop_quit (pSess->loop);
    //TODO fix
    g_print("There is race condtion in the glib library, having to sleep to let glib clean up\n");
-   sleep(20);
+   sleep(3);
    if (pSess->thread)
    {
-      g_print("about to join threads\n");
+      GST_INFO("about to join threads\n");
       g_thread_join (pSess->thread);
    }
    else
    {
       g_print("No thread to free... odd\n");
    }
-   g_print("threads have joined \n");
    if (pSess->playbackURI) {g_free(pSess->playbackURI);}
    if (pSess->manualPipeline) {g_free(pSess->manualPipeline);}
    if (pSess->pipeline) {gst_object_unref (GST_OBJECT (pSess->pipeline));}
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
    g_free(pSess);
-   g_print("exiting destroy \n");
    return stat;
 
 }
@@ -274,7 +335,6 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    gchar *pPipeline;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    GSource *source;
-   int length;
    gchar manualPipeline[1024];
 
    tSession *pSess = (tSession*)pSession;
@@ -299,7 +359,6 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    //
    // This section makes DLNA content hardcoded.  Need to optimize.
    //
-   //length = strlen(pSess->playbackURI);
    if (g_str_has_suffix(pSess->playbackURI, "mpeg"))
    {
       // This url is pointing to DLNA content, build a manual pipeline.
@@ -415,22 +474,62 @@ cgmi_Status cgmi_SetRate (void *pSession,  float rate)
 {
 
    tSession *pSess = (tSession*)pSession;
+   GstElement *video_sink;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+   GstFormat format = GST_FORMAT_TIME;
+   GstEvent *seek_event=NULL;
+   gint64 position; 
+   GstState  curState;
+   GstQuery *streamInfo;
+
+   streamInfo = gst_query_new_segment (GST_FORMAT_TIME);
+   gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE); 
 
    if (rate == 0.0)
    {
       cisco_gst_setState( pSess, GST_STATE_PAUSED);
+      return stat;
    }
-   else if ( rate == 1.0)
+   else if (( rate == 1.0) && (curState == GST_STATE_PAUSED))
    {
       cisco_gst_setState( pSess, GST_STATE_PLAYING);
-   }
-   else
-   {
-      GST_WARNING("This rate is not supported\n");
-      stat = CGMI_ERROR_NOT_SUPPORTED;
+      return stat;
    }
 
+   /* Obtain the current position, needed for the seek event */
+   if (!gst_element_query_position (pSess->pipeline, &format, &position)) 
+   {
+      GST_ERROR ("Unable to retrieve current position.\n");
+      return CGMI_ERROR_FAILED;
+   }
+
+
+   if (rate >=1.0)
+   {
+      seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
+            GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, 0);
+
+   }
+   else if (rate <= -1.0)
+   {
+      seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
+            GST_SEEK_TYPE_SET,0 , GST_SEEK_TYPE_NONE, position);
+
+   }
+   else if (rate == 1.0)
+   {
+      seek_event = gst_event_new_seek(1.0, GST_FORMAT_TIME, 0, GST_SEEK_TYPE_NONE, -1, GST_SEEK_TYPE_NONE, -1);
+   }
+
+   g_object_get (pSess->pipeline, "video-sink", &video_sink, NULL);
+
+
+
+   /* Send the event */
+   if (seek_event)
+   {
+      gst_element_send_event (video_sink, seek_event);
+   }
    return stat;
 }
 
@@ -441,15 +540,15 @@ cgmi_Status cgmi_SetPosition  (void *pSession,  float position)
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    do
    {
-         g_print("Setting position to %f(ns)  \n", (position* GST_SECOND));
+      g_print("Setting position to %f (ns)  \n", (position* GST_SECOND));
       if( !gst_element_seek( pSess->pipeline,
-                             1.0,
-                             GST_FORMAT_TIME,
-                             GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
-                             GST_SEEK_TYPE_SET,
-                             (position*GST_SECOND),
-                             GST_SEEK_TYPE_NONE,
-                             GST_CLOCK_TIME_NONE ))
+               1.0,
+               GST_FORMAT_TIME,
+               GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
+               GST_SEEK_TYPE_SET,
+               (position*GST_SECOND),
+               GST_SEEK_TYPE_NONE,
+               GST_CLOCK_TIME_NONE ))
       {
          GST_ERROR("Seek Failed\n");
       }
@@ -470,12 +569,12 @@ cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition)
    // this returns nano seconds, change it to seconds.
    do
    {
+     GST_WARNING("The dmp doesn't give the right data back\n");
 
       gst_element_query_position( pSess->pipeline, &gstFormat, &curPos );
 
-      GST_INFO("Stream: %s\n", pSess->playbackURI );
-      GST_INFO("Position: %lld (seconds)\n", (curPos/GST_NSECOND) );
-      *pPosition = (curPos/GST_NSECOND);
+      GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND) );
+      *pPosition = (curPos/GST_SECOND);
 
    } while (0);
    return stat;
@@ -494,8 +593,8 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
       gst_element_query_duration( pSess->pipeline, &gstFormat, &Duration );
 
       GST_INFO("Stream: %s\n", pSess->playbackURI );
-      GST_INFO("Position: %lld (seconds)\n", (Duration/GST_NSECOND) );
-      *pDuration = (Duration/GST_NSECOND);
+      GST_INFO("Position: %lld (seconds)\n", (Duration/GST_SECOND) );
+      *pDuration = (Duration/GST_SECOND);
 
    } while (0);
    return stat;

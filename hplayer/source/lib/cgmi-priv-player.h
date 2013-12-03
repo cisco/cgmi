@@ -8,9 +8,9 @@ extern "C"
 #endif
 typedef struct
 {
+   void*          cookie;
    GMainContext   *thread_ctx; 
-//   pthread_t      thread;
-   GThread      *thread;
+   GThread        *thread;
    gchar          *playbackURI; /* URI to playback */
    gchar          *manualPipeline; /* URI to playback */
    GMainLoop      *loop;
@@ -24,6 +24,8 @@ typedef struct
    GstMessage     *msg;
    void*          usrParam;
 
+   /* user registered data */ 
+   cgmi_EventCallback eventCB;
 }tSession;
 
 gboolean cisco_gst_init( int argc, char *argv[] );

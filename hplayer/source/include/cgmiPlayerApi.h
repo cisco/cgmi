@@ -78,7 +78,7 @@ typedef enum
    NOTIFY_END_OF_STREAM,                  ///< You are at the end of stream or EOF
    NOTIFY_DECRYPTION_FAILED,              ///< Not able to decrypt the stream, we don't know how to decrypt
    NOTIFY_NO_DECRYPTION_KEY,              ///<No key has been provided to decrypt this content.
-   NOTIFY_VIDEO_ASPECT_RATIO_CHANGED,     ///<The straem has changed it's aspect ratio
+   NOTIFY_VIDEO_ASPECT_RATIO_CHANGED,     ///<The stream has changed it's aspect ratio
    NOTIFY_VIDEO_RESOLUTION_CHANGED,       ///<The resolution of the stream has changed.
    NOTIFY_CHANGED_LANGUAGE_AUDIO,         ///<The streams Audio language has changed
    NOTIFY_CHANGED_LANGUAGE_SUBTITLE,      ///<The subtitle language has changed.
@@ -264,7 +264,8 @@ cgmi_Status cgmi_Unload  (void *pSession );
 /**
  *  \brief \b cgmi_Play
  *
- *  Play the asset that is currently loaded.  
+ *  Play the asset that is currently loaded. If the uri can not be found
+ *  an error will be returned in the callback.
  *  \param[in] pSession  This is a handle to the active session.
  *
  *  \pre    The Session must be open the the url must be loaded
