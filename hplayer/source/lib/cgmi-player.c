@@ -132,7 +132,7 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
          gst_message_parse_error( msg, &error, &debug );
          g_free( debug );
 
-         GST_WARNING("Error:%d:%d: %s - Resource domain:%d\n",error->code, error->domain,  error->message, GST_RESOURCE_ERROR);
+         GST_WARNING("Error:%d:%d: %s - domain:%d\n",error->code, error->domain,  error->message, GST_RESOURCE_ERROR);
          // the error could come from multiple domains.
          if(error->domain == GST_CORE_ERROR)
          {
@@ -149,6 +149,10 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
          }
          else if (error->domain == GST_STREAM_ERROR)
          {
+            if (error->code == GST_STREAM_ERROR_FAILED) 
+            {
+               pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE);
+            }
          }
          else if (error->domain == GST_ERROR_SYSTEM)
          {
@@ -521,14 +525,12 @@ cgmi_Status cgmi_SetRate (void *pSession,  float rate)
       seek_event = gst_event_new_seek(1.0, GST_FORMAT_TIME, 0, GST_SEEK_TYPE_NONE, -1, GST_SEEK_TYPE_NONE, -1);
    }
 
-   g_object_get (pSess->pipeline, "video-sink", &video_sink, NULL);
-
 
 
    /* Send the event */
    if (seek_event)
    {
-      gst_element_send_event (video_sink, seek_event);
+      gst_element_send_event (pSess->pipeline, seek_event);
    }
    return stat;
 }
@@ -569,8 +571,6 @@ cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition)
    // this returns nano seconds, change it to seconds.
    do
    {
-     GST_WARNING("The dmp doesn't give the right data back\n");
-
       gst_element_query_position( pSess->pipeline, &gstFormat, &curPos );
 
       GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND) );
