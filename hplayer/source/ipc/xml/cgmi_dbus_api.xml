@@ -89,7 +89,9 @@
             <arg name="sessionId" direction="in" type="t"/>
             <arg name="index" direction="in" type="i"/>
             <arg name="bufSize" direction="in" type="i"/>
-            <arg name="buffer" direction="out" type="ay"/>
+            <arg name="buffer" direction="out" type="ay">
+                <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
+            </arg>
             <arg name="status" direction="out" type="i"/>
         </method>
 
@@ -108,7 +110,6 @@
         <!-- Section Filter APIs -->
         <method name="createSectionFilter">
             <arg name="sessionId" direction="in" type="t"/>
-            <arg name="filterPriv" direction="in" type="t"/>
             <arg name="filterId" direction="out" type="t"/>
             <arg name="status" direction="out" type="i"/>
         </method>
@@ -123,8 +124,12 @@
             <arg name="sessionId" direction="in" type="t"/>
             <arg name="filterId" direction="in" type="t"/>
             <arg name="filterPid" direction="in" type="i"/>
-            <arg name="filterValue" direction="in" type="ay"/>
-            <arg name="filterMask" direction="in" type="ay"/>
+            <arg name="filterValue" direction="in" type="ay">
+                <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
+            </arg>
+            <arg name="filterMask" direction="in" type="ay">
+                <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
+            </arg>
             <arg name="filterLength" direction="in" type="i"/>
             <arg name="filterOffset" direction="in" type="u"/>
             <arg name="filterComparitor" direction="in" type="i"/>
@@ -146,19 +151,13 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
-        <!-- Section Filter callbacks -->
-        <signal name="queryBufferNotify">
-            <arg name="userData" type="t"/>
-            <arg name="filterPriv" type="t"/>
-            <arg name="filterId" type="t"/>
-        </signal>
-
+        <!-- Section Filter callback -->
         <signal name="sectionBufferNotify">
-            <arg name="userData" type="t"/>
-            <arg name="filterPriv" type="t"/>
             <arg name="filterId" type="t"/>
             <arg name="sectionStatus" type="i"/>
-            <arg name="section" type="ay"/>
+            <arg name="section" type="ay">
+                <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
+            </arg>
             <arg name="sectionSize" type="i" />
         </signal>
 

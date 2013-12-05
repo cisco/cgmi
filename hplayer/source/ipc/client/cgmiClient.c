@@ -47,14 +47,26 @@ typedef struct
 } tcgmi_PlayerEventCallbackData;
 
 
+typedef struct
+{
+    queryBufferCB bufferCB;
+    sectionBufferCB sectionCB;
+    void *pFilterPriv;
+    void *pUserData;  // From session
+    gboolean running;
+
+} tcgmi_SectionFilterCbData;
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // Globals
 ////////////////////////////////////////////////////////////////////////////////
-static gboolean         gClientInited           = FALSE;
-static GMainLoop        *gLoop                  = NULL;
-static OrgCiscoCgmi     *gProxy                 = NULL;
-static GHashTable       *gPlayerEventCallbacks  = NULL;
-static cgmi_Status      gInitStatus             = CGMI_ERROR_NOT_INITIALIZED;
+static gboolean         gClientInited             = FALSE;
+static GMainLoop        *gLoop                    = NULL;
+static OrgCiscoCgmi     *gProxy                   = NULL;
+static GHashTable       *gPlayerEventCallbacks    = NULL;
+static GHashTable       *gSectionFilterCbs        = NULL;
+static cgmi_Status      gInitStatus               = CGMI_ERROR_NOT_INITIALIZED;
 static pthread_t        gMainLoopThread;
 static sem_t            gMainThreadStartSema;
 static pthread_mutex_t  gEventCallbackMutex;
@@ -68,6 +80,8 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
         gint event,
         gint data)
 {
+    tcgmi_PlayerEventCallbackData *playerCb = NULL;
+
     g_print("Enter on_handle_notification sessionHandle = %lu, event = %d...\n",
             sessionHandle, event);
 
@@ -88,10 +102,9 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
             break;
         }
 
-        tcgmi_PlayerEventCallbackData *callbackData =
-            g_hash_table_lookup(gPlayerEventCallbacks, (gpointer)sessionHandle);
+        playerCb = g_hash_table_lookup(gPlayerEventCallbacks, (gpointer)sessionHandle);
 
-        if ( callbackData == NULL || callbackData->callback == NULL )
+        if ( playerCb == NULL || playerCb->callback == NULL )
         {
             g_print("Failed to find callback for sessionId (%lu) in hash table.\n",
                     sessionHandle );
@@ -99,14 +112,104 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
             break;
         }
 
-        callbackData->callback( callbackData->userParam,
-                                (void *)sessionHandle,
-                                (tcgmi_Event)event );
+        playerCb->callback( playerCb->userParam,
+                            (void *)sessionHandle,
+                            (tcgmi_Event)event );
 
     }
     while (0);
 
     pthread_mutex_unlock(&gEventCallbackMutex);
+
+    return TRUE;
+}
+
+static gboolean on_handle_section_buffer_notify (  OrgCiscoCgmi *proxy,
+        guint64 filterId,
+        gint sectionStatus,
+        GVariant *arg_section,
+        gint sectionSize)
+{
+    tcgmi_SectionFilterCbData *filterCbs = NULL;
+    char *retBuffer = NULL;
+    int retBufferSize = sectionSize;
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariantIter *iter = NULL;
+    int bufIdx = 0;
+
+    //g_print("Enter on_handle_section_buffer_notify filterId = 0x%08lx...\n", (void *)filterId);
+
+    // Preconditions
+    if ( proxy != gProxy )
+    {
+        g_print("DBUS failure proxy doesn't match.\n");
+        return TRUE;
+    }
+
+    do
+    {
+        // Find callbacks
+        filterCbs = g_hash_table_lookup( gSectionFilterCbs, (gpointer)filterId );
+        if( NULL == filterCbs || NULL == filterCbs->bufferCB || NULL == filterCbs->sectionCB )
+        {
+            //g_print("Failed to find callback(s) for filterId (0x%08lx) in hash table.\n",
+            //        (void *)filterId );
+            break;
+        }
+
+        // Ignore tardy signals
+        if( FALSE == filterCbs->running ) { break; }
+
+        // Ask for a buffer from the app
+        retStat = filterCbs->bufferCB( filterCbs->pUserData, 
+            filterCbs->pFilterPriv, 
+            (void *)filterId,
+            &retBuffer, 
+            &retBufferSize );
+
+        if( CGMI_ERROR_SUCCESS != retStat )
+        {
+            g_print("Failed to get buffer from app with error (%s)\n",
+                    cgmi_ErrorString(retStat) );
+            break;
+        }
+        if( retBuffer == NULL || retBufferSize < sectionSize )
+        {
+            g_print("Error:  The app failed to provide a valid section buffer\n");
+            break;
+        }
+
+        // Unmarshal section buffer into app buffer
+        g_variant_get( arg_section, "ay", &iter );
+        if( NULL == iter )
+        {
+            g_print("Error:  Failed to get iterator from gvariant\n");
+            break;
+        }
+        bufIdx = 0;
+        while( bufIdx < sectionSize && g_variant_iter_loop(iter, "y", &retBuffer[bufIdx]) )
+        {
+            bufIdx++;
+        }
+        g_variant_iter_free( iter );
+
+        // Send buffer
+        retStat = filterCbs->sectionCB( filterCbs->pUserData,
+            filterCbs->pFilterPriv,
+            (void *)filterId,
+            sectionStatus,
+            retBuffer, 
+            sectionSize );
+
+        if( CGMI_ERROR_SUCCESS != retStat )
+        {
+            g_print("Failed sending buffer to the app with error (%s)\n",
+                    cgmi_ErrorString(retStat) );
+            break;
+        }
+
+    }while(0);
+
 
     return TRUE;
 }
@@ -126,6 +229,12 @@ static void cgmi_ResetClientState()
         gPlayerEventCallbacks = NULL;
     }
     pthread_mutex_unlock(&gEventCallbackMutex);
+
+    if ( gSectionFilterCbs != NULL )
+    {
+        g_hash_table_destroy(gSectionFilterCbs);
+        gSectionFilterCbs = NULL;
+    }
 
     /* Destroy the DBUS connection */
     g_object_unref(gProxy);
@@ -155,12 +264,25 @@ static void on_name_appeared (GDBusConnection *connection,
         return;
     }
 
-    // Listen for player callbacks 
+    // Listen for player callbacks
     g_signal_connect( gProxy, "player-notify",
                       G_CALLBACK (on_handle_notification), NULL );
 
-    // Create hash table for tracking sessions and callbacks 
-    gPlayerEventCallbacks = g_hash_table_new(g_direct_hash, g_direct_equal);
+    // Listen for section filter callbacks
+    g_signal_connect( gProxy, "section-buffer-notify",
+                      G_CALLBACK (on_handle_section_buffer_notify), NULL );
+
+    // Create hash tables for tracking sessions and callbacks.
+    // NOTE:  Tell the hash table to free each value on removal via g_free
+    gPlayerEventCallbacks = g_hash_table_new_full(g_direct_hash, 
+        g_direct_equal,
+        NULL,
+        g_free);
+
+    gSectionFilterCbs = g_hash_table_new_full(g_direct_hash, 
+        g_direct_equal,
+        NULL,
+        g_free);
 
     // Call init when the server comes on the dbus.
     org_cisco_cgmi_call_init_sync( gProxy, (gint *)&gInitStatus, NULL, &error );
@@ -735,6 +857,9 @@ cgmi_Status cgmi_GetAudioStreamInfo( void *pSession,  int index,
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
+    GVariant *bufferArray = NULL;
+    GVariantIter *iter;
+    int idx;
 
     // Preconditions
     if( pSession == NULL || buf == NULL )
@@ -751,10 +876,22 @@ cgmi_Status cgmi_GetAudioStreamInfo( void *pSession,  int index,
             (guint64)pSession,
             index,
             bufSize,
-            &buf,
+            &bufferArray,
             (gint *)&retStat,
             NULL,
             &error );
+
+    if( NULL == bufferArray )
+    {
+
+    }
+
+    g_variant_get( bufferArray, "ay", &iter );
+    idx = 0;
+    while( idx < bufSize && g_variant_iter_loop(iter, "y", &buf[idx]) )
+    {
+        idx++;
+    }
 
     dbus_check_error(error);
 
@@ -821,6 +958,9 @@ cgmi_Status cgmi_CreateSectionFilter( void *pSession, void *pFilterPriv, void **
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
+    tcgmi_SectionFilterCbData *sectionFilterData;
+    tcgmi_PlayerEventCallbackData *cbData;
+    void *pFilter;
 
     // Preconditions
     if( pSession == NULL || pFilterId == NULL )
@@ -835,13 +975,57 @@ cgmi_Status cgmi_CreateSectionFilter( void *pSession, void *pFilterPriv, void **
 
     org_cisco_cgmi_call_create_section_filter_sync( gProxy,
             (guint64)pSession,
-            (guint64)pFilterPriv,
             (guint64 *)pFilterId,
             (gint *)&retStat,
             NULL,
             &error );
 
     dbus_check_error(error);
+
+    //TODO:  Remove debug
+    g_print("Created filter ID 0x%08lx\n", *pFilterId);
+
+    do
+    {
+        if ( gSectionFilterCbs == NULL )
+        {
+            g_print("Internal error:  Callback hash table not initialized.\n");
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        sectionFilterData = g_malloc0(sizeof(tcgmi_SectionFilterCbData));
+        if (sectionFilterData == NULL)
+        {
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+
+        cbData = g_hash_table_lookup(gPlayerEventCallbacks, (gpointer)pSession);
+        if (cbData == NULL)
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        sectionFilterData->pFilterPriv = pFilterPriv;
+        sectionFilterData->pUserData = cbData->userParam;
+        sectionFilterData->running = FALSE;
+
+        g_hash_table_insert( gSectionFilterCbs, (gpointer)*pFilterId,
+                             (gpointer)sectionFilterData );
+
+        if( NULL == g_hash_table_lookup( gSectionFilterCbs, 
+            (gpointer)*pFilterId ) )
+        {
+            g_print("Can't find the new filter in the hash!!!\n");
+        }
+        else
+        {
+            g_print("Found the new filter in the hash!!!\n");
+        }
+
+    }while(0);
 
     return retStat;
 }
@@ -869,6 +1053,12 @@ cgmi_Status cgmi_DestroySectionFilter(void *pSession, void *pFilterId )
             NULL,
             &error );
 
+    if ( gSectionFilterCbs != NULL )
+    {
+        // let the hash table free the tcgmi_SectionFilterCbData instance
+        g_hash_table_remove( gSectionFilterCbs, GINT_TO_POINTER((guint64)pFilterId) );
+    }
+
     dbus_check_error(error);
 
     return retStat;
@@ -878,7 +1068,11 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void *pFilterId, tcgmi_FilterD
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
-    char *value, *mask;
+    GVariantBuilder *valueBuilder = NULL;
+    GVariantBuilder *maskBuilder = NULL;
+    GVariant *value;
+    GVariant *mask;
+    int idx;
 
     // Preconditions
     if( pSession == NULL || pFilterId == NULL || pFilter == NULL )
@@ -890,13 +1084,18 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void *pFilterId, tcgmi_FilterD
 
     enforce_dbus_preconditions();
 
-    // DBUS doesn't like NULL char* (ay) pointers, so pass an empty string instead.
-    value = pFilter->value;
-    mask = pFilter->mask;
-    if( value == NULL ) value = "";
-    if( mask == NULL ) mask = "";
+    // Marshal the value and mask GVariants
+    valueBuilder = g_variant_builder_new( G_VARIANT_TYPE("ay") );
+    maskBuilder = g_variant_builder_new( G_VARIANT_TYPE("ay") );
+    for( idx = 0; idx < pFilter->length; idx++ )
+    {
+        g_variant_builder_add( valueBuilder, "y", pFilter->value[idx] );
+        g_variant_builder_add( maskBuilder, "y", pFilter->mask[idx] );
+    }
+    value = g_variant_builder_end( valueBuilder );
+    mask = g_variant_builder_end( maskBuilder );
 
-    //TODO:  Marshall value and mask
+
     org_cisco_cgmi_call_set_section_filter_sync( gProxy,
             (guint64)pSession,
             (guint64)pFilterId,
@@ -912,16 +1111,12 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void *pFilterId, tcgmi_FilterD
 
     dbus_check_error(error);
 
+    g_variant_builder_unref( valueBuilder );
+    g_variant_builder_unref( maskBuilder );
+
     return retStat;
 }
 
-/*
-   gint pid;
-   guchar *value;
-   guchar *mask;
-   gint length;
-   guint offset;
-   cgmi_FilterComparitor comparitor;*/
 
 cgmi_Status cgmi_StartSectionFilter(void *pSession,
                                     void *pFilterId,
@@ -933,6 +1128,7 @@ cgmi_Status cgmi_StartSectionFilter(void *pSession,
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
+    tcgmi_SectionFilterCbData *filterCb;
 
     // Preconditions
     if( pSession == NULL || pFilterId == NULL )
@@ -944,8 +1140,27 @@ cgmi_Status cgmi_StartSectionFilter(void *pSession,
 
     enforce_dbus_preconditions();
 
+    if( NULL == gSectionFilterCbs )
+    {
+        g_print("NULL gSectionFilterCbs.  Invalid call sequence?\n");
+        return CGMI_ERROR_NOT_INITIALIZED;
+    }
 
-    // TODO:  Implement callbacks
+    // Find section filter callback instance
+    filterCb = g_hash_table_lookup( gSectionFilterCbs, 
+        (gpointer)pFilterId );
+    if( NULL == filterCb )
+    {
+        g_print("Unable to find filterCb instance.  Invalid pFilterId.\n");
+        return CGMI_ERROR_INVALID_HANDLE;
+    }
+
+    // Save/track client callbacks
+    filterCb->bufferCB = bufferCB;
+    filterCb->sectionCB = sectionCB;
+    filterCb->running = TRUE;
+
+    // Call DBUS
     org_cisco_cgmi_call_start_section_filter_sync( gProxy,
             (guint64)pSession,
             (guint64)pFilterId,
@@ -965,6 +1180,7 @@ cgmi_Status cgmi_StopSectionFilter(void *pSession, void *pFilterId )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
+    tcgmi_SectionFilterCbData *filterCb;
 
     // Preconditions
     if( pSession == NULL || pFilterId == NULL )
@@ -976,6 +1192,17 @@ cgmi_Status cgmi_StopSectionFilter(void *pSession, void *pFilterId )
 
     enforce_dbus_preconditions();
 
+    // Find section filter callback instance
+    filterCb = g_hash_table_lookup( gSectionFilterCbs, 
+        (gpointer)pFilterId );
+    if( NULL == filterCb )
+    {
+        g_print("Unable to find filterCb instance.  Invalid pFilterId.\n");
+        return CGMI_ERROR_INVALID_HANDLE;
+    }
+
+    // Flag that we have stopped this filter to ignore tardy callbacks
+    filterCb->running = FALSE;
 
     org_cisco_cgmi_call_stop_section_filter_sync( gProxy,
             (guint64)pSession,

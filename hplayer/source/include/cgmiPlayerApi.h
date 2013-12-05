@@ -117,7 +117,7 @@ typedef struct
 
 typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event );
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );
-typedef cgmi_Status (*sectionBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, cgmi_Status SectionStatus, const char *pSection, int sectionSize);
+typedef cgmi_Status (*sectionBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, cgmi_Status SectionStatus, char *pSection, int sectionSize);
 
 /**
  *  \brief \b cgmi_ErrorString

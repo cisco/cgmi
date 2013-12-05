@@ -12,6 +12,11 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// Defines
+////////////////////////////////////////////////////////////////////////////////
+#define DEFAULT_SECTION_FILTER_BUFFER_SIZE 256;
+
+////////////////////////////////////////////////////////////////////////////////
 // Logging for daemon.  TODO:  Send to syslog when in background
 ////////////////////////////////////////////////////////////////////////////////
 #define DAEMON_NAME "CGMI_DAEMON"
@@ -94,14 +99,32 @@ static cgmi_Status cgmiQueryBufferCallback(
     char **ppBuffer,
     int *pBufferSize )
 {
+    //CGMID_INFO("cgmiQueryBufferCallback -- pFilterId: %lu, pFilterPriv %lu \n",
+    //        (guint64)pFilterId, (guint64)pFilterPriv);
 
-    org_cisco_cgmi_emit_query_buffer_notify( (OrgCiscoCgmi *) pUserData,
-            0,
-            (guint64)pFilterPriv,
-            (guint64)pFilterId);
+    // Preconditions
+    if( NULL == ppBuffer )
+    {
+        CGMID_ERROR("NULL buffer pointer passed to cgmiQueryBufferCallback.\n");
+        return CGMI_ERROR_BAD_PARAM;
+    }
 
-    CGMID_INFO("cgmiQueryBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
-            (guint64)pFilterId, (guint64)pFilterPriv);
+    // Check if a size of greater than zero was provided, use default if not
+    if( *pBufferSize <= 0 )
+    {
+        *pBufferSize = DEFAULT_SECTION_FILTER_BUFFER_SIZE;
+    }
+
+    //CGMID_INFO("Allocating buffer of size (%d)\n", *pBufferSize);
+    *ppBuffer = g_malloc0(*pBufferSize);
+
+    if( NULL == *ppBuffer )
+    {
+        *pBufferSize = 0;
+        return CGMI_ERROR_OUT_OF_MEMORY;
+    }
+
+    return CGMI_ERROR_SUCCESS;
 }
 
 static cgmi_Status cgmiSectionBufferCallback(
@@ -109,21 +132,44 @@ static cgmi_Status cgmiSectionBufferCallback(
     void *pFilterPriv,
     void *pFilterId,
     cgmi_Status sectionStatus,
-    const char *pSection,
+    char *pSection,
     int sectionSize)
 {
+    GVariantBuilder *sectionBuilder = NULL;
+    GVariant *sectionArray = NULL;
+    int idx;
 
+    //CGMID_INFO("cgmiSectionBufferCallback -- pFilterId: %lu, pFilterPriv: %lu \n",
+    //        (guint64)pFilterId, (guint64)pFilterPriv);
+
+    // Preconditions
+    if( NULL == pSection )
+    {
+        CGMID_ERROR("NULL buffer passed to cgmiSectionBufferCallback.\n");
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    // Marshal gvariant
+    sectionBuilder = g_variant_builder_new( G_VARIANT_TYPE("ay") );
+    for( idx = 0; idx < sectionSize; idx++ )
+    {
+        g_variant_builder_add( sectionBuilder, "y", pSection[idx] );
+    }
+    sectionArray = g_variant_builder_end( sectionBuilder );
+
+    //CGMID_INFO("Sending pFilterId: 0x%lx, sectionSize %d\n", pFilterId, sectionSize);
     org_cisco_cgmi_emit_section_buffer_notify( (OrgCiscoCgmi *) pUserData,
-            0,
-            (guint64)pFilterPriv,
             (guint64)pFilterId,
             (gint)sectionStatus,
-            pSection,
+            sectionArray,
             sectionSize );
 
-    CGMID_INFO("cgmiSectionBufferCallback -- pFilterId: %lu, pFilterPriv%lu \n",
-            (guint64)pFilterId, (guint64)pFilterPriv);
+    g_variant_builder_unref( sectionBuilder );
 
+    // Free buffer allocated in cgmiQueryBufferCallback
+    g_free( pSection );
+
+    return CGMI_ERROR_SUCCESS;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -185,7 +231,7 @@ on_handle_cgmi_error_string (
 {
     gchar *statusString = NULL;
 
-    CGMID_ENTER();
+    //CGMID_ENTER();
 
     statusString = cgmi_ErrorString( arg_status );
 
@@ -452,16 +498,41 @@ on_handle_cgmi_get_audio_stream_info (
     gint bufSize )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariantBuilder *bufferBuilder = NULL;
+    GVariant *bufferArray = NULL;
     char buffer[bufSize];
+    int idx;
 
     CGMID_ENTER();
 
     retStat = cgmi_GetAudioStreamInfo( (void *)arg_sessionId, index, buffer, bufSize );
 
+    do{
+        bufferBuilder = g_variant_builder_new( G_VARIANT_TYPE("ay") );
+        if( bufferBuilder == NULL )
+        {
+            CGMID_ERROR("Failed to create variant builder.\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+
+        for( idx = 0; idx < bufSize; idx++ )
+        {
+            g_variant_builder_add( bufferBuilder, "y", &buffer[idx] );
+        }
+        bufferArray = g_variant_builder_end( bufferBuilder );
+        if( NULL == bufferArray ) { retStat = CGMI_ERROR_OUT_OF_MEMORY; }
+
+    }while(0);
+
+
     org_cisco_cgmi_complete_get_audio_stream_info (object,
             invocation,
-            buffer,
+            bufferArray,
             retStat);
+
+    g_variant_unref( bufferArray );
+    g_variant_builder_unref( bufferBuilder );
 
     return TRUE;
 }
@@ -499,7 +570,7 @@ on_handle_cgmi_set_default_audio_lang (
 
     retStat = cgmi_SetDefaultAudioLang( (void *)arg_sessionId, language );
 
-    org_cisco_cgmi_complete_set_audio_stream (object,
+    org_cisco_cgmi_complete_set_default_audio_lang (object,
             invocation,
             retStat);
 
@@ -510,16 +581,16 @@ static gboolean
 on_handle_cgmi_create_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
-    guint64 arg_filterPriv )
+    guint64 arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     void *pFilterId;
 
     CGMID_ENTER();
 
+    // Provide a pointer to the sessionId as the private data.
     retStat = cgmi_CreateSectionFilter( (void *)arg_sessionId,
-                                     (void *)arg_filterPriv,
+                                     (void *)object,
                                      &pFilterId );
 
     org_cisco_cgmi_complete_create_section_filter (object,
@@ -558,32 +629,75 @@ on_handle_cgmi_set_section_filter (
     guint64 arg_sessionId,
     guint64 arg_filterId,
     gint arg_filterPid,
-    gchar *arg_filterValue,
-    gchar *arg_filterMask,
+    GVariant *arg_filterValue,
+    GVariant *arg_filterMask,
     gint arg_filterLength,
     guint arg_filterOffset,
     gint arg_filterComparitor )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     tcgmi_FilterData pFilter;
+    GVariantIter *iter = NULL;
+    guchar *filterValue = NULL;
+    guchar *filterMask = NULL;
+    gint idx;
 
     CGMID_ENTER();
 
-    // Populate the filter struct
-    pFilter.pid = arg_filterPid;
-    pFilter.value = arg_filterValue;
-    pFilter.mask = arg_filterMask;
-    pFilter.length = arg_filterLength;
-    pFilter.offset = arg_filterOffset;
-    pFilter.comparitor = arg_filterComparitor;
+    do{
 
-    retStat = cgmi_SetSectionFilter( (void *)arg_sessionId,
-                                  (void *)arg_filterId, 
-                                  &pFilter );
+        // If we have a mask and value to unmarshal do so
+        if( arg_filterLength > 0 )
+        {
+            filterValue = g_malloc0(arg_filterLength);
+            filterMask = g_malloc0(arg_filterLength);
+
+            if( NULL == filterValue || NULL == filterMask )
+            {
+                CGMID_INFO("Error allocating memory.\n");
+                retStat = CGMI_ERROR_OUT_OF_MEMORY;
+                break;
+            }   
+        }
+
+        // Unmarshal value and mask
+        g_variant_get( arg_filterValue, "ay", &iter );
+        idx = 0;
+        while( idx < arg_filterLength && 
+            g_variant_iter_loop(iter, "y", &filterValue[idx]) )
+        {
+            idx++;
+        }
+
+        g_variant_get( arg_filterMask, "ay", &iter );
+        idx = 0;
+        while( idx < arg_filterLength && 
+            g_variant_iter_loop(iter, "y", &filterMask[idx]) )
+        {
+            idx++;
+        }
+
+        // Populate the filter struct
+        pFilter.pid = arg_filterPid;
+        pFilter.value = arg_filterValue;
+        pFilter.mask = arg_filterMask;
+        pFilter.length = arg_filterLength;
+        pFilter.offset = arg_filterOffset;
+        pFilter.comparitor = arg_filterComparitor;
+
+        retStat = cgmi_SetSectionFilter( (void *)arg_sessionId,
+                                      (void *)arg_filterId, 
+                                      &pFilter );
+
+    }while(0);
 
     org_cisco_cgmi_complete_set_section_filter (object,
             invocation,
             retStat);
+
+    // Clean up
+    if( NULL != filterValue ) { g_free(filterValue); }
+    if( NULL != filterMask ) { g_free(filterMask); }
 
     return TRUE;
 }
@@ -635,7 +749,7 @@ on_handle_cgmi_stop_section_filter (
     retStat = cgmi_StopSectionFilter( (void *)arg_sessionId,
                                    (void *)arg_filterId );
 
-    org_cisco_cgmi_complete_start_section_filter (object,
+    org_cisco_cgmi_complete_stop_section_filter (object,
             invocation,
             retStat);
 

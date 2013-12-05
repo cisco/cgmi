@@ -13,10 +13,13 @@
 #include <gst/app/gstappsink.h>
 #include "cgmiPlayerApi.h"
 #include "cgmi-priv-player.h"
+#include "cgmi-section-filter-priv.h"
 
 #define MAGIC_COOKIE 0xDEADBEEF
 GST_DEBUG_CATEGORY_STATIC (cgmi); 
 #define GST_CAT_DEFAULT cgmi     
+
+
 
 
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
@@ -190,6 +193,80 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
    return TRUE;
 }
 
+static GstElement *cgmi_gst_find_demux( GstBin *bin )
+{
+   GstElement *element = NULL;
+   GstElement *demux = NULL;
+   GstIterator *iter = NULL;
+   void *item;  
+   gchar *name = NULL;
+   gboolean done = FALSE;
+
+   name = gst_element_get_name( bin );
+   g_free( name );
+   
+   iter = gst_bin_iterate_elements( bin );
+   while ( FALSE == done )
+   {
+      switch ( gst_iterator_next(iter, &item) ) 
+      {
+         case GST_ITERATOR_OK:
+            element = (GstElement *)item;
+            if ( NULL != element )
+            {
+               name = gst_element_get_name( element );
+               if ( NULL != strstr(name, "demux") )
+               {                  
+                  demux = element;
+                  g_print("Found demux handle = %p\n", demux);
+                  done = TRUE;
+               }
+               g_free( name );
+               gst_object_unref( item );
+            }            
+            break;
+         case GST_ITERATOR_RESYNC:
+            gst_iterator_resync( iter );
+            break;
+         case GST_ITERATOR_ERROR:
+            g_print("playbin element iterator error!\n");
+            done = TRUE;
+            break;
+         case GST_ITERATOR_DONE:
+            done = TRUE;
+            break;
+      }
+   }
+   gst_iterator_free( iter );
+
+   return demux;
+}
+
+static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer data )
+{
+   GstElement *demux = NULL;
+   tSession *pSess = (tSession*)data;
+
+   // If we haven't found the demux investigate this bin
+   if ( NULL == pSess->demux )
+   {
+      demux = cgmi_gst_find_demux( bin );
+
+      if( NULL != demux )
+      {
+         pSess->demux = demux;
+      }
+   }
+   
+   // If this element is a bin ensure this callback is called when elements
+   // are added.
+   if ( GST_IS_BIN(element) )
+   {
+      g_signal_connect( element, "element-added", 
+         G_CALLBACK(cgmi_gst_element_added), pSess );
+   }
+}
+
 char* cgmi_ErrorString(cgmi_Status stat)
 {
    static char *errorString[] = 
@@ -253,8 +330,14 @@ cgmi_Status cgmi_Init(void)
 
    return stat;
 }
+
 cgmi_Status cgmi_Term (void)
-{ gst_deinit(); return CGMI_ERROR_SUCCESS; } cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, void **pSession ) {
+{ 
+   gst_deinit(); 
+   return CGMI_ERROR_SUCCESS;
+} 
+
+cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, void **pSession ) {
    tSession *pSess = NULL;
 
    pSess = g_malloc0(sizeof(tSession));
@@ -268,6 +351,7 @@ cgmi_Status cgmi_Term (void)
    pSess->playbackURI = NULL;
    pSess->manualPipeline = NULL;
    pSess->eventCB = eventCB;
+   pSess->demux = NULL;
 
    pSess->thread_ctx = g_main_context_new();
    pSess->loop = g_main_loop_new (pSess->thread_ctx, FALSE);
@@ -433,6 +517,10 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       pSess->tag = g_source_attach(source, pSess->thread_ctx);
       g_source_unref(source);
 
+      // Track when elements are added to the pipeline.
+      // Primarily aquires a reference to demux for section filter support.
+      g_signal_connect( pSess->pipeline, "element-added", 
+         G_CALLBACK(cgmi_gst_element_added), pSess );
 
    }while(0);
 
@@ -641,30 +729,4 @@ cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language )
 {
    return CGMI_ERROR_NOT_IMPLEMENTED;
 }
-
-cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** pFilterId  )
-{
-   return CGMI_ERROR_NOT_IMPLEMENTED;
-}
-
-cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId  )
-{
-   return CGMI_ERROR_NOT_IMPLEMENTED;
-}
-
-cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterData *pFilter  )
-{
-   return CGMI_ERROR_NOT_IMPLEMENTED;
-}
-
-cgmi_Status cgmi_StartSectionFilter(void *pSession, void* pFilterId, int timeout, int bOneShot , int bEnableCRC, queryBufferCB bufferCB,  sectionBufferCB sectionCB)
-{
-   return CGMI_ERROR_NOT_IMPLEMENTED;
-}
-
-cgmi_Status cgmi_StopSectionFilter(void *pSession, void* pFilterId )
-{
-   return CGMI_ERROR_NOT_IMPLEMENTED;
-}
-
 

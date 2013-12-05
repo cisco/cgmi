@@ -1,6 +1,7 @@
 #ifndef __GST_PLAYER_H__
 #define __GST_PLAYER_H__
 
+#include "cgmiPlayerApi.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -19,7 +20,6 @@ typedef struct
    guint          tag;
    GstElement     *videoSink;
    GstElement     *demux;
-   GstElement     *appsink;
    GstBus         *bus;
    GstMessage     *msg;
    void*          usrParam;
