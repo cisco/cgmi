@@ -43,6 +43,8 @@ extern "C"
 {
 #endif
 
+#define SECTION_FILTER_EMPTY_PID 0x1FFF // Indicates filter shouldn't match PID
+
 /** Function return status values
  */
 typedef enum
