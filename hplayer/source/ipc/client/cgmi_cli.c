@@ -4,10 +4,91 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <stdbool.h>
+
 // put this in a define. #include "diaglib.h"
 #include <sys/time.h>
 
 #include "cgmiPlayerApi.h"
+
+/* Defines for section filtering. */
+#define MAX_PMT_COUNT 20
+
+typedef struct program{
+
+    short stream_type; // 8 bits
+    short reserved_1; // 3 bits
+    short elementary_PID; // 13 bits
+
+    short reserved_2; // 4 bits
+    short ES_info_length; // 12 bits
+
+    //short numDesc;
+    //ca_desc theDesc[];
+
+}tPmtProgram;
+
+typedef struct{
+
+    short programNumber; // 16 bits
+    short reserved; // 3 bits
+    short program_map_PID; // 13 bits
+
+    short pointer; // 8 bits
+    short table_id; // 8 bits
+
+    bool section_syntax_indicator; // 1 bit
+    short reserved_1; // 3 bits
+    short section_length; // 12 bits
+
+    short program_number; // 16 bits
+
+    short reserved_2; // 2 bits
+    short version_number; // 5 bits
+    bool current_next_indicator; // 1 bit
+    short section_number; // 8 bits
+
+    short last_section_number; // 8 bits
+
+    short reserved_3; // 3 bits
+    short PCR_PID; // 13 bits
+
+    short reserved_4; // 4 bits
+    short program_info_length; // 12 bits
+
+    // descriptors missing
+
+    // programs
+    tPmtProgram programs[50];
+
+    int CRC;
+
+}tPmt;
+
+typedef struct{
+
+    short table_id; // 8 bits
+
+    bool section_syntax_indicator; // 1 bit
+    short reserved_1; // 3 bits
+    short section_length; // 12 bits
+
+    short transport_stream_id; // 16 bits
+
+    short reserved_2; // 2 bits
+    short version_number; // 5 bits
+    bool current_next_indicator; // 1 bit
+    short section_number; // 8 bits
+
+    short last_section_number; // 8 bits
+
+    tPmt pmts[MAX_PMT_COUNT]; // Dynamic size, but limited to 16
+    short numPMTs;
+
+    int CRC;
+
+}tPat;
+/* End defines for section filtering. */
 
 /* Prototypes */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event );
@@ -119,7 +200,198 @@ static cgmi_Status getduration(void *pSessionId, float *pDuration, cgmi_SessionT
     return retCode;
 }
 
+/****************************  Section Filter Callbacks  *******************************/
+static cgmi_Status cgmi_QueryBufferCallback(
+    void *pUserData,
+    void *pFilterPriv,
+    void *pFilterId,
+    char **ppBuffer,
+    int *pBufferSize )
+{
+    //g_print( "cgmi_QueryBufferCallback -- pFilterId: 0x%08lx \n", pFilterId );
 
+
+    // Preconditions
+    if( NULL == ppBuffer )
+    {
+        g_print("NULL buffer pointer passed to cgmiQueryBufferCallback.\n");
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    // Check if a size of greater than zero was provided, use default if not
+    if( *pBufferSize <= 0 )
+    {
+        *pBufferSize = 256;
+    }
+
+    //g_print("Allocating buffer of size (%d)\n", *pBufferSize);
+    *ppBuffer = g_malloc0(*pBufferSize);
+
+    if( NULL == *ppBuffer )
+    {
+        *pBufferSize = 0;
+        return CGMI_ERROR_OUT_OF_MEMORY;
+    }
+
+    return CGMI_ERROR_SUCCESS;
+}
+
+/****************************  Example PAT parsing  *******************************/
+static int parsePAT( char *buffer, int bufferSize, tPat *pat )
+{
+    int index = 0;
+    int x;
+
+    pat->table_id = buffer[++index];
+    pat->section_syntax_indicator = (bool)( (buffer[++index]&0x80)>>7 );
+    pat->reserved_1 = (buffer[index]&0x70)>>4;
+    pat->section_length = (buffer[index]&0x0F)<<8 | buffer[++index];
+    pat->transport_stream_id = (buffer[++index]<<8 | buffer[++index] );
+    pat->reserved_2 = (buffer[++index]&0xC0)>>6;
+    pat->version_number = (buffer[index]&0x3E)>>1;
+    pat->current_next_indicator = (bool)(buffer[index]&0x01);
+    pat->section_number = buffer[++index];
+    pat->last_section_number = buffer[++index];
+
+    // number of PMTs is section_length - 5 bytes remaining in PAT headers, - 4 bytes for CRC_32, divided by 4 bytes for each entry.
+    pat->numPMTs = (pat->section_length - 5 - 4) / 4;
+
+    for( x = 0; x < pat->numPMTs; x++ )
+    {
+        pat->pmts[x].programNumber = (buffer[++index]<<8) | buffer[++index];
+        pat->pmts[x].reserved = (buffer[++index]&0xC0)>>5;
+        pat->pmts[x].program_map_PID = (buffer[index]&0x1F)<<8 | buffer[++index];
+    }
+
+    pat->CRC = (buffer[++index]<<24) | (buffer[++index]<<16) | (buffer[++index]<<8) | (buffer[++index]);
+
+    return 0;
+}
+
+void printPAT( tPat *pat )
+{
+    int x;
+
+    g_print("Dumping PAT...\n");
+    g_print("\tTable_id: 0x%x\n", pat->table_id);
+    if( pat->section_syntax_indicator )
+        g_print("\tsection_syntax_indicator: True(1)\n");
+    else
+        g_print("\tsection_syntax_indicator: False(0)\n");
+    g_print("\treserved_1: 0x%x\n", pat->reserved_1);
+    g_print("\tsection_length: 0x%x (%d)\n", pat->section_length, pat->section_length);
+    g_print("\ttransport_stream_id: 0x%x\n", pat->transport_stream_id);
+    g_print("\treserved_2: 0x%x\n", pat->reserved_2);
+    g_print("\tversion_number: 0x%x\n", pat->version_number);
+    if( pat->current_next_indicator )
+        g_print("\tcurrent_next_indicator: True(1)\n");
+    else
+        g_print("\tcurrent_next_indicator: False(0)\n");
+    g_print("\tsection_number: 0x%x\n", pat->section_number);
+    g_print("\tlast_section_number: 0x%x\n", pat->last_section_number);
+
+    g_print("\tFound %d program(s) in the PAT...\n", pat->numPMTs);
+
+    for(x = 0; x < pat->numPMTs ; x++)
+    {
+        g_print("\tProgram #%d:\n", x + 1);
+        g_print("\t\tprogramNumber: 0x%x\n", pat->pmts[x].programNumber);
+        g_print("\t\treserved: 0x%x\n", pat->pmts[x].reserved);
+        g_print("\t\tprogram_map_PID: 0x%x\n\n", pat->pmts[x].program_map_PID);
+    }
+
+    g_print("\n");
+}
+
+static cgmi_Status cgmi_SectionBufferCallback(
+    void *pUserData,
+    void *pFilterPriv,
+    void *pFilterId,
+    cgmi_Status sectionStatus,
+    char *pSection,
+    int sectionSize)
+{
+    cgmi_Status retStat;
+    tPat pat;
+
+    //g_print( "cgmi_QueryBufferCallback -- pFilterId: 0x%08lx \n", pFilterId );
+
+    if( NULL == pSection )
+    {
+        g_print("NULL buffer passed to cgmiSectionBufferCallback.\n");
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    g_print("Received section pFilterId: 0x%p, sectionSize %d\n\n", pFilterId, sectionSize);
+    //printHex( pSection, sectionSize );
+    g_print("\n\n");
+
+    parsePAT( pSection, sectionSize, &pat );
+    printPAT( &pat );
+
+    // After printing the PAT stop the filter
+    g_print("Calling cgmi_StopSectionFilter...\n");
+    retStat = cgmi_StopSectionFilter( pFilterPriv, pFilterId );
+    if (retStat != CGMI_ERROR_SUCCESS )
+    {
+        printf("CGMI StopSectionFilterFailed\n");
+    }
+
+    // TODO:  Create a new filter to get a PMT found in the PAT above.
+
+    g_print("Calling cgmi_DestroySectionFilter...\n");
+    retStat = cgmi_DestroySectionFilter( pFilterPriv, pFilterId );
+    if (retStat != CGMI_ERROR_SUCCESS )
+    {
+        printf("CGMI StopSectionFilterFailed\n");
+    }
+
+    // Free buffer allocated in cgmi_QueryBufferCallback
+    g_free( pSection );
+
+    return CGMI_ERROR_SUCCESS;
+}
+
+/* Section Filter */
+static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value, guchar *mask, gint length,
+                                  guint offset )
+{
+    cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+
+    void *filterid = NULL;
+    tcgmi_FilterData filterdata;
+
+    retCode = cgmi_CreateSectionFilter( pSessionId, NULL, &filterid );
+    if (retCode != CGMI_ERROR_SUCCESS)
+    {
+        printf("CGMI CreateSectionFilter Failed\n");
+
+        return retCode;
+    }
+
+    filterdata.pid = pid;
+    filterdata.value = value;
+    filterdata.mask = mask;
+    filterdata.length = length;
+    filterdata.comparitor = FILTER_COMP_EQUAL;
+
+    retCode = cgmi_SetSectionFilter( pSessionId, filterid, &filterdata );
+    if (retCode != CGMI_ERROR_SUCCESS)
+    {
+        printf("CGMI SetSectionFilter Failed\n");
+
+        return retCode;
+    }
+
+    retCode = cgmi_StartSectionFilter( pSessionId, filterid, 10, 1, 0, 
+                                       cgmi_QueryBufferCallback, cgmi_SectionBufferCallback );
+    if (retCode != CGMI_ERROR_SUCCESS)
+    {
+        printf("CGMI StartSectionFilter Failed\n");
+    }
+
+    return retCode;
+}
 
 /* Callback Function */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
@@ -153,6 +425,16 @@ int main(int argc, char **argv)
     gint duration = 0;
     struct timeval start, current;
     int i = 0;
+
+    gchar arg1[256], arg2[256], arg3[256], arg4[256], tmp[256];
+    gint pid = 0;
+    guchar value[208], mask[208];
+    gint vlength = 0, mlength = 0;
+    guint offset = 0;
+    gchar *ptmpchar;
+    gchar tmpstr[3];
+    int len = 0;
+    int err = 0;
 
     // need to put this in a define diagInit (DIAGTYPE_DEFAULT, NULL, 0);
 
@@ -193,6 +475,8 @@ int main(int argc, char **argv)
            "\tgetduration\n"
            "\n"
            "\tnewsession\n"
+           "\n"
+           "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL> <offset=0xVAL>\n"
            "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
@@ -349,6 +633,177 @@ int main(int argc, char **argv)
                 printf("CGMI CreateSession Success!\n");
             }
         }
+        /* Create Filter */
+        else if (strncmp(command, "createfilter", 12) == 0)
+        {
+            /* default values for section filter code */
+            err = 0;
+            pid = SECTION_FILTER_EMPTY_PID;
+            bzero( value, 208 * sizeof( guchar ) );
+            bzero( mask, 208 * sizeof( guchar ) );
+            vlength = 0;
+            mlength = 0;
+            offset = 0;
+
+            /* command */
+            str = strtok( command, " " );
+            if ( str == NULL )
+            {
+                printf( "Invalid command:\n"
+                        "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL> <offset=0xVAL>\n"
+                      );
+                continue;
+            }
+
+            /* arg1 */
+            str = strtok( NULL, " " );
+            if ( str == NULL )
+            {
+                printf( "Invalid command:\n"
+                        "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL> <offset=0xVAL>\n"
+                      );
+                continue;
+            } else {
+                strncpy( arg1, str, 256 );
+            }
+
+            /* arg2 */
+            str = strtok( NULL, " " );
+            if ( str != NULL )
+            {
+                strncpy( arg2, str, 256 );
+            } else {
+                strcpy( arg2, "" );
+            }
+
+            /* arg3 */
+            str = strtok( NULL, " " );
+            if ( str != NULL )
+            {
+                strncpy( arg3, str, 256 );
+            } else {
+                strcpy( arg3, "" );
+            }
+
+            /* arg4 */
+            str = strtok( NULL, " " );
+            if ( str != NULL )
+            {
+                strncpy( arg4, str, 256 );
+            } else {
+                strcpy( arg4, "" );
+            }
+
+            for ( i=0; i < 4; i++ )
+            {
+                /* cycle through each argument so they're supported out of order */
+                switch (i)
+                {
+                    case 0:
+                        strcpy( tmp, arg1 );
+                        break;
+                    case 1:
+                        strcpy( tmp, arg2 );
+                        break;
+                    case 2:
+                        strcpy( tmp, arg3 );
+                        break;
+                    case 3:
+                        strcpy( tmp, arg4 );
+                        break;
+                }
+
+                /* pid */
+                if ( strncmp( tmp, "pid=", 4 ) == 0 )
+                {
+                    pid = (int) strtol( tmp + 4, NULL, 0 );
+                }
+
+                /* value */
+                if ( strncmp( tmp, "value=", 6 ) == 0 )
+                {
+                    if ( strncmp( tmp + 6, "0x", 2 ) != 0 )
+                    {
+                        printf( "Hex values required for value.\n" );
+                        err = 1;
+                        break;
+                    }
+                    ptmpchar = tmp + 8;
+                    vlength = 0;
+                    len = strlen( ptmpchar );
+                    while ( (ptmpchar[0] != '\0') && (ptmpchar[0] != '\n') && (len > (vlength * 2)) )
+                    {
+                        strncpy( tmpstr, ptmpchar, 2 );
+                        tmpstr[2] = '\0';
+                        value[vlength] = (guchar) strtoul( tmpstr, NULL, 16 );
+                        ptmpchar = ptmpchar + 2;
+                        vlength++;
+                    }
+                }
+
+                /* mask */
+                if ( strncmp( tmp, "mask=", 5 ) == 0 )
+                {
+                    if ( strncmp( tmp + 5, "0x", 2 ) != 0 )
+                    {
+                        printf( "Hex values required for mask.\n" );
+                        err = 1;
+                        break;
+                    }
+                    ptmpchar = tmp + 7;
+                    mlength = 0;
+                    len = strlen( ptmpchar );
+                    while ( (ptmpchar[0] != '\0') && (ptmpchar[0] != '\n') && (len > (mlength * 2)) )
+                    {
+                        strncpy( tmpstr, ptmpchar, 2 );
+                        tmpstr[2] = '\0';
+                        mask[mlength] = (guchar) strtoul( tmpstr, NULL, 16 );
+                        ptmpchar = ptmpchar + 2;
+                        mlength++;
+                    }
+                }
+
+                /* offset */
+                if ( strncmp( tmp, "offset=", 7 ) == 0 )
+                {
+                    offset = (int) strtoul( tmp + 7, NULL, 0 );
+                }
+            }
+
+            if ( err )
+            {
+                continue;
+            }
+
+            /* DEBUG PRINTF */
+            printf( "arg1: %s, arg2: %s, arg3: %s, arg4: %s\n",
+                    arg1, arg2, arg3, arg4 );
+            printf( "pid: 0x%x\n", pid );
+            printf( "value: " );
+            for ( i = 0; i < vlength; i++ )
+            {
+                printf( "%u: 0x%x, ", i, value[i] );
+            }
+            printf( "\n" );
+            printf( "mask: " );
+            for ( i = 0; i < mlength; i++ )
+            {
+                printf( "%u: 0x%x, ", i, mask[i] );
+            }
+            printf( "\n" );
+            printf( "offset: 0x%x\n", offset );
+            /* END DEBUG */
+
+            if ( (mlength > 0) && (vlength > 0) && (mlength != vlength) )
+            {
+                printf( "Mask length and value length must be equal.\n" );
+
+                continue;
+            }
+
+            retCode = sectionfilter( pSessionId, pid, value, mask, mlength, offset );
+        }
+
         /* Channel Change Test */
         else if (strncmp(command, "cct", 3) == 0)
         {
