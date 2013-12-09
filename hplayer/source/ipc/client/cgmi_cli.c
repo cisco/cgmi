@@ -775,25 +775,6 @@ int main(int argc, char **argv)
                 continue;
             }
 
-            /* DEBUG PRINTF */
-            printf( "arg1: %s, arg2: %s, arg3: %s, arg4: %s\n",
-                    arg1, arg2, arg3, arg4 );
-            printf( "pid: 0x%x\n", pid );
-            printf( "value: " );
-            for ( i = 0; i < vlength; i++ )
-            {
-                printf( "%u: 0x%x, ", i, value[i] );
-            }
-            printf( "\n" );
-            printf( "mask: " );
-            for ( i = 0; i < mlength; i++ )
-            {
-                printf( "%u: 0x%x, ", i, mask[i] );
-            }
-            printf( "\n" );
-            printf( "offset: 0x%x\n", offset );
-            /* END DEBUG */
-
             if ( (mlength > 0) && (vlength > 0) && (mlength != vlength) )
             {
                 printf( "Mask length and value length must be equal.\n" );
