@@ -88,6 +88,8 @@ typedef struct{
     int CRC;
 
 }tPat;
+
+static void *filterid = NULL;
 /* End defines for section filtering. */
 
 /* Prototypes */
@@ -119,6 +121,23 @@ static cgmi_Status play(void *pSessionId, char *src)
 static cgmi_Status stop(void *pSessionId)
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+
+    if ( filterid != NULL )
+    {
+        retCode = cgmi_StopSectionFilter( pSessionId, filterid );
+        if (retCode != CGMI_ERROR_SUCCESS )
+        {
+            printf("CGMI StopSectionFilterFailed\n");
+        }
+
+        retCode = cgmi_DestroySectionFilter( pSessionId, filterid );
+        if (retCode != CGMI_ERROR_SUCCESS )
+        {
+            printf("CGMI StopSectionFilterFailed\n");
+        }
+
+        filterid = NULL;
+    }
 
     /* Stop = Unload */
     retCode = cgmi_Unload( pSessionId );
@@ -242,6 +261,8 @@ static int parsePAT( char *buffer, int bufferSize, tPat *pat )
     int index = 0;
     int x;
 
+    printf( "Parsing PAT..." );
+    fflush(stdout);
     pat->table_id = buffer[++index];
     pat->section_syntax_indicator = (bool)( (buffer[++index]&0x80)>>7 );
     pat->reserved_1 = (buffer[index]&0x70)>>4;
@@ -255,15 +276,22 @@ static int parsePAT( char *buffer, int bufferSize, tPat *pat )
 
     // number of PMTs is section_length - 5 bytes remaining in PAT headers, - 4 bytes for CRC_32, divided by 4 bytes for each entry.
     pat->numPMTs = (pat->section_length - 5 - 4) / 4;
+    printf( "." );
+    fflush(stdout);
 
     for( x = 0; x < pat->numPMTs; x++ )
     {
         pat->pmts[x].programNumber = (buffer[++index]<<8) | buffer[++index];
         pat->pmts[x].reserved = (buffer[++index]&0xC0)>>5;
         pat->pmts[x].program_map_PID = (buffer[index]&0x1F)<<8 | buffer[++index];
+        printf( "." );
+        fflush(stdout);
     }
 
     pat->CRC = (buffer[++index]<<24) | (buffer[++index]<<16) | (buffer[++index]<<8) | (buffer[++index]);
+
+    printf( "Done.\n" );
+    fflush(stdout);
 
     return 0;
 }
@@ -323,11 +351,13 @@ static cgmi_Status cgmi_SectionBufferCallback(
     }
 
     g_print("Received section pFilterId: 0x%p, sectionSize %d\n\n", pFilterId, sectionSize);
+#if 0 /* Problems with these output functions. */
     //printHex( pSection, sectionSize );
     g_print("\n\n");
 
     parsePAT( pSection, sectionSize, &pat );
     printPAT( &pat );
+#endif
 
     // After printing the PAT stop the filter
     g_print("Calling cgmi_StopSectionFilter...\n");
@@ -346,6 +376,8 @@ static cgmi_Status cgmi_SectionBufferCallback(
         printf("CGMI StopSectionFilterFailed\n");
     }
 
+    filterid = NULL;
+
     // Free buffer allocated in cgmi_QueryBufferCallback
     g_free( pSection );
 
@@ -353,15 +385,14 @@ static cgmi_Status cgmi_SectionBufferCallback(
 }
 
 /* Section Filter */
-static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value, guchar *mask, gint length,
-                                  guint offset )
+static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value,
+                                  guchar *mask, gint length, guint offset )
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
-    void *filterid = NULL;
     tcgmi_FilterData filterdata;
 
-    retCode = cgmi_CreateSectionFilter( pSessionId, NULL, &filterid );
+    retCode = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterid );
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI CreateSectionFilter Failed\n");
@@ -373,6 +404,7 @@ static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value, guc
     filterdata.value = value;
     filterdata.mask = mask;
     filterdata.length = length;
+    filterdata.offset = offset;
     filterdata.comparitor = FILTER_COMP_EQUAL;
 
     retCode = cgmi_SetSectionFilter( pSessionId, filterid, &filterdata );
@@ -396,7 +428,89 @@ static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value, guc
 /* Callback Function */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
 {
-  printf("CGMI Event Recevied : %d \n",event);
+    printf("CGMI Event Recevied : ");
+
+    switch (event)
+    {
+        case NOTIFY_STREAMING_OK:
+            printf("NOTIFY_STREAMING_OK");
+            break;
+        case NOTIFY_FIRST_PTS_DECODED:
+            printf("NOTIFY_FIRST_PTS_DECODED");
+            break;
+        case NOTIFY_STREAMING_NOT_OK:
+            printf("NOTIFY_STREAMING_NOT_OK");
+            break;
+        case NOTIFY_SEEK_DONE:
+            printf("NOTIFY_SEEK_DONE");
+            break;
+        case NOTIFY_START_OF_STREAM:
+            printf("NOTIFY_START_OF_STREAM");
+            break;
+        case NOTIFY_END_OF_STREAM:
+            printf("NOTIFY_END_OF_STREAM");
+            break;
+        case NOTIFY_DECRYPTION_FAILED:
+            printf("NOTIFY_DECRYPTION_FAILED");
+            break;
+        case NOTIFY_NO_DECRYPTION_KEY:
+            printf("NOTIFY_NO_DECRYPTION_KEY");
+            break;
+        case NOTIFY_VIDEO_ASPECT_RATIO_CHANGED:
+            printf("NOTIFY_VIDEO_ASPECT_RATIO_CHANGED");
+            break;
+        case NOTIFY_VIDEO_RESOLUTION_CHANGED:
+            printf("NOTIFY_VIDEO_RESOLUTION_CHANGED");
+            break;
+        case NOTIFY_CHANGED_LANGUAGE_AUDIO:
+            printf("NOTIFY_CHANGED_LANGUAGE_AUDIO");
+            break;
+        case NOTIFY_CHANGED_LANGUAGE_SUBTITLE:
+            printf("NOTIFY_CHANGED_LANGUAGE_SUBTITLE");
+            break;
+        case NOTIFY_CHANGED_LANGUAGE_TELETEXT:
+            printf("NOTIFY_CHANGED_LANGUAGE_TELETEXT");
+            break;
+        case NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE:
+            printf("NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE");
+            break;
+        case NOTIFY_MEDIAPLAYER_UNKNOWN:
+            printf("NOTIFY_MEDIAPLAYER_UNKNOWN");
+            break;
+        default:
+            printf("UNKNOWN");
+            break;
+    }
+
+    printf( "\n" );
+}
+
+void help(void)
+{
+    printf("Supported commands:\n"
+            "Single APIs:\n"
+           "\tplay <url>\n"
+           "\tstop (or unload)\n"
+           "\n"
+           "\tgetraterange\n"
+           "\tsetrate <rate (float)>\n"
+           "\n"
+           "\tgetposition\n"
+           "\tsetposition <position (seconds) (float)>\n"
+           "\n"
+           "\tgetduration\n"
+           "\n"
+           "\tnewsession\n"
+           "\n"
+           "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL> <offset=0xVAL>\n"
+           "\n"
+           "Tests:\n"
+           "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
+           "\t\tChannel Change Test - Change channels between <url #1> and\n"
+           "\t\t<url#2> at interval <interval> for duration <duration>.\n"
+           "\n"
+           "\thelp\n" 
+           "\tquit\n\n");
 }
 
 /* MAIN */
@@ -461,29 +575,7 @@ int main(int argc, char **argv)
     /* Helpful Information */
     printf("CGMI CLI Ready...\n");
 
-    printf("Supported commands:\n"
-            "Single APIs:\n"
-           "\tplay <url>\n"
-           "\tstop (or unload)\n"
-           "\n"
-           "\tgetraterange\n"
-           "\tsetrate <rate (float)>\n"
-           "\n"
-           "\tgetposition\n"
-           "\tsetposition <position (seconds) (float)>\n"
-           "\n"
-           "\tgetduration\n"
-           "\n"
-           "\tnewsession\n"
-           "\n"
-           "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL> <offset=0xVAL>\n"
-           "\n"
-           "Tests:\n"
-           "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
-           "\t\tChannel Change Test - Change channels between <url #1> and\n"
-           "\t\t<url#2> at interval <interval> for duration <duration>.\n"
-           "\n"
-           "\tquit\n\n");
+    help();
 
     /* Main Command Loop */
     while (!quit)
@@ -501,6 +593,11 @@ int main(int argc, char **argv)
         /* play */
         if (strncmp(command, "play", 4) == 0)
         {
+            if (playing)
+            {
+                printf( "Stop playback before starting a new one.\n" );
+                continue;
+            }
             strncpy( arg, command + 5, strlen(command) - 6 );
             arg[strlen(command) - 6] = '\0';
             /* Check First */
@@ -636,6 +733,11 @@ int main(int argc, char **argv)
         /* Create Filter */
         else if (strncmp(command, "createfilter", 12) == 0)
         {
+            if ( filterid != NULL )
+            {
+                printf( "Only one filter at a time allowed currently in cgmi_cli.\n" );
+                continue;
+            }
             /* default values for section filter code */
             err = 0;
             pid = SECTION_FILTER_EMPTY_PID;
@@ -855,6 +957,11 @@ int main(int argc, char **argv)
 
             printf( "Played for %d seconds. %d channels.\n",
                     (int) (current.tv_sec - start.tv_sec), i );
+        }
+        /* help */
+        else if (strncmp(command, "help", 4) == 0)
+        {
+            help();
         }
         /* quit */
         else if (strncmp(command, "quit", 4) == 0)

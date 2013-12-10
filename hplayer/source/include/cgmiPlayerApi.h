@@ -107,11 +107,11 @@ typedef enum
 
 typedef struct
 {
-   gint pid;
-   guchar *value;
-   guchar *mask;
-   gint length;
-   guint offset;
+   int pid;
+   unsigned char *value;
+   unsigned char *mask;
+   int length;
+   unsigned int offset;
    cgmi_FilterComparitor comparitor;
 
 }tcgmi_FilterData; 
