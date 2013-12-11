@@ -504,12 +504,19 @@ void help(void)
            "\n"
            "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL> <offset=0xVAL>\n"
            "\n"
+           "\tgetaudiolanginfo\n"
+           "\n"
+           "\tsetaudiolang <index>\n"
+           "\n"
+           "\tsetdefaudiolang <lang>\n"
+           "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
            "\t\t<url#2> at interval <interval> for duration <duration>.\n"
            "\n"
            "\thelp\n" 
+           "\n"
            "\tquit\n\n");
 }
 
@@ -885,6 +892,59 @@ int main(int argc, char **argv)
             }
 
             retCode = sectionfilter( pSessionId, pid, value, mask, mlength, offset );
+        }
+        /* get audio languages available */
+        else if (strncmp(command, "getaudiolanginfo", 16) == 0)
+        {
+            gint count;
+            gint i;
+            gchar lang[4] = { 0 };
+            retCode = cgmi_GetNumAudioLanguages( pSessionId, &count );
+            if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);
+                continue;
+            }
+            printf("\nAvailable Audio Languages:\n");
+            printf("--------------------------\n");
+            for ( i = 0; i < count; i++ )
+            {
+                retCode = cgmi_GetAudioLangInfo( pSessionId, i, lang, sizeof(lang) );
+                if ( retCode != CGMI_ERROR_SUCCESS )
+                    break;
+                printf("%d: %s\n", i, lang);
+            }
+        }
+        /* set audio stream */
+        else if (strncmp(command, "setaudiolang", 12) == 0)
+        {
+            gint index;
+            strncpy( arg, command + 13, strlen(command) - 14 );
+            arg[strlen(command) - 14] = '\0';
+            
+            index = atoi( arg );
+
+            retCode = cgmi_SetAudioStream( pSessionId, index );
+            if ( retCode == CGMI_ERROR_BAD_PARAM )
+            {
+                printf("Invalid index, use getaudiolanginfo to see available languages and their indexes %d\n", retCode);                
+            }
+            else if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);                
+            }
+        }
+        /* set default audio language */
+        else if (strncmp(command, "setdefaudiolang", 15) == 0)
+        {
+            strncpy( arg, command + 16, strlen(command) - 17 );
+            arg[strlen(command) - 17] = '\0';
+            
+            retCode = cgmi_SetDefaultAudioLang( pSessionId,  arg );
+            if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);                
+            }
         }
 
         /* Channel Change Test */

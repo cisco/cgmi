@@ -7,6 +7,19 @@
 extern "C"
 {
 #endif
+
+#define MAX_AUDIO_LANGUAGE_DESCRIPTORS 32
+#define SOCKET_RECEIVE_BUFFER_SIZE     1000000
+#define UDP_CHUNK_SIZE                 (1316*32)
+
+typedef struct
+{
+   guint pid;
+   guint index;
+   guint streamType;
+   gchar isoCode[4];
+} tAudioLang;
+
 typedef struct
 {
    void*          cookie;
@@ -20,12 +33,17 @@ typedef struct
    guint          tag;
    GstElement     *videoSink;
    GstElement     *demux;
+   GstElement     *udpsrc;
    GstBus         *bus;
    GstMessage     *msg;
    void*          usrParam;
-
+   tAudioLang     audioLanguages[MAX_AUDIO_LANGUAGE_DESCRIPTORS];
+   gchar          defaultAudioLanguage[4];
+   gint           numAudioLanguages;
+   gint           audioStreamIndex;
    /* user registered data */ 
    cgmi_EventCallback eventCB;
+
 }tSession;
 
 gboolean cisco_gst_init( int argc, char *argv[] );

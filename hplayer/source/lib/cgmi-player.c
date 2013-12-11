@@ -17,13 +17,11 @@
 
 #define MAGIC_COOKIE 0xDEADBEEF
 GST_DEBUG_CATEGORY_STATIC (cgmi); 
-#define GST_CAT_DEFAULT cgmi     
-
-
-
+#define GST_CAT_DEFAULT cgmi
 
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
 
+static gchar gDefaultAudioLanguage[4];
 
 static int  cgmi_CheckSessionHandle(tSession *pSess)
 {
@@ -180,7 +178,16 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
             if( GST_STATE_PLAYING == new_state )
             {
                //debug_cisco_gst_streamDurPos(pSess);
-
+               if ( NULL == pSess->videoSink )
+               {
+                  GstElement *videoSink = NULL;
+                  g_object_get( pSess->pipeline, "video-sink", &videoSink, NULL );
+                  if ( NULL != videoSink )
+                  {
+                     pSess->videoSink = videoSink;
+                     gst_object_unref( videoSink );
+                  }
+               }
             }
          }
       }
@@ -193,18 +200,138 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
    return TRUE;
 }
 
-static GstElement *cgmi_gst_find_demux( GstBin *bin )
+static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer data )
+{
+   tSession *pSess = (tSession*)data;
+   unsigned int videoStream, audioStream, programNumber;
+   
+   if ( NULL == pSess )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return;
+   }
+
+   g_print("on_psi_info:\n");
+   
+   GValueArray *patInfo = NULL;
+   GObject *entry = NULL;
+   guint pid;
+
+   GObject *pmtInfo = NULL, *streamInfo = NULL;
+   GValueArray *streamInfos = NULL;
+   GValueArray *descriptors = NULL;
+   GValueArray *languages = NULL;
+   gint i, j, z;
+   GValue *value;
+   guint program, version, pcrPid, esPid, esType;
+
+   if ( NULL == pSess->demux )
+   {
+      g_print("%s:Invalid demux handle\n", __FUNCTION__);
+      return;      
+   }
+
+   /* Get PAT Info */
+   g_object_get( obj, "pat-info", &patInfo, NULL );
+
+   g_print("PAT: Total Entries: %d \n", patInfo->n_values);
+   g_print("------------------------------------------------------------------------- \n");
+
+   for ( i = 0; i < patInfo->n_values; i++ ) 
+   {
+      value = g_value_array_get_nth( patInfo, i );
+      entry = (GObject*)g_value_get_object( value );
+      g_object_get( entry, "program-number", &program, NULL );
+      g_object_get( entry, "pid", &pid, NULL );
+      g_print("Program: %04x pid: %04x\n", program, pid);
+
+      /* Set the Program Index you want.
+         Note that this is not the same as program number. It is the 1-based index from the 
+         beginning of list of available PMTs in the PAT. Therefore, for instance, if there 
+         are 3 programs in the PAT with program numbers 11, 12, and 13 in order, to select 
+         program number 12, program needs to be set to 2 (i.e., second program from the beginning) */
+
+      /* We select the first program by default */
+      g_object_set( G_OBJECT(pSess->demux), "program-number", 1, NULL );  
+
+      g_object_get( obj, "pmt-info", &pmtInfo, NULL );
+
+      g_object_get( pmtInfo, "program-number", &program, NULL );
+      g_object_get( pmtInfo, "version-number", &version, NULL );
+      g_object_get( pmtInfo, "pcr-pid", &pcrPid, NULL );
+      g_object_get( pmtInfo, "stream-info", &streamInfos, NULL );
+      g_object_get( pmtInfo, "descriptors", &descriptors, NULL );
+
+      g_print("PMT: Program: %04x Version: %d pcr: %04x Streams: %d " "Descriptors: %d\n",
+              (guint16)program, version, (guint16)pcrPid, streamInfos->n_values, descriptors->n_values);
+      for ( j = 0; j < streamInfos->n_values; j++ ) 
+      {
+         value = g_value_array_get_nth( streamInfos, j );
+         streamInfo = (GObject*) g_value_get_object( value );
+         g_object_get( streamInfo, "pid", &esPid, NULL );
+         g_object_get( streamInfo, "stream-type", &esType, NULL);
+         g_object_get( streamInfo, "descriptors", &descriptors, NULL);
+         g_print("Pid: %04x type: %x Descriptors: %d\n",(guint16)esPid, (guint8) esType, descriptors->n_values);
+         for ( z = 0; z < descriptors->n_values; z++ )
+         {
+            GString *string;
+            value = g_value_array_get_nth( descriptors, z );
+            string = (GString *)g_value_get_boxed( value );
+            gint len;
+            if ( string->len > 2 ) 
+            {
+               len = (guint8)string->str[1];
+               g_print("descriptor # %d tag %02x len %d\n", z, (guint8)string->str[0], len);
+               switch ( string->str[0] )
+               {
+                  case 0x0A: /* ISO_639_language_descriptor */
+                     g_print("Found audio language descriptor for stream %d\n", j);
+                     if ( pSess->numAudioLanguages < MAX_AUDIO_LANGUAGE_DESCRIPTORS && len >= 4 )
+                     {
+                        pSess->audioLanguages[pSess->numAudioLanguages].pid = esPid;
+                        pSess->audioLanguages[pSess->numAudioLanguages].streamType = esType;
+                        pSess->audioLanguages[pSess->numAudioLanguages].index = j;
+                        strncpy( pSess->audioLanguages[pSess->numAudioLanguages].isoCode, &string->str[2], 3 );
+                        pSess->audioLanguages[pSess->numAudioLanguages].isoCode[3] = 0;
+
+                        if ( strlen(pSess->defaultAudioLanguage) > 0 && pSess->audioStreamIndex == -1 )
+                        {
+                           if ( strncmp(pSess->audioLanguages[pSess->numAudioLanguages].isoCode, pSess->defaultAudioLanguage, 3) == 0 )
+                           {
+                              pSess->audioStreamIndex == j;
+                           }
+                        }
+                        pSess->numAudioLanguages++;
+                     }
+                     else
+                     {
+                        g_print("Maximum number of audio language descriptors %d has been reached!!!\n", 
+                                MAX_AUDIO_LANGUAGE_DESCRIPTORS);
+                     }
+                     break;
+               }
+            }
+         }
+      }
+      g_print ("------------------------------------------------------------------------- \n");
+   }
+
+   if ( pSess->audioStreamIndex != -1 )
+   {
+      g_print("Selecting audio stream index %d...\n");
+      g_object_set( G_OBJECT(pSess->demux), "audio-stream", pSess->audioStreamIndex, NULL );
+   }
+}
+
+static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename )
 {
    GstElement *element = NULL;
-   GstElement *demux = NULL;
+   GstElement *handle = NULL;
    GstIterator *iter = NULL;
    void *item;  
    gchar *name = NULL;
    gboolean done = FALSE;
-
-   name = gst_element_get_name( bin );
-   g_free( name );
-   
+  
    iter = gst_bin_iterate_elements( bin );
    while ( FALSE == done )
    {
@@ -215,13 +342,16 @@ static GstElement *cgmi_gst_find_demux( GstBin *bin )
             if ( NULL != element )
             {
                name = gst_element_get_name( element );
-               if ( NULL != strstr(name, "demux") )
-               {                  
-                  demux = element;
-                  g_print("Found demux handle = %p\n", demux);
-                  done = TRUE;
+               if ( NULL != name )
+               {
+                  if ( NULL != strstr(name, ename) )
+                  {                  
+                     handle = element;
+                     g_print("Found element (%s) handle = %p\n", ename, handle);
+                     done = TRUE;
+                  }
+                  g_free( name );
                }
-               g_free( name );
                gst_object_unref( item );
             }            
             break;
@@ -229,7 +359,6 @@ static GstElement *cgmi_gst_find_demux( GstBin *bin )
             gst_iterator_resync( iter );
             break;
          case GST_ITERATOR_ERROR:
-            g_print("playbin element iterator error!\n");
             done = TRUE;
             break;
          case GST_ITERATOR_DONE:
@@ -239,31 +368,79 @@ static GstElement *cgmi_gst_find_demux( GstBin *bin )
    }
    gst_iterator_free( iter );
 
-   return demux;
+   return handle;
 }
+
+void cgmi_gst_notify_source( GObject *obj, GParamSpec *param, gpointer data ) 
+{
+   GstElement *source = NULL;
+   gchar *name;
+
+   g_print("notify-source\n");
+
+   g_object_get( obj, "source", &source, NULL );
+   if ( NULL == source )
+      return;
+
+   name = G_OBJECT_CLASS_NAME(G_OBJECT_GET_CLASS(source));
+ 
+   if ( NULL != name )
+   {
+      g_print("Source element class: %s\n", name);
+      if ( NULL != strstr(name, "GstUDPSrc") )
+      {
+         if ( NULL != g_object_class_find_property(G_OBJECT_GET_CLASS(source), "buffer-size") )
+         {
+            g_print("Setting socket receiver buffer size to %d\n", SOCKET_RECEIVE_BUFFER_SIZE);
+            g_object_set( source, "buffer-size", SOCKET_RECEIVE_BUFFER_SIZE, NULL );
+         }
+         if ( NULL != g_object_class_find_property(G_OBJECT_GET_CLASS(source), "chunk-size") )
+         {
+            g_print("Setting UDP chunk size to %d\n", UDP_CHUNK_SIZE);
+            g_object_set( source, "chunk-size", UDP_CHUNK_SIZE, NULL );
+         }
+      }
+   }
+
+   gst_object_unref( source );
+}                                                        
 
 static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer data )
 {
    GstElement *demux = NULL;
+   GstElement *videoSink = NULL;
    tSession *pSess = (tSession*)data;
+
+   gchar *name = gst_element_get_name( element );
+   g_print("Element added: %s\n", name);   
 
    // If we haven't found the demux investigate this bin
    if ( NULL == pSess->demux )
    {
-      demux = cgmi_gst_find_demux( bin );
+      demux = cgmi_gst_find_element( bin, "demux" );
 
       if( NULL != demux )
       {
          pSess->demux = demux;
+         g_signal_connect( demux, "psi-info", G_CALLBACK(cgmi_gst_psi_info), data );
       }
    }
-   
+ 
    // If this element is a bin ensure this callback is called when elements
    // are added.
    if ( GST_IS_BIN(element) )
    {
+      g_print("Element (%s) is a bin", name);
+
       g_signal_connect( element, "element-added", 
+
          G_CALLBACK(cgmi_gst_element_added), pSess );
+
+   }
+
+   if ( NULL != name )
+   {
+      g_free( name );
    }
 }
 
@@ -352,6 +529,10 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->manualPipeline = NULL;
    pSess->eventCB = eventCB;
    pSess->demux = NULL;
+   pSess->udpsrc = NULL;
+   strncpy( pSess->defaultAudioLanguage, gDefaultAudioLanguage, sizeof(pSess->defaultAudioLanguage) );
+   pSess->defaultAudioLanguage[sizeof(pSess->defaultAudioLanguage) - 1] = 0;
+   pSess->audioStreamIndex = -1;
 
    pSess->thread_ctx = g_main_context_new();
    pSess->loop = g_main_loop_new (pSess->thread_ctx, FALSE);
@@ -484,7 +665,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
          GST_WARNING("PipeLine was not able to be created\n");
          if (g_error_str)
          {
-            g_warning("Error with pipeline:%s \n", g_error_str->message);
+            g_print("Error with pipeline:%s \n", g_error_str->message);
          }
 
          //now if there are missing elements that are needed in the pipeline, lets' dump
@@ -492,11 +673,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
          if(g_error_matches(g_error_str, GST_PARSE_ERROR, GST_PARSE_ERROR_NO_SUCH_ELEMENT))
          {
             guint i=0; 
-            g_warning("Missing these plugins:\n");
+            g_print("Missing these plugins:\n");
             arr = gst_parse_context_get_missing_elements(ctx);
             while (arr[i] != NULL)
             {
-               g_warning("%s\n",arr[i]);
+               g_print("%s\n",arr[i]);
                i++;
             }
             g_strfreev(arr);
@@ -508,7 +689,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       pSess->bus = gst_element_get_bus( pSess->pipeline );
       if (pSess->bus == NULL)
       {
-         GST_ERROR("THe bus is null in the pipeline\n");
+         GST_ERROR("The bus is null in the pipeline\n");
       }
 
       // enable the notifications.
@@ -521,6 +702,10 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       // Primarily aquires a reference to demux for section filter support.
       g_signal_connect( pSess->pipeline, "element-added", 
          G_CALLBACK(cgmi_gst_element_added), pSess );
+
+      g_signal_connect( pSess->pipeline, "notify::source", 
+         G_CALLBACK(cgmi_gst_notify_source), pSess );
+
 
    }while(0);
 
@@ -549,6 +734,9 @@ cgmi_Status cgmi_Unload  (void *pSession )
       g_print ("Deleting pipeline\n");
       gst_object_unref (GST_OBJECT (pSess->pipeline));
       pSess->pipeline = NULL;
+      pSess->demux = NULL;
+      pSess->udpsrc = NULL;
+      pSess->audioStreamIndex = -1;
 
    }while (0);
    g_print("Exiting %s pipeline is now null\n",__FUNCTION__);
@@ -566,7 +754,6 @@ cgmi_Status cgmi_SetRate (void *pSession,  float rate)
 {
 
    tSession *pSess = (tSession*)pSession;
-   GstElement *video_sink;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    GstFormat format = GST_FORMAT_TIME;
    GstEvent *seek_event=NULL;
@@ -579,12 +766,12 @@ cgmi_Status cgmi_SetRate (void *pSession,  float rate)
 
    if (rate == 0.0)
    {
-      cisco_gst_setState( pSess, GST_STATE_PAUSED);
+      cisco_gst_setState( pSess, GST_STATE_PAUSED );
       return stat;
    }
    else if (( rate == 1.0) && (curState == GST_STATE_PAUSED))
    {
-      cisco_gst_setState( pSess, GST_STATE_PLAYING);
+      cisco_gst_setState( pSess, GST_STATE_PLAYING );
       return stat;
    }
 
@@ -709,24 +896,116 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay )
 }
 
 
-cgmi_Status cgmi_GetNumAudioStreams (void *pSession,  int *count)
+cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
 {
-   return CGMI_ERROR_NOT_IMPLEMENTED;
+   tSession *pSess = (tSession*)pSession;
+   if ( NULL == pSess )
+   {
+      g_print("Invalid session handle!\n");
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+   if ( NULL == count )
+   {
+      g_print("Null count pointer passed for audio language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   *count = pSess->numAudioLanguages;
+  
+   return CGMI_ERROR_SUCCESS;
 }
 
-cgmi_Status cgmi_GetAudioStreamInfo (void *pSession,  int index, char* buf, int bufSize)
+cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize)
 {
-   return CGMI_ERROR_NOT_IMPLEMENTED;
+   tSession *pSess = (tSession*)pSession;
+
+   if ( NULL == pSess )
+   {
+      g_print("Invalid session handle!\n");
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == buf )
+   {
+      g_print("Null buffer pointer passed for audio language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }   
+
+   if ( index > pSess->numAudioLanguages - 1 || index < 0 )
+   {
+      g_print("Bad index value passed for audio language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+ 
+   strncpy( buf, pSess->audioLanguages[index].isoCode, bufSize );
+   buf[bufSize - 1] = 0;
+
+   return CGMI_ERROR_SUCCESS;
 }
 
 cgmi_Status cgmi_SetAudioStream (void *pSession,  int index )
 
 {
-   return CGMI_ERROR_NOT_IMPLEMENTED;
+   cgmi_Status stat;
+   tSession *pSess = (tSession*)pSession;
+   if ( NULL == pSess )
+   {
+      g_print("Invalid session handle!\n");
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( index > pSess->numAudioLanguages - 1 || index < 0 )
+   {
+      g_print("Bad index value passed for audio language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   if ( NULL == pSess->demux )
+   {
+      g_print("Demux is not ready yet, cannot set audio stream!\n");
+      return CGMI_ERROR_NOT_READY;
+   }
+
+   stat = cgmi_Unload( pSess );
+   if ( stat != CGMI_ERROR_SUCCESS )
+       return stat;
+
+   g_print("Setting audio stream index to %d for language %s\n", 
+           pSess->audioLanguages[index].index, pSess->audioLanguages[index].isoCode);
+
+   pSess->audioStreamIndex = pSess->audioLanguages[index].index;
+
+   stat = cgmi_Load( pSess, pSess->playbackURI );
+   if ( stat != CGMI_ERROR_SUCCESS )
+       return stat;
+
+   stat = cgmi_Play( pSess );
+
+   return stat;
 }
 
-cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language )
+cgmi_Status cgmi_SetDefaultAudioLang (void *pSession, const char *language )
 {
-   return CGMI_ERROR_NOT_IMPLEMENTED;
+   char *ptr;
+   tSession *pSess = (tSession*)pSession;
+
+   if ( NULL == language )
+   {
+      g_print("Bad audio language pointer passed!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   if ( NULL == pSess )
+   {
+      strncpy( gDefaultAudioLanguage, language, gDefaultAudioLanguage );
+      gDefaultAudioLanguage[sizeof(gDefaultAudioLanguage) - 1] = 0;
+   }
+   else
+   {
+      strncpy( pSess->defaultAudioLanguage, language, sizeof(pSess->defaultAudioLanguage) );
+      pSess->defaultAudioLanguage[sizeof(pSess->defaultAudioLanguage) - 1] = 0;
+   }   
+
+   return CGMI_ERROR_SUCCESS;
 }
 

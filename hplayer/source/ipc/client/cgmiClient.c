@@ -824,7 +824,7 @@ cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward 
     return retStat;
 }
 
-cgmi_Status cgmi_GetNumAudioStreams( void *pSession,  int *count )
+cgmi_Status cgmi_GetNumAudioLanguages( void *pSession,  int *count )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -840,7 +840,7 @@ cgmi_Status cgmi_GetNumAudioStreams( void *pSession,  int *count )
     enforce_dbus_preconditions();
 
 
-    org_cisco_cgmi_call_get_num_audio_streams_sync( gProxy,
+    org_cisco_cgmi_call_get_num_audio_languages_sync( gProxy,
             (guint64)pSession,
             count,
             (gint *)&retStat,
@@ -852,17 +852,16 @@ cgmi_Status cgmi_GetNumAudioStreams( void *pSession,  int *count )
     return retStat;
 }
 
-cgmi_Status cgmi_GetAudioStreamInfo( void *pSession,  int index,
-                                     char *buf, int bufSize )
+cgmi_Status cgmi_GetAudioLangInfo( void *pSession, int index,
+                                   char *buf, int bufSize )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
-    GVariant *bufferArray = NULL;
-    GVariantIter *iter;
     int idx;
+    gchar *buffer = NULL;
 
     // Preconditions
-    if( pSession == NULL || buf == NULL )
+    if( NULL == pSession || NULL == buf )
     {
         return CGMI_ERROR_BAD_PARAM;
     }
@@ -871,27 +870,23 @@ cgmi_Status cgmi_GetAudioStreamInfo( void *pSession,  int index,
 
     enforce_dbus_preconditions();
 
-
-    org_cisco_cgmi_call_get_audio_stream_info_sync( gProxy,
+    org_cisco_cgmi_call_get_audio_lang_info_sync( gProxy,
             (guint64)pSession,
             index,
             bufSize,
-            &bufferArray,
+            (gchar **)&buffer,
             (gint *)&retStat,
             NULL,
             &error );
 
-    if( NULL == bufferArray )
+    if( NULL == buffer )
     {
-
+        return CGMI_ERROR_FAILED;      
     }
 
-    g_variant_get( bufferArray, "ay", &iter );
-    idx = 0;
-    while( idx < bufSize && g_variant_iter_loop(iter, "y", &buf[idx]) )
-    {
-        idx++;
-    }
+    strncpy( buf, buffer, bufSize );
+    buf[bufSize - 1] = 0;
+    g_free( buffer );
 
     dbus_check_error(error);
 
@@ -912,7 +907,6 @@ cgmi_Status cgmi_SetAudioStream( void *pSession,  int index )
     enforce_session_preconditions(pSession);
 
     enforce_dbus_preconditions();
-
 
     org_cisco_cgmi_call_set_audio_stream_sync( gProxy,
             (guint64)pSession,

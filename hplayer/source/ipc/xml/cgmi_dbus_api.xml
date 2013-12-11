@@ -79,19 +79,17 @@
         </method>
 
         <!-- Audio APIs -->
-        <method name="getNumAudioStreams">
+        <method name="getNumAudioLanguages">
             <arg name="sessionId" direction="in" type="t"/>
             <arg name="count" direction="out" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
-        <method name="getAudioStreamInfo">
+        <method name="getAudioLangInfo">
             <arg name="sessionId" direction="in" type="t"/>
             <arg name="index" direction="in" type="i"/>
             <arg name="bufSize" direction="in" type="i"/>
-            <arg name="buffer" direction="out" type="ay">
-                <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
-            </arg>
+            <arg name="buffer" direction="out" type="s"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 

@@ -390,15 +390,15 @@ static gpointer sanity(gpointer user_data)
 
 
     int count;
-    g_print("Calling cgmi_GetNumAudioStreams...\n");
-    retStat = cgmi_GetNumAudioStreams( pSessionId, &count );
+    g_print("Calling cgmi_GetNumAudioLanguages...\n");
+    retStat = cgmi_GetNumAudioLanguages( pSessionId, &count );
     CHECK_ERROR(retStat);
-    g_print("cgmi_GetNumAudioStreams : count = (%d)\n", count );
+    g_print("cgmi_GetNumAudioLanguages : count = (%d)\n", count );
 
 
-    char streamInfoBuf[1024];
-    g_print("Calling cgmi_GetAudioStreamInfo...\n");
-    retStat = cgmi_GetAudioStreamInfo( pSessionId, 0, streamInfoBuf, 1024 );
+    char langInfoBuf[1024];
+    g_print("Calling cgmi_GetAudioLangInfo...\n");
+    retStat = cgmi_GetAudioLangInfo( pSessionId, 0, langInfoBuf, 1024 );
     CHECK_ERROR(retStat);
 
 

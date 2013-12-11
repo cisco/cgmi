@@ -25,7 +25,7 @@
 *
 *    Thread Safe: Yes
 *
-*    \authors : Matt Snoby, Kris Kersey, Zack Wine, Chris Foster
+*    \authors : Matt Snoby, Kris Kersey, Zack Wine, Chris Foster, Tankut Akgul
 *    Platform Dependencies: Gstreamer 0.10.
 *  \ingroup CGMI
 */
@@ -375,7 +375,7 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
 cgmi_Status cgmi_GetRateRange (void *pSession,  float *pRewind, float *pFFoward );
 
 /**
- *  \brief \b cgmi_GetNumAudioStreams
+ *  \brief \b cgmi_GetNumAudioLanguages
  *
  *  This is a request to find out how many audio streams the currently loaded asset has.
  *  \param[in] pSession  This is a handle to the active session.
@@ -389,8 +389,8 @@ cgmi_Status cgmi_GetRateRange (void *pSession,  float *pRewind, float *pFFoward 
  *
  *  \image html audio_language_selection.png "How to do Audio Language Selection"
  */
-cgmi_Status cgmi_GetNumAudioStreams (void *pSession,  int *count);
-cgmi_Status cgmi_GetAudioStreamInfo (void *pSession,  int index, char* buf, int bufSize);
+cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count);
+cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize);
 cgmi_Status cgmi_SetAudioStream (void *pSession,  int index );
 cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language );
 

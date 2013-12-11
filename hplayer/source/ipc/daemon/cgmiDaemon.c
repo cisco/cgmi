@@ -469,19 +469,19 @@ on_handle_cgmi_get_rate_range (
 }
 
 static gboolean
-on_handle_cgmi_get_num_audio_streams (
+on_handle_cgmi_get_num_audio_languages (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
     guint64 arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
-    int count = 0;
+    gint count = 0;
 
     CGMID_ENTER();
 
-    retStat = cgmi_GetNumAudioStreams( (void *)arg_sessionId, &count );
+    retStat = cgmi_GetNumAudioLanguages( (void *)arg_sessionId, &count );
 
-    org_cisco_cgmi_complete_get_num_audio_streams (object,
+    org_cisco_cgmi_complete_get_num_audio_languages (object,
             invocation,
             count,
             retStat);
@@ -490,7 +490,7 @@ on_handle_cgmi_get_num_audio_streams (
 }
 
 static gboolean
-on_handle_cgmi_get_audio_stream_info (
+on_handle_cgmi_get_audio_lang_info (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
     guint64 arg_sessionId,
@@ -499,40 +499,28 @@ on_handle_cgmi_get_audio_stream_info (
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     GVariantBuilder *bufferBuilder = NULL;
-    GVariant *bufferArray = NULL;
-    char buffer[bufSize];
     int idx;
+    char *buffer = NULL;
 
     CGMID_ENTER();
 
-    retStat = cgmi_GetAudioStreamInfo( (void *)arg_sessionId, index, buffer, bufSize );
-
-    do{
-        bufferBuilder = g_variant_builder_new( G_VARIANT_TYPE("ay") );
-        if( bufferBuilder == NULL )
-        {
-            CGMID_ERROR("Failed to create variant builder.\n");
-            retStat = CGMI_ERROR_OUT_OF_MEMORY;
-            break;
-        }
-
-        for( idx = 0; idx < bufSize; idx++ )
-        {
-            g_variant_builder_add( bufferBuilder, "y", &buffer[idx] );
-        }
-        bufferArray = g_variant_builder_end( bufferBuilder );
-        if( NULL == bufferArray ) { retStat = CGMI_ERROR_OUT_OF_MEMORY; }
-
-    }while(0);
-
-
-    org_cisco_cgmi_complete_get_audio_stream_info (object,
+    if ( bufSize > 0 )
+    {
+        buffer = g_malloc0(bufSize);        
+    }
+    
+    if ( NULL == buffer )
+        retStat = CGMI_ERROR_OUT_OF_MEMORY;    
+    else
+        retStat = cgmi_GetAudioLangInfo( (void *)arg_sessionId, index, buffer, bufSize );
+       
+    org_cisco_cgmi_complete_get_audio_lang_info (object,
             invocation,
-            bufferArray,
+            buffer,
             retStat);
 
-    g_variant_unref( bufferArray );
-    g_variant_builder_unref( bufferBuilder );
+    if ( NULL != buffer )
+        g_free( buffer );   
 
     return TRUE;
 }
@@ -864,13 +852,13 @@ on_bus_acquired (GDBusConnection *connection,
                       NULL);
 
     g_signal_connect (interface,
-                      "handle-get-num-audio-streams",
-                      G_CALLBACK (on_handle_cgmi_get_num_audio_streams),
+                      "handle-get-num-audio-languages",
+                      G_CALLBACK (on_handle_cgmi_get_num_audio_languages),
                       NULL);
 
     g_signal_connect (interface,
-                      "handle-get-audio-stream-info",
-                      G_CALLBACK (on_handle_cgmi_get_audio_stream_info),
+                      "handle-get-audio-lang-info",
+                      G_CALLBACK (on_handle_cgmi_get_audio_lang_info),
                       NULL);
 
     g_signal_connect (interface,
