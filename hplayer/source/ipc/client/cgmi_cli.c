@@ -510,6 +510,8 @@ void help(void)
            "\n"
            "\tsetdefaudiolang <lang>\n"
            "\n"
+           "\tsetvideorect <x,y,w,h>\n"
+           "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
@@ -940,7 +942,43 @@ int main(int argc, char **argv)
             strncpy( arg, command + 16, strlen(command) - 17 );
             arg[strlen(command) - 17] = '\0';
             
-            retCode = cgmi_SetDefaultAudioLang( pSessionId,  arg );
+            retCode = cgmi_SetDefaultAudioLang( pSessionId, arg );
+            if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);                
+            }
+        }
+        /* set video rectangle */
+        else if (strncmp(command, "setvideorect", 12) == 0)
+        {
+            char *ptr;
+            char *dim;
+            int i, size[4];
+            strncpy( arg, command + 13, strlen(command) - 14 );
+            arg[strlen(command) - 14] = '\0';
+            
+            dim = arg;
+            for ( i = 0; i < 4; i++ )
+            {                
+                if ( i != 3 )
+                    ptr = strchr(dim, ',');
+
+                if ( NULL == ptr )
+                {
+                  printf("Error parsing arguments, please specify rectangle dimensions in the format x,y,w,h\n");
+                  break;
+                }
+                if ( i != 3 )
+                    *ptr = 0;
+
+                size[i] = atoi( dim );
+                dim = ptr + 1;
+            }
+
+            if ( NULL == ptr )
+                continue;
+
+            retCode = cgmi_SetVideoRectangle( pSessionId, size[0], size[1], size[2], size[3] );
             if ( retCode != CGMI_ERROR_SUCCESS )
             {
                 printf("Error returned %d\n", retCode);                

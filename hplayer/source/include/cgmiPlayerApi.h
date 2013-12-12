@@ -375,23 +375,95 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
 cgmi_Status cgmi_GetRateRange (void *pSession,  float *pRewind, float *pFFoward );
 
 /**
- *  \brief \b cgmi_GetNumAudioLanguages
+ *  \brief \b cgmi_SetVideoRectangle
  *
- *  This is a request to find out how many audio streams the currently loaded asset has.
+ *  This is a request to scale the video wrt fullscreen coordinates (0,0,1280,720)
  *  \param[in] pSession  This is a handle to the active session.
  *
- *  \param[out] count  this int will be populated with the nubmer of audio streams the current asset has. 
+ *  \param[in] x  Video destination rectangle x-position
+ *
+ *  \param[in] y  Video destination rectangle y-position
+ *
+ *  \param[in] w  Video destination rectangle width
+ *
+ *  \param[in] h  Video destination rectangle height
+ *
+ *  \pre    The Session must be open the the url must be loaded.
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_SetVideoRectangle (void *pSession, int x, int y, int w, int h );
+
+/**
+ *  \brief \b cgmi_GetNumAudioLanguages
+ *
+ *  This is a request to find out how many audio languages the currently loaded asset has.
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[out] count  this int will be populated with the nubmer of audio languages the current asset has. 
  *
  *  \pre    The Session must be open the the url must be loaded
  *
- * \return  CGMI_ERROR_SUCCESS when the location is obtained and sent back.
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
  *  \ingroup CGMI
  *
  *  \image html audio_language_selection.png "How to do Audio Language Selection"
  */
 cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count);
+
+/**
+ *  \brief \b cgmi_GetAudioLangInfo
+ *
+ *  This is to find out ISO-639 language code of the requested stream.
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[in] index  Index of the audio stream in the returned number of available languages
+ *
+ *  \param[in] buf    Buffer to write the ISO-639 code in
+ *
+ *  \param[in] bufSize Size of the buffer passed in
+ *
+ *  \pre    The Session must be open the the url must be loaded.
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ *  \image html audio_language_selection.png "How to do Audio Language Selection"
+ */
 cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize);
-cgmi_Status cgmi_SetAudioStream (void *pSession,  int index );
+
+/**
+ *  \brief \b cgmi_SetAudioStream
+ *
+ *  This is to select the audio language from the available list of languages
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[in] index     Index of the audio stream in the returned number of available languages.
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ *  \pre    The Session must be open the the url must be loaded.
+ *
+ *  \image html audio_language_selection.png "How to do Audio Language Selection"
+ */
+cgmi_Status cgmi_SetAudioStream (void *pSession, int index);
+
+/**
+ *  \brief \b cgmi_SetDefaultAudioLang
+ *
+ *  This is a request to specify the default audio language.
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[in] language  The ISO-639 code for the default audio language to be set
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ *  \image html audio_language_selection.png "How to do Audio Language Selection"
+ */
 cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language );
 
 cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** pFilterId  );

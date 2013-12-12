@@ -824,6 +824,36 @@ cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward 
     return retStat;
 }
 
+cgmi_Status cgmi_SetVideoRectangle( void *pSession, int x, int y, int w, int h  )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+
+    // Preconditions
+    if( pSession == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    org_cisco_cgmi_call_set_video_rectangle_sync( gProxy,
+            (guint64)pSession,
+            x,
+            y,
+            w,
+            h,
+            (gint *)&retStat,
+            NULL,
+            &error );
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
 cgmi_Status cgmi_GetNumAudioLanguages( void *pSession,  int *count )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
@@ -893,7 +923,7 @@ cgmi_Status cgmi_GetAudioLangInfo( void *pSession, int index,
     return retStat;
 }
 
-cgmi_Status cgmi_SetAudioStream( void *pSession,  int index )
+cgmi_Status cgmi_SetAudioStream( void *pSession, int index )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -920,7 +950,7 @@ cgmi_Status cgmi_SetAudioStream( void *pSession,  int index )
     return retStat;
 }
 
-cgmi_Status cgmi_SetDefaultAudioLang( void *pSession,  const char *language )
+cgmi_Status cgmi_SetDefaultAudioLang( void *pSession, const char *language )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;

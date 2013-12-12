@@ -411,6 +411,10 @@ static gpointer sanity(gpointer user_data)
     retStat = cgmi_SetDefaultAudioLang( pSessionId, "eng" );
     CHECK_ERROR(retStat);
 
+    g_print("Calling cgmi_SetVideoRectangle...\n");
+    retStat = cgmi_SetVideoRectangle( pSessionId, 0, 0, 400, 400 );
+    CHECK_ERROR(retStat);
+
     // Let it play for a few more seconds
     g_usleep(1 * 1000 * 1000);
 

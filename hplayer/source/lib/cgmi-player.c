@@ -184,9 +184,16 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                   g_object_get( pSess->pipeline, "video-sink", &videoSink, NULL );
                   if ( NULL != videoSink )
                   {
-                     pSess->videoSink = videoSink;
+                     pSess->videoSink = videoSink;                     
                      gst_object_unref( videoSink );
                   }
+               }
+               if ( NULL != pSess->videoSink )
+               {
+                  gchar dim[64];
+                  snprintf( dim, sizeof(dim), "%d,%d,%d,%d", 
+                            pSess->vidDestRect.x, pSess->vidDestRect.y, pSess->vidDestRect.w, pSess->vidDestRect.h);
+                  g_object_set( G_OBJECT(pSess->videoSink), "window_set", dim, NULL );
                }
             }
          }
@@ -409,6 +416,7 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
 {
    GstElement *demux = NULL;
    GstElement *videoSink = NULL;
+   GstElement *videoDecoder = NULL;
    tSession *pSess = (tSession*)data;
 
    gchar *name = gst_element_get_name( element );
@@ -425,17 +433,33 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
          g_signal_connect( demux, "psi-info", G_CALLBACK(cgmi_gst_psi_info), data );
       }
    }
+
+   if ( NULL == pSess->videoSink )
+   {
+      videoSink = cgmi_gst_find_element( bin, "videosink" );
+
+      if( NULL != videoSink )
+      {
+         pSess->videoSink = videoSink;
+      }
+   }
+
+   if ( NULL == pSess->videoDecoder )
+   {
+      videoDecoder = cgmi_gst_find_element( bin, "videodecoder" );
+
+      if( NULL != videoDecoder )
+      {
+         pSess->videoDecoder = videoDecoder;
+      }
+   }
  
    // If this element is a bin ensure this callback is called when elements
    // are added.
    if ( GST_IS_BIN(element) )
    {
       g_print("Element (%s) is a bin", name);
-
-      g_signal_connect( element, "element-added", 
-
-         G_CALLBACK(cgmi_gst_element_added), pSess );
-
+      g_signal_connect( element, "element-added", G_CALLBACK(cgmi_gst_element_added), pSess );
    }
 
    if ( NULL != name )
@@ -530,6 +554,13 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->eventCB = eventCB;
    pSess->demux = NULL;
    pSess->udpsrc = NULL;
+   pSess->videoSink = NULL;
+   pSess->videoDecoder = NULL;
+   pSess->vidDestRect.x = 0;
+   pSess->vidDestRect.y = 0;
+   pSess->vidDestRect.w = VIDEO_MAX_WIDTH;
+   pSess->vidDestRect.h = VIDEO_MAX_HEIGHT;
+
    strncpy( pSess->defaultAudioLanguage, gDefaultAudioLanguage, sizeof(pSess->defaultAudioLanguage) );
    pSess->defaultAudioLanguage[sizeof(pSess->defaultAudioLanguage) - 1] = 0;
    pSess->audioStreamIndex = -1;
@@ -628,7 +659,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    //
    // This section makes DLNA content hardcoded.  Need to optimize.
    //
-   if (g_str_has_suffix(pSess->playbackURI, "mpeg"))
+   if (g_str_has_suffix(pSess->playbackURI, "mpeg"))   
    {
       // This url is pointing to DLNA content, build a manual pipeline.
       memset(manualPipeline, 0, 1024);
@@ -699,13 +730,25 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       g_source_unref(source);
 
       // Track when elements are added to the pipeline.
-      // Primarily aquires a reference to demux for section filter support.
-      g_signal_connect( pSess->pipeline, "element-added", 
-         G_CALLBACK(cgmi_gst_element_added), pSess );
+      // Primarily acquires a reference to demux for section filter support.
+      if ( NULL != pSess->manualPipeline )
+      {
+         GstBin *decodebin2 = cgmi_gst_find_element( pSess->pipeline, "dec" );
 
-      g_signal_connect( pSess->pipeline, "notify::source", 
-         G_CALLBACK(cgmi_gst_notify_source), pSess );
+         if( NULL != decodebin2 )
+         {
+            g_signal_connect( decodebin2, "element-added", 
+               G_CALLBACK(cgmi_gst_element_added), pSess );
+         }
+      }
+      else
+      {
+         g_signal_connect( pSess->pipeline, "element-added", 
+            G_CALLBACK(cgmi_gst_element_added), pSess );
 
+         g_signal_connect( pSess->pipeline, "notify::source", 
+            G_CALLBACK(cgmi_gst_notify_source), pSess );
+      }
 
    }while(0);
 
@@ -716,7 +759,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 }
 
 
-cgmi_Status cgmi_Unload  (void *pSession )
+cgmi_Status cgmi_Unload  ( void *pSession )
 {
    
    tSession *pSess = (tSession*)pSession;
@@ -736,6 +779,8 @@ cgmi_Status cgmi_Unload  (void *pSession )
       pSess->pipeline = NULL;
       pSess->demux = NULL;
       pSess->udpsrc = NULL;
+      pSess->videoSink = NULL;
+      pSess->videoDecoder = NULL;
       pSess->audioStreamIndex = -1;
 
    }while (0);
@@ -895,6 +940,53 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay )
    return CGMI_ERROR_NOT_IMPLEMENTED;
 }
 
+cgmi_Status cgmi_SetVideoRectangle (void *pSession, int x, int y, int w, int h )
+{
+   char *ptr;
+   tSession *pSess = (tSession*)pSession;
+
+   if ( NULL == pSess )
+   {
+      g_print("Invalid session handle!\n");
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( x < 0 )
+      x = 0;
+   if ( x >= VIDEO_MAX_WIDTH )
+      x = VIDEO_MAX_WIDTH - 1;
+
+   if ( y < 0 )
+      y = 0;
+   if ( y >= VIDEO_MAX_HEIGHT )
+      y = VIDEO_MAX_HEIGHT - 1;
+
+   if ( x + w > VIDEO_MAX_WIDTH )
+      w = VIDEO_MAX_WIDTH - x;
+   if ( y + h > VIDEO_MAX_HEIGHT )
+      h = VIDEO_MAX_HEIGHT - y;
+
+   if ( w < 10 || h < 10 )
+   {
+      g_print("Adjusted video size too small, must be bigger than 10x10 pixels!");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   pSess->vidDestRect.x = x;
+   pSess->vidDestRect.y = y;
+   pSess->vidDestRect.w = w;
+   pSess->vidDestRect.h = h;
+
+   if ( NULL != pSess->videoSink )
+   {
+      gchar dim[64];
+      snprintf( dim, sizeof(dim), "%d,%d,%d,%d", 
+                pSess->vidDestRect.x, pSess->vidDestRect.y, pSess->vidDestRect.w, pSess->vidDestRect.h);
+      g_object_set( G_OBJECT(pSess->videoSink), "window_set", dim, NULL );
+   }
+
+   return CGMI_ERROR_SUCCESS;
+}
 
 cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
 {
@@ -944,7 +1036,6 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
 }
 
 cgmi_Status cgmi_SetAudioStream (void *pSession,  int index )
-
 {
    cgmi_Status stat;
    tSession *pSess = (tSession*)pSession;
@@ -1008,4 +1099,5 @@ cgmi_Status cgmi_SetDefaultAudioLang (void *pSession, const char *language )
 
    return CGMI_ERROR_SUCCESS;
 }
+
 

@@ -469,6 +469,29 @@ on_handle_cgmi_get_rate_range (
 }
 
 static gboolean
+on_handle_cgmi_set_video_rectangle (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    guint64 arg_sessionId,
+    int x,
+    int y, 
+    int w,
+    int h )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+
+    CGMID_ENTER();
+
+    retStat = cgmi_SetVideoRectangle( (void *)arg_sessionId, x, y, w, h );
+
+    org_cisco_cgmi_complete_set_video_rectangle (object,
+            invocation,
+            retStat);
+
+    return TRUE;
+}
+
+static gboolean
 on_handle_cgmi_get_num_audio_languages (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
@@ -849,6 +872,11 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-get-rate-range",
                       G_CALLBACK (on_handle_cgmi_get_rate_range),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-set-video-rectangle",
+                      G_CALLBACK (on_handle_cgmi_set_video_rectangle),
                       NULL);
 
     g_signal_connect (interface,

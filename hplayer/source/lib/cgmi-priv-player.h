@@ -11,6 +11,8 @@ extern "C"
 #define MAX_AUDIO_LANGUAGE_DESCRIPTORS 32
 #define SOCKET_RECEIVE_BUFFER_SIZE     1000000
 #define UDP_CHUNK_SIZE                 (1316*32)
+#define VIDEO_MAX_WIDTH                1280
+#define VIDEO_MAX_HEIGHT               720
 
 typedef struct
 {
@@ -18,7 +20,15 @@ typedef struct
    guint index;
    guint streamType;
    gchar isoCode[4];
-} tAudioLang;
+}tAudioLang;
+
+typedef struct
+{
+    gint x;
+    gint y;
+    gint w;
+    gint h;
+}tCgmiRect;
 
 typedef struct
 {
@@ -32,11 +42,13 @@ typedef struct
    GstElement     *source;
    guint          tag;
    GstElement     *videoSink;
+   GstElement     *videoDecoder;
    GstElement     *demux;
    GstElement     *udpsrc;
    GstBus         *bus;
    GstMessage     *msg;
    void*          usrParam;
+   tCgmiRect      vidDestRect;
    tAudioLang     audioLanguages[MAX_AUDIO_LANGUAGE_DESCRIPTORS];
    gchar          defaultAudioLanguage[4];
    gint           numAudioLanguages;
