@@ -237,8 +237,11 @@ static void cgmi_ResetClientState()
     }
 
     /* Destroy the DBUS connection */
-    g_object_unref(gProxy);
-    gProxy = NULL;
+    if ( gProxy != NULL )
+    {
+        g_object_unref(gProxy);
+        gProxy = NULL;
+    }
 }
 
 /* Called whem the server aquires name on dbus */
@@ -439,8 +442,7 @@ char* cgmi_ErrorString ( cgmi_Status retStat )
 
     if ( gProxy == NULL )
     {
-        g_print("%s:%d - %s Error CGMI not initialized.\n",
-                __FILE__, __LINE__, __FUNCTION__);
+        g_print("Error CGMI not initialized.\n");
         return NULL;
     }
 
@@ -1127,7 +1129,6 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void *pFilterId, tcgmi_FilterD
             value,
             mask,
             (gint)pFilter->length,
-            (guint)pFilter->offset,
             (gint)pFilter->comparitor,
             (gint *)&retStat,
             NULL,

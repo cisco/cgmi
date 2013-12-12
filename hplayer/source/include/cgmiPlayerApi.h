@@ -111,7 +111,6 @@ typedef struct
    unsigned char *value;
    unsigned char *mask;
    int length;
-   unsigned int offset;
    cgmi_FilterComparitor comparitor;
 
 }tcgmi_FilterData; 

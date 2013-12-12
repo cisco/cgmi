@@ -138,7 +138,6 @@
                 <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
             </arg>
             <arg name="filterLength" direction="in" type="i"/>
-            <arg name="filterOffset" direction="in" type="u"/>
             <arg name="filterComparitor" direction="in" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>

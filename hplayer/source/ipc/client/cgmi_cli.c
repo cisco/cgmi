@@ -386,7 +386,7 @@ static cgmi_Status cgmi_SectionBufferCallback(
 
 /* Section Filter */
 static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value,
-                                  guchar *mask, gint length, guint offset )
+                                  guchar *mask, gint length )
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
@@ -404,7 +404,6 @@ static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value,
     filterdata.value = value;
     filterdata.mask = mask;
     filterdata.length = length;
-    filterdata.offset = offset;
     filterdata.comparitor = FILTER_COMP_EQUAL;
 
     retCode = cgmi_SetSectionFilter( pSessionId, filterid, &filterdata );
@@ -502,7 +501,8 @@ void help(void)
            "\n"
            "\tnewsession\n"
            "\n"
-           "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL> <offset=0xVAL>\n"
+           "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL>\n"
+           "\tstopfilter\n"
            "\n"
            "\tgetaudiolanginfo\n"
            "\n"
@@ -553,7 +553,6 @@ int main(int argc, char **argv)
     gint pid = 0;
     guchar value[208], mask[208];
     gint vlength = 0, mlength = 0;
-    guint offset = 0;
     gchar *ptmpchar;
     gchar tmpstr[3];
     int len = 0;
@@ -754,14 +753,13 @@ int main(int argc, char **argv)
             bzero( mask, 208 * sizeof( guchar ) );
             vlength = 0;
             mlength = 0;
-            offset = 0;
 
             /* command */
             str = strtok( command, " " );
             if ( str == NULL )
             {
                 printf( "Invalid command:\n"
-                        "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL> <offset=0xVAL>\n"
+                        "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL>\n"
                       );
                 continue;
             }
@@ -771,7 +769,7 @@ int main(int argc, char **argv)
             if ( str == NULL )
             {
                 printf( "Invalid command:\n"
-                        "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL> <offset=0xVAL>\n"
+                        "\tcreatefilter pid=0xVAL <value=0xVAL> <mask=0xVAL>\n"
                       );
                 continue;
             } else {
@@ -873,12 +871,6 @@ int main(int argc, char **argv)
                         mlength++;
                     }
                 }
-
-                /* offset */
-                if ( strncmp( tmp, "offset=", 7 ) == 0 )
-                {
-                    offset = (int) strtoul( tmp + 7, NULL, 0 );
-                }
             }
 
             if ( err )
@@ -893,7 +885,13 @@ int main(int argc, char **argv)
                 continue;
             }
 
-            retCode = sectionfilter( pSessionId, pid, value, mask, mlength, offset );
+            retCode = sectionfilter( pSessionId, pid, value, mask, mlength );
+            if ( retCode == CGMI_ERROR_SUCCESS )
+            {
+                printf( "Filter created.\n" );
+            } else {
+                printf( "Filter creation failed.\n" );
+            }
         }
         /* get audio languages available */
         else if (strncmp(command, "getaudiolanginfo", 16) == 0)
@@ -984,7 +982,29 @@ int main(int argc, char **argv)
                 printf("Error returned %d\n", retCode);                
             }
         }
+        /* Stop Section Filter */
+        else if (strncmp(command, "stopfilter", 10) == 0)
+        {
+            if ( filterid != NULL )
+            {
+                retCode = cgmi_StopSectionFilter( pSessionId, filterid );
+                if (retCode != CGMI_ERROR_SUCCESS )
+                {
+                    printf("CGMI StopSectionFilterFailed\n");
+                }
+        
+                retCode = cgmi_DestroySectionFilter( pSessionId, filterid );
+                if (retCode != CGMI_ERROR_SUCCESS )
+                {
+                    printf("CGMI StopSectionFilterFailed\n");
+                }
 
+                filterid = NULL;
+                printf("Filter stopped.\n");
+            } else {
+                printf("Filter has not been started.\n");
+            }
+        }
         /* Channel Change Test */
         else if (strncmp(command, "cct", 3) == 0)
         {

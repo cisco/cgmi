@@ -62,22 +62,17 @@ static void printHex (void *buffer, int size) {
 
 static cgmi_Status charBufToGValueArray( char * buffer, 
    int bufSize, 
-   int offset, 
    GValueArray **valueArray )
 {
    int i;
-   int arraySize = bufSize + offset;
 
-   // Preconditions we need a non-negative bufSize/offset, and a non-NULL buffer
-   if( NULL == buffer &&  0 >= bufSize && 0 >= offset )
+   // Preconditions we need a non-negative bufSize, and a non-NULL buffer
+   if( NULL == buffer || 0 >= bufSize )
    {
       return CGMI_ERROR_BAD_PARAM;
    }
 
-   // The section filter is happier with 16 + bytes for the filter/mask
-   if( arraySize <= 0 ) { arraySize = FILTER_MIN_LENGTH; }
-
-   GValueArray *array = g_value_array_new( arraySize );
+   GValueArray *array = g_value_array_new( bufSize );
    if ( NULL == array )
    {
       return CGMI_ERROR_OUT_OF_MEMORY;
@@ -85,14 +80,11 @@ static cgmi_Status charBufToGValueArray( char * buffer,
 
    *valueArray = array;
 
-   for ( i = 0; i < arraySize; i++ )
+   for ( i = 0; i < bufSize; i++ )
    {
       GValue value = { 0 };
       g_value_init( &value, G_TYPE_UCHAR );
-      if ( i >= offset && i < offset + bufSize )
-         g_value_set_uchar( &value, buffer[i] );
-      else
-         g_value_set_uchar( &value, 0 );
+      g_value_set_uchar( &value, buffer[i] );
       g_value_array_append( array, &value );
       g_value_unset( &value );
    }
@@ -420,36 +412,37 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
 
    do{
 
-      // Convert the filter data to a glib compatible format
-      retStat = charBufToGValueArray( pFilterData->value,
-         pFilterData->length,
-         pFilterData->offset,
-         &valueArray );
-
-      if( CGMI_ERROR_SUCCESS != retStat ) 
+      if ( pFilterData->length > 0 )
       {
-         g_print("Failed setting section filter value.\n");
-         break; 
+          // Convert the filter data to a glib compatible format
+          retStat = charBufToGValueArray( pFilterData->value,
+             pFilterData->length,
+             &valueArray );
+
+          if( CGMI_ERROR_SUCCESS != retStat ) 
+          {
+             g_print("Failed setting section filter value.\n");
+             break; 
+          }
+    
+          g_object_set( secFilter->handle, "filter-data", valueArray, NULL );
+          g_value_array_free( valueArray );
+
+
+
+          retStat = charBufToGValueArray( pFilterData->mask,
+             pFilterData->length,
+             &valueArray );
+
+          if( CGMI_ERROR_SUCCESS != retStat ) 
+          {
+             g_print("Failed setting section filter mask.\n");
+             break; 
+          }
+
+          g_object_set( secFilter->handle, "filter-mask", valueArray, NULL );
+          g_value_array_free( valueArray );
       }
-
-      g_object_set( secFilter->handle, "filter-data", valueArray, NULL );
-      g_value_array_free( valueArray );
-
-
-
-      retStat = charBufToGValueArray( pFilterData->mask,
-         pFilterData->length,
-         pFilterData->offset,
-         &valueArray );
-
-      if( CGMI_ERROR_SUCCESS != retStat ) 
-      {
-         g_print("Failed setting section filter mask.\n");
-         break; 
-      }
-
-      g_object_set( secFilter->handle, "filter-mask", valueArray, NULL );
-      g_value_array_free( valueArray );
 
       secFilter->lastAction = FILTER_SET;
    

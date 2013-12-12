@@ -693,7 +693,6 @@ on_handle_cgmi_set_section_filter (
         pFilter.value = arg_filterValue;
         pFilter.mask = arg_filterMask;
         pFilter.length = arg_filterLength;
-        pFilter.offset = arg_filterOffset;
         pFilter.comparitor = arg_filterComparitor;
 
         retStat = cgmi_SetSectionFilter( (void *)arg_sessionId,

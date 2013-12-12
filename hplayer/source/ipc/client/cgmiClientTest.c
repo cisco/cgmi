@@ -431,7 +431,6 @@ static gpointer sanity(gpointer user_data)
     filterData.value = NULL;
     filterData.mask = NULL;
     filterData.length = 0;
-    filterData.offset = 0;
     filterData.comparitor = FILTER_COMP_EQUAL;
 
     g_print("Calling cgmi_SetSectionFilter... for filterId 0x%08lx\n", filterId);
