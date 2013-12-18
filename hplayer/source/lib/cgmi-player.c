@@ -300,12 +300,13 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                         pSess->audioLanguages[pSess->numAudioLanguages].index = j;
                         strncpy( pSess->audioLanguages[pSess->numAudioLanguages].isoCode, &string->str[2], 3 );
                         pSess->audioLanguages[pSess->numAudioLanguages].isoCode[3] = 0;
-
+                        
                         if ( strlen(pSess->defaultAudioLanguage) > 0 && pSess->audioStreamIndex == -1 )
                         {
                            if ( strncmp(pSess->audioLanguages[pSess->numAudioLanguages].isoCode, pSess->defaultAudioLanguage, 3) == 0 )
                            {
-                              pSess->audioStreamIndex == j;
+                              g_print("Stream (%d) audio language matched to default audio lang %s\n", j, pSess->defaultAudioLanguage);
+                              pSess->audioStreamIndex = j;
                            }
                         }
                         pSess->numAudioLanguages++;
