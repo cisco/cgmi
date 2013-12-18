@@ -1,6 +1,8 @@
 /* Includes */
 #include <glib.h>
 #include <stdio.h>
+#include <termios.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -14,80 +16,8 @@
 /* Defines for section filtering. */
 #define MAX_PMT_COUNT 20
 
-typedef struct program{
-
-    short stream_type; // 8 bits
-    short reserved_1; // 3 bits
-    short elementary_PID; // 13 bits
-
-    short reserved_2; // 4 bits
-    short ES_info_length; // 12 bits
-
-    //short numDesc;
-    //ca_desc theDesc[];
-
-}tPmtProgram;
-
-typedef struct{
-
-    short programNumber; // 16 bits
-    short reserved; // 3 bits
-    short program_map_PID; // 13 bits
-
-    short pointer; // 8 bits
-    short table_id; // 8 bits
-
-    bool section_syntax_indicator; // 1 bit
-    short reserved_1; // 3 bits
-    short section_length; // 12 bits
-
-    short program_number; // 16 bits
-
-    short reserved_2; // 2 bits
-    short version_number; // 5 bits
-    bool current_next_indicator; // 1 bit
-    short section_number; // 8 bits
-
-    short last_section_number; // 8 bits
-
-    short reserved_3; // 3 bits
-    short PCR_PID; // 13 bits
-
-    short reserved_4; // 4 bits
-    short program_info_length; // 12 bits
-
-    // descriptors missing
-
-    // programs
-    tPmtProgram programs[50];
-
-    int CRC;
-
-}tPmt;
-
-typedef struct{
-
-    short table_id; // 8 bits
-
-    bool section_syntax_indicator; // 1 bit
-    short reserved_1; // 3 bits
-    short section_length; // 12 bits
-
-    short transport_stream_id; // 16 bits
-
-    short reserved_2; // 2 bits
-    short version_number; // 5 bits
-    bool current_next_indicator; // 1 bit
-    short section_number; // 8 bits
-
-    short last_section_number; // 8 bits
-
-    tPmt pmts[MAX_PMT_COUNT]; // Dynamic size, but limited to 16
-    short numPMTs;
-
-    int CRC;
-
-}tPat;
+#define MAX_COMMAND_LENGTH 512
+#define MAX_HISTORY 50
 
 static void *filterid = NULL;
 /* End defines for section filtering. */
@@ -255,82 +185,6 @@ static cgmi_Status cgmi_QueryBufferCallback(
     return CGMI_ERROR_SUCCESS;
 }
 
-/****************************  Example PAT parsing  *******************************/
-static int parsePAT( char *buffer, int bufferSize, tPat *pat )
-{
-    int index = 0;
-    int x;
-
-    printf( "Parsing PAT..." );
-    fflush(stdout);
-    pat->table_id = buffer[++index];
-    pat->section_syntax_indicator = (bool)( (buffer[++index]&0x80)>>7 );
-    pat->reserved_1 = (buffer[index]&0x70)>>4;
-    pat->section_length = (buffer[index]&0x0F)<<8 | buffer[++index];
-    pat->transport_stream_id = (buffer[++index]<<8 | buffer[++index] );
-    pat->reserved_2 = (buffer[++index]&0xC0)>>6;
-    pat->version_number = (buffer[index]&0x3E)>>1;
-    pat->current_next_indicator = (bool)(buffer[index]&0x01);
-    pat->section_number = buffer[++index];
-    pat->last_section_number = buffer[++index];
-
-    // number of PMTs is section_length - 5 bytes remaining in PAT headers, - 4 bytes for CRC_32, divided by 4 bytes for each entry.
-    pat->numPMTs = (pat->section_length - 5 - 4) / 4;
-    printf( "." );
-    fflush(stdout);
-
-    for( x = 0; x < pat->numPMTs; x++ )
-    {
-        pat->pmts[x].programNumber = (buffer[++index]<<8) | buffer[++index];
-        pat->pmts[x].reserved = (buffer[++index]&0xC0)>>5;
-        pat->pmts[x].program_map_PID = (buffer[index]&0x1F)<<8 | buffer[++index];
-        printf( "." );
-        fflush(stdout);
-    }
-
-    pat->CRC = (buffer[++index]<<24) | (buffer[++index]<<16) | (buffer[++index]<<8) | (buffer[++index]);
-
-    printf( "Done.\n" );
-    fflush(stdout);
-
-    return 0;
-}
-
-void printPAT( tPat *pat )
-{
-    int x;
-
-    g_print("Dumping PAT...\n");
-    g_print("\tTable_id: 0x%x\n", pat->table_id);
-    if( pat->section_syntax_indicator )
-        g_print("\tsection_syntax_indicator: True(1)\n");
-    else
-        g_print("\tsection_syntax_indicator: False(0)\n");
-    g_print("\treserved_1: 0x%x\n", pat->reserved_1);
-    g_print("\tsection_length: 0x%x (%d)\n", pat->section_length, pat->section_length);
-    g_print("\ttransport_stream_id: 0x%x\n", pat->transport_stream_id);
-    g_print("\treserved_2: 0x%x\n", pat->reserved_2);
-    g_print("\tversion_number: 0x%x\n", pat->version_number);
-    if( pat->current_next_indicator )
-        g_print("\tcurrent_next_indicator: True(1)\n");
-    else
-        g_print("\tcurrent_next_indicator: False(0)\n");
-    g_print("\tsection_number: 0x%x\n", pat->section_number);
-    g_print("\tlast_section_number: 0x%x\n", pat->last_section_number);
-
-    g_print("\tFound %d program(s) in the PAT...\n", pat->numPMTs);
-
-    for(x = 0; x < pat->numPMTs ; x++)
-    {
-        g_print("\tProgram #%d:\n", x + 1);
-        g_print("\t\tprogramNumber: 0x%x\n", pat->pmts[x].programNumber);
-        g_print("\t\treserved: 0x%x\n", pat->pmts[x].reserved);
-        g_print("\t\tprogram_map_PID: 0x%x\n\n", pat->pmts[x].program_map_PID);
-    }
-
-    g_print("\n");
-}
-
 static cgmi_Status cgmi_SectionBufferCallback(
     void *pUserData,
     void *pFilterPriv,
@@ -340,7 +194,8 @@ static cgmi_Status cgmi_SectionBufferCallback(
     int sectionSize)
 {
     cgmi_Status retStat;
-    tPat pat;
+    //tPat pat;
+    int i = 0;
 
     //g_print( "cgmi_QueryBufferCallback -- pFilterId: 0x%08lx \n", pFilterId );
 
@@ -350,14 +205,13 @@ static cgmi_Status cgmi_SectionBufferCallback(
         return CGMI_ERROR_BAD_PARAM;
     }
 
-    g_print("Received section pFilterId: 0x%p, sectionSize %d\n\n", pFilterId, sectionSize);
-#if 0 /* Problems with these output functions. */
-    //printHex( pSection, sectionSize );
-    g_print("\n\n");
-
-    parsePAT( pSection, sectionSize, &pat );
-    printPAT( &pat );
-#endif
+    g_print("Received section pFilterId: %p, sectionSize %d\n\n",
+            pFilterId, sectionSize);
+    for ( i=0; i < sectionSize; i++ )
+    {
+        printf( "0x%x ", (unsigned char) pSection[i] );
+    }
+    printf("\n");
 
     // After printing the PAT stop the filter
     g_print("Calling cgmi_StopSectionFilter...\n");
@@ -486,7 +340,7 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
 
 void help(void)
 {
-    printf("Supported commands:\n"
+    printf( "Supported commands:\n"
             "Single APIs:\n"
            "\tplay <url>\n"
            "\tstop (or unload)\n"
@@ -518,6 +372,7 @@ void help(void)
            "\t\t<url#2> at interval <interval> for duration <duration>.\n"
            "\n"
            "\thelp\n" 
+           "\thistory\n"
            "\n"
            "\tquit\n\n");
 }
@@ -525,13 +380,28 @@ void help(void)
 /* MAIN */
 int main(int argc, char **argv)
 {
-    cgmi_Status retCode = CGMI_ERROR_SUCCESS;
-    void *pSessionId;
+    cgmi_Status retCode = CGMI_ERROR_SUCCESS;   /* Return codes from cgmi */
+    void *pSessionId;                           /* CGMI Session Handle */
 
-    gchar command[512];
-    gchar arg[512];
-    gint quit = 0;
-    gint playing = 0;
+    gchar command[MAX_COMMAND_LENGTH];          /* Command buffer */
+    gchar arg[MAX_COMMAND_LENGTH];              /* Command args buffer for
+                                                   parsing. */
+    gchar history[MAX_HISTORY][MAX_COMMAND_LENGTH]; /* History buffers */
+    gint cur_history = 0;                       /* Current position in up/down
+                                                   history browsing. */
+    gint history_ptr = 0;                       /* Current location to store
+                                                   new history. */
+    gint history_depth = 0;                     /* How full is the history
+                                                   buffer. */
+    gint quit = 0;                              /* 1 = quit command parsing */
+    gint playing = 0;                           /* Play state:
+                                                    0: stopped
+                                                    1: playing */
+
+    /* Command Parsing */
+    int c = 0;      /* Character from console input. */
+    int a = 0;      /* Character location in the command buffer. */
+    int retcom = 0; /* Return command for processing. */
 
     /* Status Variables */
     gfloat Position = 0.0;
@@ -542,13 +412,15 @@ int main(int argc, char **argv)
     cgmi_SessionType type = cgmi_Session_Type_UNKNOWN;
     gint pbCanPlay = 0;
 
+    /* Change Channel Test parameters */
     gchar url1[128], url2[128];
     gchar *str = NULL;
     gint interval = 0;
     gint duration = 0;
     struct timeval start, current;
-    int i = 0;
+    int i = 0, j = 0;
 
+    /* createfilter parameters */
     gchar arg1[256], arg2[256], arg3[256], arg4[256], tmp[256];
     gint pid = 0;
     guchar value[208], mask[208];
@@ -557,6 +429,9 @@ int main(int argc, char **argv)
     gchar tmpstr[3];
     int len = 0;
     int err = 0;
+
+    /* Terminal settings */
+    struct termios oldt, newt;
 
     // need to put this in a define diagInit (DIAGTYPE_DEFAULT, NULL, 0);
 
@@ -582,20 +457,122 @@ int main(int argc, char **argv)
 
     /* Helpful Information */
     printf("CGMI CLI Ready...\n");
-
     help();
+
+    /* Needed to handle key press events correctly. */
+    tcgetattr( STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON); // Disable line buffering
+    newt.c_lflag &= ~(ECHO); // Disable local echo
+    tcsetattr( STDIN_FILENO, TCSANOW, &newt);
 
     /* Main Command Loop */
     while (!quit)
     {
         retCode = CGMI_ERROR_SUCCESS;
 
-        /* Get the command. */
+        /* commandline */
         printf( "cgmi> " );
-        if ( fgets( command, 512, stdin ) == NULL )
+        a = 0;
+        retcom = 0;
+        cur_history = history_ptr;
+        while (!retcom)
         {
-            fprintf( stderr, "Error getting input. Exiting.\n" );
-            quit = 1;
+            c = getchar();
+            switch (c)
+            {
+                case 0x1b:      /* Arrow keys */
+                    c = getchar();
+                    c = getchar();
+                    if ( c == 0x41 )    /* Up */
+                    {
+                        cur_history--;
+                        if ( cur_history < 0 )
+                        {
+                            if ( history_depth == MAX_HISTORY )
+                            {
+                                cur_history = MAX_HISTORY - 1;
+                            } else {
+                                cur_history = 0;
+                            }
+                        }
+
+                        strncpy( command, history[cur_history],
+                                 MAX_COMMAND_LENGTH );
+                        a = strlen( command );
+                        printf( "\ncgmi> %s", command );
+                    }
+                    if ( c == 0x42 )    /* Down */
+                    {
+                        cur_history++;
+#if 0
+                        if ( cur_history >= history_depth )
+                        {
+                            cur_history = history_depth - 1;
+                        }
+#endif
+                        if ( cur_history >= MAX_HISTORY )
+                        {
+                            cur_history = MAX_HISTORY - 1;
+                        }
+
+                        if ( cur_history >= history_ptr )
+                        {
+                            cur_history = history_ptr;
+                            command[0] = '\0';
+                            a = 0;
+                        } else {
+                            strncpy( command, history[cur_history],
+                                     MAX_COMMAND_LENGTH );
+                            a = strlen( command );
+                        }
+    
+                        printf( "\ncgmi> %s", command );
+                    }
+                    break;
+                case 0x4:       /* Ctrl+D */
+                    printf("\n");
+                    quit = 1;
+                    retcom = 1;
+                    break;
+                case 0x8:       /* Backspace */
+                    a--;
+                    if (a<0)
+                        a=0;
+                    else
+                        printf("\b \b");
+                    break;
+                case 0xa:       /* Enter */
+                    printf( "\n" );
+                    retcom = 1;
+                    break;
+                default:
+                    /* Printable Characters */
+                    if ( (c >= 0x20) && (c <= 0x7e) )
+                    {
+                        command[a++] = (char) c;
+                        printf( "%c", c );
+                    } else {
+                        printf( "\nUnknown key: 0x%x\n", c );
+                        printf( "\ncgmi> %s", command );
+                    }
+                    break;
+            }
+        }
+
+        command[a] = '\0';
+        if ( a > 0 )
+        {
+            //printf("command: %s\n", command);
+            strncpy( history[history_ptr++], command, MAX_COMMAND_LENGTH );
+            if ( history_ptr > (MAX_HISTORY - 1) )
+            {
+                history_ptr = 0;
+            }
+            if ( history_depth < MAX_HISTORY )
+            {
+                history_depth++;
+            }
         }
 
         /* play */
@@ -606,15 +583,20 @@ int main(int argc, char **argv)
                 printf( "Stop playback before starting a new one.\n" );
                 continue;
             }
-            strncpy( arg, command + 5, strlen(command) - 6 );
-            arg[strlen(command) - 6] = '\0';
+            if ( strlen( command ) <= 5 )
+            {
+                printf( "\tplay <url>\n" );
+                continue;
+            }
+            strncpy( arg, command + 5, strlen(command) - 5 );
+            arg[strlen(command) - 5] = '\0';
             /* Check First */
             printf("Checking if we can play this...");
             retCode = cgmi_canPlayType( arg, &pbCanPlay );
             if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
             {
                 printf( "cgmi_canPlayType Not Implemented\n" );
-                printf("Playing \"%s\"...\n", arg);
+                printf( "Playing \"%s\"...\n", arg );
                 retCode = play(pSessionId, arg);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
@@ -623,7 +605,7 @@ int main(int argc, char **argv)
             } else if ( !retCode && pbCanPlay )
             {
                 printf( "Yes\n" );
-                printf("Playing \"%s\"...\n", arg);
+                printf( "Playing \"%s\"...\n", arg );
                 retCode = play(pSessionId, arg);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
@@ -633,15 +615,35 @@ int main(int argc, char **argv)
                 printf( "No\n" );
             }
         }
+        /* Stop Section Filter */
+        else if (strncmp(command, "stopfilter", 10) == 0)
+        {
+            if ( filterid != NULL )
+            {
+                retCode = cgmi_StopSectionFilter( pSessionId, filterid );
+                if (retCode != CGMI_ERROR_SUCCESS )
+                {
+                    printf("CGMI StopSectionFilterFailed\n");
+                }
+        
+                retCode = cgmi_DestroySectionFilter( pSessionId, filterid );
+                if (retCode != CGMI_ERROR_SUCCESS )
+                {
+                    printf("CGMI StopSectionFilterFailed\n");
+                }
+
+                filterid = NULL;
+                printf("Filter stopped.\n");
+            } else {
+                printf("Filter has not been started.\n");
+            }
+        }
         /* stop or unload */
         else if ((strncmp(command, "stop", 4) == 0) || 
                  (strncmp(command, "unload", 6) == 0))
         {
             retCode = stop(pSessionId);
-            if ( retCode == CGMI_ERROR_SUCCESS )
-            {
-                playing = 0;
-            }
+            playing = 0;
         }
         /* getraterange */
         else if (strncmp(command, "getraterange", 12) == 0)
@@ -655,8 +657,13 @@ int main(int argc, char **argv)
         /* setrate */
         else if (strncmp(command, "setrate", 7) == 0)
         {
-            strncpy( arg, command + 8, strlen(command) - 9 );
-            arg[strlen(command) - 9] = '\0';
+            if ( strlen( command ) <= 8 )
+            {
+                printf( "\tsetrate <rate (float)>\n" );
+                continue;
+            }
+            strncpy( arg, command + 8, strlen(command) - 8 );
+            arg[strlen(command) - 8] = '\0';
             Rate = (float) atof(arg);
             printf( "Setting rate to %f (%s)\n", Rate, arg );
             retCode = setrate(pSessionId, Rate);
@@ -673,13 +680,18 @@ int main(int argc, char **argv)
         /* setposition */
         else if (strncmp(command, "setposition", 11) == 0)
         {
-            strncpy( arg, command + 12, strlen(command) - 13 );
-            arg[strlen(command) - 13] = '\0';
+            if ( strlen( command ) <= 12 )
+            {
+                printf( "\tsetposition <position (seconds) (float)>\n" );
+                continue;
+            }
+            strncpy( arg, command + 12, strlen(command) - 12 );
+            arg[strlen(command) - 12] = '\0';
             Position = (float) atof(arg);
             printf( "Setting position to %f (%s)\n", Position, arg );
             retCode = setposition(pSessionId, Position);
         }
-        /* setposition */
+        /* getduration */
         else if (strncmp(command, "getduration", 11) == 0)
         {
             retCode = getduration(pSessionId, &Duration, &type);
@@ -919,8 +931,13 @@ int main(int argc, char **argv)
         else if (strncmp(command, "setaudiolang", 12) == 0)
         {
             gint index;
-            strncpy( arg, command + 13, strlen(command) - 14 );
-            arg[strlen(command) - 14] = '\0';
+            if ( strlen( command ) <= 13 )
+            {
+                printf( "\tsetaudiolang <index>\n" );
+                continue;
+            }
+            strncpy( arg, command + 13, strlen(command) - 13 );
+            arg[strlen(command) - 13] = '\0';
             
             index = atoi( arg );
 
@@ -937,8 +954,13 @@ int main(int argc, char **argv)
         /* set default audio language */
         else if (strncmp(command, "setdefaudiolang", 15) == 0)
         {
-            strncpy( arg, command + 16, strlen(command) - 17 );
-            arg[strlen(command) - 17] = '\0';
+            if ( strlen( command ) <= 16 )
+            {
+                printf( "\tsetdefaudiolang <lang>\n" );
+                continue;
+            }
+            strncpy( arg, command + 16, strlen(command) - 16 );
+            arg[strlen(command) - 16] = '\0';
             
             retCode = cgmi_SetDefaultAudioLang( pSessionId, arg );
             if ( retCode != CGMI_ERROR_SUCCESS )
@@ -952,8 +974,13 @@ int main(int argc, char **argv)
             char *ptr;
             char *dim;
             int i, size[4];
-            strncpy( arg, command + 13, strlen(command) - 14 );
-            arg[strlen(command) - 14] = '\0';
+            if ( strlen( command ) <= 13 )
+            {
+                printf( "\tsetvideorect <x,y,w,h>\n" );
+                continue;
+            }
+            strncpy( arg, command + 13, strlen(command) - 13 );
+            arg[strlen(command) - 13] = '\0';
             
             dim = arg;
             for ( i = 0; i < 4; i++ )
@@ -980,29 +1007,6 @@ int main(int argc, char **argv)
             if ( retCode != CGMI_ERROR_SUCCESS )
             {
                 printf("Error returned %d\n", retCode);                
-            }
-        }
-        /* Stop Section Filter */
-        else if (strncmp(command, "stopfilter", 10) == 0)
-        {
-            if ( filterid != NULL )
-            {
-                retCode = cgmi_StopSectionFilter( pSessionId, filterid );
-                if (retCode != CGMI_ERROR_SUCCESS )
-                {
-                    printf("CGMI StopSectionFilterFailed\n");
-                }
-        
-                retCode = cgmi_DestroySectionFilter( pSessionId, filterid );
-                if (retCode != CGMI_ERROR_SUCCESS )
-                {
-                    printf("CGMI StopSectionFilterFailed\n");
-                }
-
-                filterid = NULL;
-                printf("Filter stopped.\n");
-            } else {
-                printf("Filter has not been started.\n");
             }
         }
         /* Channel Change Test */
@@ -1081,10 +1085,26 @@ int main(int argc, char **argv)
         {
             help();
         }
+        /* history */
+        else if (strncmp(command, "history", 7) == 0)
+        {
+            for ( j=0; j < history_depth; j++ )
+            {
+                printf( "\t%s\n", history[j] );
+            }
+        }
         /* quit */
         else if (strncmp(command, "quit", 4) == 0)
         {
             quit = 1;
+        }
+        /* unknown */
+        else
+        {
+            if ( command[0] != '\0' )
+            {
+                printf( "Unknown command: \"%s\"\n", command );
+            }
         }
 
         /* If we receive and error, print error. */
@@ -1093,6 +1113,8 @@ int main(int argc, char **argv)
              printf( "Error: %s\n", cgmi_ErrorString( retCode ) );
         }
     }
+
+    tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
 
     /* If we were playing, stop. */
     if ( playing )
