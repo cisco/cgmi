@@ -473,6 +473,7 @@ int main(int argc, char **argv)
 
     /* Signal handler to clean up console. */
     signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
 
     /* Main Command Loop */
     while (!quit)

@@ -660,7 +660,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    //
    // This section makes DLNA content hardcoded.  Need to optimize.
    //
-   if (g_str_has_suffix(pSess->playbackURI, "mpeg"))   
+   if (g_strrstr(pSess->playbackURI, ".mpeg") != NULL)
    {
       // This url is pointing to DLNA content, build a manual pipeline.
       memset(manualPipeline, 0, 1024);
