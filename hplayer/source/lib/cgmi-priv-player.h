@@ -32,29 +32,34 @@ typedef struct
 
 typedef struct
 {
-   void*          cookie;
-   GMainContext   *thread_ctx; 
-   GThread        *thread;
-   gchar          *playbackURI; /* URI to playback */
-   gchar          *manualPipeline; /* URI to playback */
-   GMainLoop      *loop;
-   GstElement     *pipeline;
-   GstElement     *source;
-   guint          tag;
-   GstElement     *videoSink;
-   GstElement     *videoDecoder;
-   GstElement     *demux;
-   GstElement     *udpsrc;
-   GstBus         *bus;
-   GstMessage     *msg;
-   void*          usrParam;
-   tCgmiRect      vidDestRect;
-   tAudioLang     audioLanguages[MAX_AUDIO_LANGUAGE_DESCRIPTORS];
-   gchar          defaultAudioLanguage[4];
-   gint           numAudioLanguages;
-   gint           audioStreamIndex;
+   void*              cookie;
+   GMainContext       *thread_ctx; 
+   GThread            *thread;
+   gchar              *playbackURI; /* URI to playback */
+   gchar              *manualPipeline; /* URI to playback */
+   GMainLoop          *loop;
+   GstElement         *pipeline;
+   GstElement         *source;
+   guint              tag;
+   GstElement         *videoSink;
+   GstElement         *videoDecoder;
+   GstElement         *demux;
+   GstElement         *udpsrc;   
+   GstBus             *bus;
+   GstMessage         *msg;
+   void*              usrParam;
+   tCgmiRect          vidDestRect;
+   tAudioLang         audioLanguages[MAX_AUDIO_LANGUAGE_DESCRIPTORS];
+   gchar              defaultAudioLanguage[4];
+   gint               numAudioLanguages;
+   gint               audioStreamIndex;
    /* user registered data */ 
    cgmi_EventCallback eventCB;
+   GstElement         *userDataAppsink;
+   GstPad             *userDataPad;
+   GstPad             *userDataAppsinkPad;
+   userDataBufferCB   userDataBufferCB;
+   void               *userDataBufferParam;
 
 }tSession;
 

@@ -219,7 +219,7 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
 
    if ( NULL != caps )
    {
-      gchar *caps_string = gst_caps_to_string(caps);
+      gchar *caps_string = gst_caps_to_string( caps );
       g_print("Caps: %s\n", caps_string);
       if ( NULL != caps_string )
       {
@@ -229,6 +229,7 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
             GstAppSinkCallbacks appsink_cbs = { NULL, NULL, cgmi_filter_gst_appsink_new_buffer, NULL };
             secFilter->appsink = gst_element_factory_make("appsink", NULL);
             g_object_set( secFilter->appsink, "emit-signals", TRUE, "caps", caps, NULL );
+
             gst_app_sink_set_callbacks( GST_APP_SINK(secFilter->appsink), &appsink_cbs, secFilter, NULL);
             gst_bin_add_many( GST_BIN(pSess->pipeline), secFilter->appsink, NULL );
             if ( TRUE != gst_element_link(pSess->demux, secFilter->appsink) ) 
@@ -246,6 +247,8 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
          }
          g_free( caps_string );
       }
+
+      gst_caps_unref( caps );
    }
 }
 

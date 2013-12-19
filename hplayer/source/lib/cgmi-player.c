@@ -469,6 +469,33 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
    }
 }
 
+static GstFlowReturn cgmi_gst_new_user_data_buffer_available (GstAppSink *sink, gpointer data)                          
+{
+   GstBuffer *buffer;
+   tSession *pSess = (tSession*)data;
+
+   if ( NULL == pSess )
+   {
+      return GST_FLOW_OK;
+   }
+
+   // Pull the buffer
+   buffer = gst_app_sink_pull_buffer( GST_APP_SINK(sink) );   
+
+   if ( NULL == buffer )
+   {
+      g_print("Error appsink callback failed to pull user data buffer.\n");
+      return GST_FLOW_OK;
+   }
+   
+   if ( NULL != pSess->userDataBufferCB )
+   {      
+      pSess->userDataBufferCB( pSess->userDataBufferParam, (void *)buffer );
+   }
+
+   return GST_FLOW_OK;
+}
+
 char* cgmi_ErrorString(cgmi_Status stat)
 {
    static char *errorString[] = 
@@ -734,7 +761,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       // Primarily acquires a reference to demux for section filter support.
       if ( NULL != pSess->manualPipeline )
       {
-         GstBin *decodebin2 = cgmi_gst_find_element( pSess->pipeline, "dec" );
+         GstBin *decodebin2 = cgmi_gst_find_element( (GstBin *)pSess->pipeline, "dec" );
 
          if( NULL != decodebin2 )
          {
@@ -1036,6 +1063,8 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
    return CGMI_ERROR_SUCCESS;
 }
 
+
+
 cgmi_Status cgmi_SetAudioStream (void *pSession,  int index )
 {
    cgmi_Status stat;
@@ -1089,7 +1118,7 @@ cgmi_Status cgmi_SetDefaultAudioLang (void *pSession, const char *language )
 
    if ( NULL == pSess )
    {
-      strncpy( gDefaultAudioLanguage, language, gDefaultAudioLanguage );
+      strncpy( gDefaultAudioLanguage, language, sizeof(gDefaultAudioLanguage) );
       gDefaultAudioLanguage[sizeof(gDefaultAudioLanguage) - 1] = 0;
    }
    else
@@ -1101,4 +1130,119 @@ cgmi_Status cgmi_SetDefaultAudioLang (void *pSession, const char *language )
    return CGMI_ERROR_SUCCESS;
 }
 
+cgmi_Status cgmi_startUserDataFilter( void *pSession, userDataBufferCB bufferCB, void *pUserData )
+{
+   GstCaps *caps = NULL;
 
+   tSession *pSess = (tSession*)pSession;
+   if ( NULL == pSess )
+   {
+      g_print("Invalid session handle!\n");
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == pSess->videoDecoder )
+   {
+      g_print("Pipeline is not ready for user data filtering yet!\n");
+      return CGMI_ERROR_NOT_READY;
+   }
+
+   if ( NULL != pSess->userDataAppsink )
+   {
+      g_print("Please stop the existing user data filter before starting a new one");
+      return CGMI_ERROR_WRONG_STATE;
+   }
+   
+   g_print("Adding an appsink and linking it to the decoder for retrieving MPEG user data...\n");
+   GstAppSinkCallbacks appsink_cbs = { NULL, NULL, cgmi_gst_new_user_data_buffer_available, NULL };
+   pSess->userDataAppsink = gst_element_factory_make( "appsink", NULL );
+   if ( NULL == pSess->userDataAppsink )
+   {
+      g_print("Failed to obtain an appsink for user data!\n");
+      return CGMI_ERROR_FAILED;
+   }
+
+   caps = gst_caps_new_simple( "application/x-video-user-data", NULL );
+   g_object_set( pSess->userDataAppsink, "emit-signals", TRUE, "caps", caps, NULL );
+   gst_caps_unref( caps );        
+
+   gst_app_sink_set_callbacks( GST_APP_SINK(pSess->userDataAppsink), &appsink_cbs, pSess, NULL);
+   gst_bin_add_many( GST_ELEMENT_PARENT(pSess->videoDecoder), pSess->userDataAppsink, NULL );
+
+   pSess->userDataAppsinkPad = gst_element_get_static_pad((GstElement *)pSess->userDataAppsink, "sink");        
+   if ( NULL == pSess->userDataAppsinkPad )
+   {
+      g_print("Failed to obtain a user data pad from the appsink!\n");
+      return CGMI_ERROR_FAILED;
+   }
+
+   pSess->userDataPad = gst_element_get_request_pad((GstElement *)(pSess->videoDecoder), "user-data-pad");
+   if ( NULL == pSess->userDataPad )
+   {
+      g_print("Failed to obtain a user data pad from the video decoder!\n");
+      return CGMI_ERROR_FAILED;
+   }
+
+   if ( gst_pad_link(pSess->userDataPad, pSess->userDataAppsinkPad) != GST_PAD_LINK_OK )
+   {
+      g_print("Could not link video decoder to appsink!\n");
+      return CGMI_ERROR_FAILED;
+   }
+
+   /*
+   if ( TRUE != gst_element_link( pSess->videoDecoder, pSess->userDataAppsink) ) 
+   {
+      g_print("Could not link video decoder to appsink!\n"); 
+      return CGMI_ERROR_FAILED;
+   } 
+   */
+
+   gst_element_sync_state_with_parent( pSess->userDataAppsink );
+
+   pSess->userDataBufferCB = bufferCB;
+   pSess->userDataBufferParam = pUserData;
+
+   g_print("Successfully started user data filter\n");
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_stopUserDataFilter( void *pSession, userDataBufferCB bufferCB )
+{
+   tSession *pSess = (tSession*)pSession;
+   if ( NULL == pSess )
+   {
+      g_print("Invalid session handle!\n");
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL != pSess->userDataAppsinkPad && NULL != pSess->userDataAppsink )
+   {
+      gst_pad_unlink( pSess->userDataPad, pSess->userDataAppsinkPad );
+   }
+
+   if ( NULL != pSess->userDataAppsink )
+   {
+      gst_element_set_state( pSess->userDataAppsink, GST_STATE_NULL );
+      gst_bin_remove( GST_ELEMENT_PARENT(pSess->videoDecoder), (GstElement *)pSess->userDataAppsink );
+      pSess->userDataAppsink = NULL;
+   }
+
+   if ( NULL != pSess->userDataPad )
+   {
+      gst_element_release_request_pad((GstElement *)(pSess->videoDecoder), pSess->userDataPad );
+      pSess->userDataPad = NULL;
+   }
+
+   if ( NULL != pSess->userDataAppsinkPad )
+   {
+      gst_object_unref ( pSess->userDataAppsinkPad );
+   }
+
+   pSess->userDataBufferCB = NULL;
+   pSess->userDataBufferParam = NULL;
+
+   g_print("Successfully stopped user data filter\n");
+
+   return CGMI_ERROR_SUCCESS;
+}

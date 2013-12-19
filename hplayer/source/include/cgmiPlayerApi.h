@@ -119,6 +119,7 @@ typedef struct
 typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event );
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );
 typedef cgmi_Status (*sectionBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, cgmi_Status SectionStatus, char *pSection, int sectionSize);
+typedef cgmi_Status (*userDataBufferCB)(void *pUserData, void *pBuffer);
 
 /**
  *  \brief \b cgmi_ErrorString
@@ -463,7 +464,7 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index);
  *
  *  \image html audio_language_selection.png "How to do Audio Language Selection"
  */
-cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language );
+cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language);
 
 cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** pFilterId  );
 cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId  );
@@ -471,6 +472,9 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
 cgmi_Status cgmi_StartSectionFilter(void *pSession, void* pFilterId, int timeout, int bOneShot , int bEnableCRC, queryBufferCB bufferCB,  sectionBufferCB sectionCB);
 cgmi_Status cgmi_StopSectionFilter(void *pSession, void* pFilterId );
 
+
+cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, void *pUserData);
+cgmi_Status cgmi_stopUserDataFilter(void *pSession, userDataBufferCB bufferCB);
 
 /**
  * \section How To section
