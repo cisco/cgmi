@@ -15,12 +15,12 @@
         </method>
 
         <method name="createSession">
-            <arg name="sessionId" direction="out" type="t"/>
+            <arg name="sessionId" direction="out" type="v"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="destroySession">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
@@ -31,55 +31,55 @@
         </method>
 
         <method name="load">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="uri" direction="in" type="s"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="unload">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="play">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="setRate">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="rate" direction="in" type="d"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="setPosition">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="position" direction="in" type="d"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="getPosition">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="position" direction="out" type="d"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="getDuration">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="duration" direction="out" type="d"/>
             <arg name="type" direction="out" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="getRateRange">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="rewind" direction="out" type="d"/>
             <arg name="fForward" direction="out" type="d"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="setVideoRectangle">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="x" direction="in" type="i"/>
             <arg name="y" direction="in" type="i"/>
             <arg name="w" direction="in" type="i"/>
@@ -89,13 +89,13 @@
 
         <!-- Audio APIs -->
         <method name="getNumAudioLanguages">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="count" direction="out" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="getAudioLangInfo">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="index" direction="in" type="i"/>
             <arg name="bufSize" direction="in" type="i"/>
             <arg name="buffer" direction="out" type="s"/>
@@ -103,33 +103,33 @@
         </method>
 
         <method name="setAudioStream">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="index" direction="in" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="setDefaultAudioLang">
-            <arg name="sessionId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
             <arg name="language" direction="in" type="s"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <!-- Section Filter APIs -->
         <method name="createSectionFilter">
-            <arg name="sessionId" direction="in" type="t"/>
-            <arg name="filterId" direction="out" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="filterId" direction="out" type="v"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="destroySectionFilter">
-            <arg name="sessionId" direction="in" type="t"/>
-            <arg name="filterId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="filterId" direction="in" type="v"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <method name="setSectionFilter">
-            <arg name="sessionId" direction="in" type="t"/>
-            <arg name="filterId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="filterId" direction="in" type="v"/>
             <arg name="filterPid" direction="in" type="i"/>
             <arg name="filterValue" direction="in" type="ay">
                 <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
@@ -143,8 +143,8 @@
         </method>
 
         <method name="startSectionFilter">
-            <arg name="sessionId" direction="in" type="t"/>
-            <arg name="filterId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="filterId" direction="in" type="v"/>
             <arg name="timeout" direction="in" type="i"/>
             <arg name="oneShot" direction="in" type="i"/>
             <arg name="enableCRC" direction="in" type="i"/>
@@ -152,14 +152,14 @@
         </method>
 
         <method name="stopSectionFilter">
-            <arg name="sessionId" direction="in" type="t"/>
-            <arg name="filterId" direction="in" type="t"/>
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="filterId" direction="in" type="v"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
         <!-- Section Filter callback -->
         <signal name="sectionBufferNotify">
-            <arg name="filterId" type="t"/>
+            <arg name="filterId" type="v"/>
             <arg name="sectionStatus" type="i"/>
             <arg name="section" type="ay">
                 <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
@@ -169,7 +169,7 @@
 
         <!-- Player callback -->
         <signal name="playerNotify">
-            <arg name="sessionHandle" type="t"/>
+            <arg name="sessionHandle" type="v"/>
             <arg name="event" type="i" />
             <arg name="data" type="i" />
         </signal>

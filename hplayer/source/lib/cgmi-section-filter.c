@@ -450,14 +450,15 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
       secFilter->lastAction = FILTER_SET;
    
       // Set other filter params
-      g_print("Filtering for pid: 0x%04x\n", pFilterData->pid );
+      g_print("Filtering for pid: 0x%04x, with secFilter: 0x%08x\n", 
+        pFilterData->pid, secFilter->handle );
+
       secFilter->pid = pFilterData->pid;
       g_object_set( secFilter->handle, "filter-pid", pFilterData->pid, NULL );
       g_object_set( secFilter->handle, "filter-mode", pFilterData->comparitor, NULL );
       g_object_set( secFilter->handle, "filter-type", FILTER_TYPE_IP, NULL );
       g_object_set( secFilter->handle, "filter-action", FILTER_SET, NULL );
       g_object_set( G_OBJECT(pSess->demux), "section-filter", secFilter->handle, NULL );
-
    }while(0);
 
    return retStat;

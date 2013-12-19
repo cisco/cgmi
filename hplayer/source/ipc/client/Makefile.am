@@ -33,8 +33,13 @@ bin_PROGRAMS = cgmi-client-test cgmi_cli
 cgmi_client_test_SOURCES= cgmiClientTest.c
 cgmi_client_test_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 
 cgmi_client_test_LDFLAGS = $(LDFLAGS) 
+if CLI_NO_IPC
+cgmi_client_test_DEPENDENCIES = $(top_builddir)/source/lib/libcgmiPlayer.la
+cgmi_client_test_LDADD = $(LDFLAGS) $(top_builddir)/source/lib/libcgmiPlayer.la
+else
 cgmi_client_test_DEPENDENCIES = libcgmi-client.la 
 cgmi_client_test_LDADD = $(LDFLAGS) $(top_builddir)/source/ipc/client/libcgmi-client.la
+endif
 
 cgmi_cli_SOURCES= cgmi_cli.c
 cgmi_cli_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include/ 

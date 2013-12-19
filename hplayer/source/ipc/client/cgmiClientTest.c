@@ -4,10 +4,11 @@
 #include <stdbool.h>
 
 #include "cgmiPlayerApi.h"
+#include "dbusPtrCommon.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// Logging stuff
+// Logging
 ////////////////////////////////////////////////////////////////////////////////
 
 #define CHECK_ERROR(err) \
@@ -20,7 +21,28 @@
     CHECK_ERROR(err); \
     if( err != CGMI_ERROR_SUCCESS ) return;
 
+
+////////////////////////////////////////////////////////////////////////////////
+// MPEG Transport Stream Parsing 
+////////////////////////////////////////////////////////////////////////////////
+
 #define MAX_PMT_COUNT 20
+#define MAX_CA_COUNT 20
+#define MPEGTS_PMT_HEADER_LEN 12
+#define MPEGTS_PMT_PRE_SEC_LEN_BYTES 2
+#define MPEGTS_CRC_LEN 4
+
+typedef struct ca_desc{
+
+    short desc_tag; // 8 bits
+    short desc_len; // 8 bits
+    short CA_system_ID; // 16 bits
+    short reserved; // 3 bits
+    short CA_PID; // 13 bits
+
+    //unsigned char private_data_bytes[100];
+
+}tMpegTsCaDesc;
 
 typedef struct program{
 
@@ -31,11 +53,10 @@ typedef struct program{
     short reserved_2; // 4 bits
     short ES_info_length; // 12 bits
 
-    //short numDesc;
-    //ca_desc theDesc[];
+    short numDesc;
+    tMpegTsCaDesc theDesc[MAX_CA_COUNT];
 
-
-}tPmtProgram;
+}tMpegTsProgram;
 
 typedef struct{
 
@@ -68,11 +89,12 @@ typedef struct{
     // descriptors missing
 
     // programs
-    tPmtProgram programs[50];
+    short num_progs_parsed;
+    tMpegTsProgram programs[50];
 
     int CRC;
 
-}tPmt;
+}tMpegTsPmt;
 
 typedef struct{
 
@@ -91,12 +113,12 @@ typedef struct{
 
     short last_section_number; // 8 bits
 
-    tPmt pmts[MAX_PMT_COUNT]; // Dynamic size, but limited to 16
+    tMpegTsPmt pmts[MAX_PMT_COUNT]; // Dynamic size, but limited to 16
     short numPMTs;
 
     int CRC;
 
-}tPat;
+}tMpegTsPat;
 
 
 #define PRINT_HEX_WIDTH 16
@@ -138,7 +160,7 @@ static void printHex (void *buffer, int size) {
     g_print("  %s\n", asciiBuf);
 }
 
-static int parsePAT( char *buffer, int bufferSize, tPat *pat )
+static int parsePAT( char *buffer, int bufferSize, tMpegTsPat *pat )
 {
     int index = 0;
     int x;
@@ -194,7 +216,7 @@ static int parsePAT( char *buffer, int bufferSize, tPat *pat )
     return 0;
 }
 
-void printPAT( tPat *pat )
+static void printPAT( tMpegTsPat *pat )
 {
     int x;
 
@@ -229,9 +251,178 @@ void printPAT( tPat *pat )
     g_print("\n");
 }
 
-/**
- * CGMI DBUS callback.
- */
+static int parsePMT( tMpegTsPmt *curPmt, unsigned char *buffer, int bufferSize )
+{
+    int index = 0;
+    int programMarker;
+    int crcMarker;
+    int x;
+    
+    // Preconditions
+    if( curPmt == NULL )
+    {
+        g_print("ERROR:  NULL PMT buffer\n");
+        return -1;
+    }
+
+    // Do we have enough buffer to parse the 12 byte header
+    if( bufferSize < MPEGTS_PMT_HEADER_LEN )
+    {
+        g_print("PMT buffer too small (%d)\n", bufferSize);
+        return -1;
+    }
+
+    curPmt->num_progs_parsed = 0;
+
+    // Start parsing PMT
+    curPmt->table_id = buffer[index];
+
+    curPmt->section_syntax_indicator = (bool)( (buffer[++index]&0x80)>>7 );
+    curPmt->reserved_1 = (buffer[index]&0x70)>>4;
+    curPmt->section_length = (buffer[index]&0x0F)<<8 | buffer[++index];
+
+    curPmt->program_number = ((buffer[++index])<<8 | buffer[++index] );
+
+    curPmt->reserved_2 = (buffer[++index]&0xC0)>>6;
+    curPmt->version_number = (buffer[index]&0x3E)>>1;
+    curPmt->current_next_indicator = (bool)(buffer[index]&0x01);
+    curPmt->section_number = buffer[++index];
+    curPmt->last_section_number = buffer[++index];
+
+    curPmt->reserved_3 = (buffer[++index]&0xE0)>>5;
+    curPmt->PCR_PID = (buffer[index]&0x1F)<<8 | buffer[++index];
+
+    curPmt->reserved_4 = (buffer[++index]&0xF0)>>4;
+    curPmt->program_info_length = (buffer[index]&0x0F)<<8 | buffer[++index];
+
+    //g_print("Parsing streams... section_length: %d, index: %d...\n", curPmt->section_length, index);
+
+    //adjust index to skip the desciptors...
+    index += curPmt->program_info_length;
+
+
+    // Do we have enough buffer to parse the programs?
+    if( bufferSize < (MPEGTS_PMT_PRE_SEC_LEN_BYTES + curPmt->section_length) )
+    {
+        g_print("PMT buffer too small (no programs) bufferSize: %d, index: %d, sec_len: %d\n", 
+            bufferSize, index, curPmt->section_length );
+        return -1;
+    }
+
+    //g_print("Parsing streams... section_length: %d, index: %d...\n", curPmt->section_length, index);
+
+    // This is where the CRC should start... Used to end program parsing loop
+    crcMarker = curPmt->section_length + MPEGTS_PMT_PRE_SEC_LEN_BYTES - MPEGTS_CRC_LEN;
+
+    //start parsing the programs
+    for( x = 0; index < crcMarker; x++ )
+    {
+
+        if( bufferSize < (index + 6) )
+        {
+            g_print("PMT buffer too small (partial programs) bufferSize: %d, index: %d, sec_len: %d\n", 
+                bufferSize, index, curPmt->section_length );
+            return -1;
+        }
+
+        //g_print("\nParsing stream %d, index %d...\n", x, index);
+        curPmt->programs[x].stream_type = (buffer[++index]);
+
+        curPmt->programs[x].reserved_1 = (buffer[++index]&0xE0)>>5;
+        curPmt->programs[x].elementary_PID = (buffer[index]&0x1F)<<8 | buffer[++index];
+
+        curPmt->programs[x].reserved_2 = (buffer[++index]&0xF0)>>4;
+        curPmt->programs[x].ES_info_length = (buffer[index]&0x0F)<<8 | buffer[++index];
+
+        curPmt->programs[x].numDesc = 0;
+        programMarker = index;
+
+        // parse descriptors
+        while( index + 3 < bufferSize &&
+            index < (programMarker + curPmt->programs[x].ES_info_length) )
+        {
+            curPmt->programs[x].theDesc[curPmt->programs[x].numDesc].desc_tag = buffer[++index];
+            curPmt->programs[x].theDesc[curPmt->programs[x].numDesc].desc_len = buffer[++index];
+
+            index += curPmt->programs[x].theDesc[curPmt->programs[x].numDesc].desc_len;
+
+            curPmt->programs[x].numDesc++;
+        }
+
+        //adjust index to skip descriptors...
+        //index += curPmt->programs[x].ES_info_length;
+        //g_print("\nParsing stream %d, ES_len %d, index %d...\n", x, curPmt->programs[x].ES_info_length, index);
+
+        curPmt->num_progs_parsed++;
+    }
+
+    if( bufferSize < (index + MPEGTS_CRC_LEN) )
+    {
+        g_print("PMT buffer too small (no CRC) bufferSize: %d, index: %d, sec_len: %d\n", 
+            bufferSize, index, curPmt->section_length );
+        return -1;
+    }
+
+    curPmt->CRC = (buffer[++index])<<24 | (buffer[++index])<<16 | (buffer[++index])<<8 | (buffer[++index]);
+
+    return 0;
+}
+
+static void printPMT( tMpegTsPmt *curPmt )
+{
+    int x;
+    if( NULL == curPmt )
+    {
+        g_print("Failed to print NULL PMT\n");
+        return;
+    }
+
+    g_print("Dumping PMT pid (%d)...", curPmt->program_map_PID);
+    g_print("\tTable_id: 0x%x\n", curPmt->table_id);
+    if( curPmt->section_syntax_indicator )
+        g_print("\tsection_syntax_indicator: True(1)\n");
+    else
+        g_print("\tsection_syntax_indicator: False(0)\n");
+    g_print("\treserved_1: 0x%x\n", curPmt->reserved_1);
+    g_print("\tsection_length: 0x%x (%d)\n",  curPmt->section_length, curPmt->section_length);
+
+    g_print("\tprogram_number: 0x%x\n", curPmt->program_number);
+
+    g_print("\treserved_2: 0x%x\n", curPmt->reserved_2);
+    g_print("\tversion_number: 0x%x\n", curPmt->version_number);
+    if( curPmt->current_next_indicator )
+        g_print("\tcurrent_next_indicator: True(1)\n");
+    else
+        g_print("\tcurrent_next_indicator: False(0)\n");
+    g_print("\tsection_number: 0x%x\n", curPmt->section_number);
+    g_print("\tlast_section_number: 0x%x\n", curPmt->last_section_number);
+
+    g_print("\treserved_3: 0x%x\n", curPmt->reserved_3);
+    g_print("\tPCR_PID: 0x%x\n", curPmt->PCR_PID);
+
+    g_print("\treserved_4: 0x%x\n", curPmt->reserved_4);
+    g_print("\tprogram_info_length: 0x%x\n", curPmt->program_info_length);
+
+
+    // print the programs found
+    for( x = 0 ; x < curPmt->num_progs_parsed ; x++ )
+    {
+        g_print("\tProgram #%d:\n", x);
+        g_print("\t\tstream_type: 0x%x\n", curPmt->programs[x].stream_type);
+        g_print("\t\treserved_1: 0x%x\n", curPmt->programs[x].reserved_1);
+        g_print("\t\telementary_PID: 0x%x\n", curPmt->programs[x].elementary_PID);
+        g_print("\t\treserved_2: 0x%x\n", curPmt->programs[x].reserved_2);
+        g_print("\t\tES_info_length: 0x%x\n", curPmt->programs[x].ES_info_length);
+    }
+
+    g_print("\tCRC: 0x%x\n", curPmt->CRC);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// CGMI callbacks
+////////////////////////////////////////////////////////////////////////////////
+
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
 {
     g_print( "CGMI Player Event Recevied : %d \n", event );
@@ -272,7 +463,7 @@ static cgmi_Status cgmi_QueryBufferCallback(
     return CGMI_ERROR_SUCCESS;
 }
 
-static cgmi_Status cgmi_SectionBufferCallback(
+static cgmi_Status cgmi_SectionBufferCallback_PMT(
     void *pUserData,
     void *pFilterPriv,
     void *pFilterId,
@@ -281,7 +472,7 @@ static cgmi_Status cgmi_SectionBufferCallback(
     int sectionSize)
 {
     cgmi_Status retStat;
-    tPat pat;
+    tMpegTsPmt curPmt;
 
     //g_print( "cgmi_QueryBufferCallback -- pFilterId: 0x%08lx \n", pFilterId );
 
@@ -295,16 +486,93 @@ static cgmi_Status cgmi_SectionBufferCallback(
     printHex( pSection, sectionSize );
     g_print("\n\n");
 
-    parsePAT( pSection, sectionSize, &pat );
-    printPAT( &pat );
+    parsePMT( &curPmt, pSection, sectionSize );
+    printPMT( &curPmt );
 
     g_print("Calling cgmi_StopSectionFilter...\n");
     retStat = cgmi_StopSectionFilter( pFilterPriv, pFilterId );
     CHECK_ERROR(retStat);
 
+    /*
     g_print("Calling cgmi_DestroySectionFilter...\n");
     retStat = cgmi_DestroySectionFilter( pFilterPriv, pFilterId );
     CHECK_ERROR(retStat);
+    */
+    // Free buffer allocated in cgmi_QueryBufferCallback
+    g_free( pSection );
+
+
+    return CGMI_ERROR_SUCCESS;
+}
+
+
+static tMpegTsPat gPat;
+
+static cgmi_Status cgmi_SectionBufferCallback_PAT(
+    void *pUserData,
+    void *pFilterPriv,
+    void *pFilterId,
+    cgmi_Status sectionStatus,
+    char *pSection,
+    int sectionSize)
+{
+    cgmi_Status retStat;
+    tMpegTsPat pat;
+    tcgmi_FilterData filterData;
+    void *pNewFilterId = NULL;
+
+    //g_print( "cgmi_QueryBufferCallback -- pFilterId: 0x%08lx \n", pFilterId );
+
+    if( NULL == pSection )
+    {
+        g_print("NULL buffer passed to cgmiSectionBufferCallback.\n");
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    g_print("Received section pFilterId: 0x%lx, sectionSize %d\n\n", pFilterId, sectionSize);
+    printHex( pSection, sectionSize );
+    g_print("\n\n");
+
+    parsePAT( pSection, sectionSize, &gPat );
+    printPAT( &gPat );
+
+    g_print("Calling cgmi_StopSectionFilter...\n");
+    retStat = cgmi_StopSectionFilter( pFilterPriv, pFilterId );
+    CHECK_ERROR(retStat);
+
+    /*
+    g_print("Calling cgmi_DestroySectionFilter...\n");
+    retStat = cgmi_DestroySectionFilter( pFilterPriv, pFilterId );
+    CHECK_ERROR(retStat);
+    */
+
+#if 0
+// Disabled until it works properly. 
+    // Ok now that we've found the PAT find the first PMT (if we have one)
+    if( pat.numPMTs > 0 )
+    {
+        void *pNewFilterId = NULL;
+        g_print("Calling cgmi_CreateSectionFilter...\n");
+        retStat = cgmi_CreateSectionFilter( pFilterPriv, pFilterPriv, &pNewFilterId );
+        CHECK_ERROR(retStat);
+
+        // Use the PID of the first PMT
+        filterData.pid = pat.pmts[0].program_map_PID;
+        filterData.value = NULL;
+        filterData.mask = NULL;
+        filterData.length = 0;
+        filterData.comparitor = FILTER_COMP_EQUAL;
+
+        g_print("Calling cgmi_SetSectionFilter... for filterId 0x%08lx\n", pNewFilterId);
+        retStat = cgmi_SetSectionFilter( pFilterPriv, pNewFilterId, &filterData );
+        CHECK_ERROR(retStat);
+
+
+        g_print("Calling cgmi_StartSectionFilter...\n");
+        retStat = cgmi_StartSectionFilter( pFilterPriv, pNewFilterId, 10, 1, 0, cgmi_QueryBufferCallback, cgmi_SectionBufferCallback_PMT );
+        CHECK_ERROR(retStat);
+    }
+#endif
 
     // Free buffer allocated in cgmi_QueryBufferCallback
     g_free( pSection );
@@ -313,9 +581,11 @@ static cgmi_Status cgmi_SectionBufferCallback(
     return CGMI_ERROR_SUCCESS;
 }
 
-/**
- * A quick sanity test of the DBUS apis
- */
+
+////////////////////////////////////////////////////////////////////////////////
+// A quick sanity test of the DBUS apis
+////////////////////////////////////////////////////////////////////////////////
+
 static gpointer sanity(gpointer user_data)
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
@@ -331,7 +601,7 @@ static gpointer sanity(gpointer user_data)
     g_print("Calling cgmi_CreateSession...\n");
     retStat = cgmi_CreateSession( cgmiCallback, NULL, &pSessionId );
     CHECK_ERROR(retStat);
-    g_print("create session returned sessionId = (%lx)\n", (guint64)pSessionId);
+    g_print("create session returned sessionId = (%lx)\n", (tCgmiDbusPointer)pSessionId);
 
     g_print("Calling cgmi_Load...\n");
     retStat = cgmi_Load( pSessionId, url );
@@ -420,6 +690,7 @@ static gpointer sanity(gpointer user_data)
 
     /* Create section filter */
     void *filterId = NULL;
+    void *filterId2 = NULL;
     g_print("Calling cgmi_CreateSectionFilter...\n");
     retStat = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterId );
     CHECK_ERROR(retStat);
@@ -427,7 +698,7 @@ static gpointer sanity(gpointer user_data)
     /* */
 
     tcgmi_FilterData filterData;
-    filterData.pid = 0;
+    filterData.pid = 0x0;
     filterData.value = NULL;
     filterData.mask = NULL;
     filterData.length = 0;
@@ -439,7 +710,7 @@ static gpointer sanity(gpointer user_data)
 
 
     g_print("Calling cgmi_StartSectionFilter...\n");
-    retStat = cgmi_StartSectionFilter( pSessionId, filterId, 10, 1, 0, cgmi_QueryBufferCallback, cgmi_SectionBufferCallback );
+    retStat = cgmi_StartSectionFilter( pSessionId, filterId, 10, 1, 0, cgmi_QueryBufferCallback, cgmi_SectionBufferCallback_PAT );
     CHECK_ERROR(retStat);
     /*/
 
@@ -457,8 +728,45 @@ static gpointer sanity(gpointer user_data)
     
     // */
 
+#if 1
+    g_usleep( 700 * 1000);
+    // Ok now that we've found the PAT find the first PMT (if we have one)
+    if( gPat.numPMTs > 0 )
+    {
+        /* Create section filter */
+        g_print("Calling cgmi_CreateSectionFilter...\n");
+        retStat = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterId2 );
+        CHECK_ERROR(retStat);
+
+
+        // Use the PID of the first PMT
+        filterData.pid = gPat.pmts[0].program_map_PID;
+        filterData.value = NULL;
+        filterData.mask = NULL;
+        filterData.length = 0;
+        filterData.comparitor = FILTER_COMP_EQUAL;
+
+        g_print("Calling cgmi_SetSectionFilter... for filterId 0x%08lx\n", filterId2);
+        retStat = cgmi_SetSectionFilter( pSessionId, filterId2, &filterData );
+        CHECK_ERROR(retStat);
+
+
+        g_print("Calling cgmi_StartSectionFilter...\n");
+        retStat = cgmi_StartSectionFilter( pSessionId, filterId2, 10, 1, 0, cgmi_QueryBufferCallback, cgmi_SectionBufferCallback_PMT );
+        CHECK_ERROR(retStat);
+    }
+#endif
+
     // Let it play for a few more seconds
-    g_usleep(6 * 1000 * 1000);
+    g_usleep(10 * 1000 * 1000);
+
+    g_print("Calling cgmi_DestroySectionFilter...\n");
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId );
+    CHECK_ERROR(retStat);
+
+    g_print("Calling cgmi_DestroySectionFilter filterId2...\n");
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId2 );
+    CHECK_ERROR(retStat);
 
 
     /****** Shut down session and clean up *******/
@@ -477,9 +785,11 @@ static gpointer sanity(gpointer user_data)
     return NULL;
 }
 
-/**
- * Make all the calls to start playing video
- */
+
+////////////////////////////////////////////////////////////////////////////////
+// Make all the calls to start playing video
+////////////////////////////////////////////////////////////////////////////////
+
 static gpointer play( char *uri )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
@@ -512,7 +822,7 @@ int main(int argc, char **argv)
 
     if (argc < 2)
     {
-        printf("usage: %s play <url> | sanity <url>\n", argv[0]);
+        g_print("usage: %s play <url> | sanity <url>\n", argv[0]);
         return -1;
     }
 
@@ -520,7 +830,7 @@ int main(int argc, char **argv)
     {
         if (argc < 3)
         {
-            printf("usage: %s sanity <url>\n", argv[0]);
+            g_print("usage: %s sanity <url>\n", argv[0]);
             return -1;
         }
         sanity(argv[2]);
@@ -530,7 +840,7 @@ int main(int argc, char **argv)
     {
         if (argc < 3)
         {
-            printf("usage: %s play <url>\n", argv[0]);
+            g_print("usage: %s play <url>\n", argv[0]);
             return -1;
         }
         play(argv[2]);

@@ -7,6 +7,7 @@
 #include <syslog.h>
 #include <glib/gprintf.h>
 // put in a #define #include "diaglib.h"
+#include "dbusPtrCommon.h"
 #include "cgmiPlayerApi.h"
 #include "cgmi_dbus_server_generated.h"
 
@@ -82,14 +83,39 @@ static void gPrintErrToSylog(const gchar *message)
 ////////////////////////////////////////////////////////////////////////////////
 static void cgmiEventCallback( void *pUserData, void *pSession, tcgmi_Event event )
 {
+    GVariant *sessVar = NULL, *sessDbusVar = NULL;
 
-    org_cisco_cgmi_emit_player_notify( (OrgCiscoCgmi *) pUserData,
-                                       (guint64)pSession,
-                                       event,
-                                       0 );
+    do{
+        // Marshal filter id pointer
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        sessDbusVar = g_variant_new ( "v", sessVar );
+        if( sessDbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            break;
+        }
+        sessDbusVar = g_variant_ref_sink(sessDbusVar);
+
+        org_cisco_cgmi_emit_player_notify( (OrgCiscoCgmi *) pUserData,
+                                           sessDbusVar,
+                                           event,
+                                           0 );
+
+    }while(0);
+
+    //Clean up
+    if( sessDbusVar != NULL ) { g_variant_unref(sessDbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
 
     CGMID_INFO("cgmiEventCallback -- pSession: %lu, event%d \n",
-            (guint64)pSession, event);
+            (tCgmiDbusPointer)pSession, event);
 }
 
 static cgmi_Status cgmiQueryBufferCallback(
@@ -135,8 +161,10 @@ static cgmi_Status cgmiSectionBufferCallback(
     char *pSection,
     int sectionSize)
 {
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GVariantBuilder *sectionBuilder = NULL;
     GVariant *sectionArray = NULL;
+    GVariant *filterIdVar = NULL, *filterDbusVar = NULL;
     int idx;
 
     //CGMID_INFO("cgmiSectionBufferCallback -- pFilterId: %lu, pFilterPriv: %lu \n",
@@ -149,27 +177,58 @@ static cgmi_Status cgmiSectionBufferCallback(
         return CGMI_ERROR_BAD_PARAM;
     }
 
-    // Marshal gvariant
-    sectionBuilder = g_variant_builder_new( G_VARIANT_TYPE("ay") );
-    for( idx = 0; idx < sectionSize; idx++ )
-    {
-        g_variant_builder_add( sectionBuilder, "y", pSection[idx] );
-    }
-    sectionArray = g_variant_builder_end( sectionBuilder );
+    do{
+        // Marshal gvariant buffer
+        sectionBuilder = g_variant_builder_new( G_VARIANT_TYPE("ay") );
+        if( sectionBuilder == NULL )
+        {
+            g_print("Failed to create new variant builder\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        for( idx = 0; idx < sectionSize; idx++ )
+        {
+            g_variant_builder_add( sectionBuilder, "y", pSection[idx] );
+        }
+        sectionArray = g_variant_builder_end( sectionBuilder );
 
-    //CGMID_INFO("Sending pFilterId: 0x%lx, sectionSize %d\n", pFilterId, sectionSize);
-    org_cisco_cgmi_emit_section_buffer_notify( (OrgCiscoCgmi *) pUserData,
-            (guint64)pFilterId,
-            (gint)sectionStatus,
-            sectionArray,
-            sectionSize );
+        // Marshal filter id pointer
+        filterIdVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pFilterId );
+        if( filterIdVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        filterIdVar = g_variant_ref_sink(filterIdVar);
 
-    g_variant_builder_unref( sectionBuilder );
+        filterDbusVar = g_variant_new ( "v", filterIdVar );
+        if( filterDbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        filterDbusVar = g_variant_ref_sink(filterDbusVar);
+
+        //CGMID_INFO("Sending pFilterId: 0x%lx, sectionSize %d\n", pFilterId, sectionSize);
+        org_cisco_cgmi_emit_section_buffer_notify( (OrgCiscoCgmi *) pUserData,
+                filterDbusVar,
+                (gint)sectionStatus,
+                sectionArray,
+                sectionSize );
+
+    }while(0);
+
+    //Clean up
+    if( filterDbusVar != NULL ) { g_variant_unref(filterDbusVar); }
+    if( filterIdVar != NULL ) { g_variant_unref(filterIdVar); }
+    if( sectionBuilder != NULL ) { g_variant_builder_unref( sectionBuilder ); }
 
     // Free buffer allocated in cgmiQueryBufferCallback
     g_free( pSection );
 
-    return CGMI_ERROR_SUCCESS;
+    return retStat;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -249,15 +308,40 @@ on_handle_cgmi_create_session (
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     void *pSessionId = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
 
     CGMID_ENTER();
 
     retStat = cgmi_CreateSession( cgmiEventCallback, (void *)object, &pSessionId );
 
-    org_cisco_cgmi_complete_create_session (object,
-                                            invocation,
-                                            (guint64)pSessionId,
-                                            retStat);
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSessionId );
+        if( sessVar == NULL )
+        {
+            CGMID_INFO("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            CGMID_INFO("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_complete_create_session (object,
+                                                invocation,
+                                                dbusVar,
+                                                retStat);
+
+    }while(0);
+
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
 
     return TRUE;
 }
@@ -266,13 +350,28 @@ static gboolean
 on_handle_cgmi_destroy_session (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId )
+    GVariant *arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession = 0;
 
     CGMID_ENTER();
 
-    retStat = cgmi_DestroySession( (void *)arg_sessionId );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_DestroySession( (void *)pSession );
+
+    }while(0);
 
     org_cisco_cgmi_complete_destroy_session (object,
             invocation,
@@ -306,14 +405,29 @@ static gboolean
 on_handle_cgmi_load (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
+    GVariant *arg_sessionId,
     const gchar *uri )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_Load( (void *)arg_sessionId, uri );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_Load( (void *)pSession, uri );
+
+    }while(0);
 
     org_cisco_cgmi_complete_load (object,
                                   invocation,
@@ -326,13 +440,28 @@ static gboolean
 on_handle_cgmi_unload (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId )
+    GVariant *arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_Unload( (void *)arg_sessionId );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_Unload( (void *)pSession );
+
+    }while(0);
 
     //FIX Chris
     org_cisco_cgmi_complete_unload (object,
@@ -346,13 +475,28 @@ static gboolean
 on_handle_cgmi_play (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId )
+    GVariant *arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_Play( (void *)arg_sessionId );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_Play( (void *)pSession );
+
+    }while(0);
 
     org_cisco_cgmi_complete_play (object,
                                   invocation,
@@ -365,14 +509,29 @@ static gboolean
 on_handle_cgmi_set_rate (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
+    GVariant *arg_sessionId,
     gdouble arg_rate )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_SetRate( (void *)arg_sessionId, arg_rate );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_SetRate( (void *)pSession, arg_rate );
+
+    }while(0);
 
     org_cisco_cgmi_complete_set_rate (object,
                                       invocation,
@@ -385,14 +544,29 @@ static gboolean
 on_handle_cgmi_set_position (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
+    GVariant *arg_sessionId,
     gdouble arg_position )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_SetPosition( (void *)arg_sessionId, arg_position );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_SetPosition( (void *)pSession, arg_position );
+
+    }while(0);
 
     org_cisco_cgmi_complete_set_position (object,
                                           invocation,
@@ -405,14 +579,29 @@ static gboolean
 on_handle_cgmi_get_position (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId )
+    GVariant *arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     float position = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_GetPosition( (void *)arg_sessionId, &position );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetPosition( (void *)pSession, &position );
+
+    }while(0);
 
     org_cisco_cgmi_complete_get_position (object,
                                           invocation,
@@ -426,15 +615,30 @@ static gboolean
 on_handle_cgmi_get_duration (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId )
+    GVariant *arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     float duration = 0;
     cgmi_SessionType type = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_GetDuration( (void *)arg_sessionId, &duration, &type );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetDuration( (void *)pSession, &duration, &type );
+
+    }while(0);
 
     org_cisco_cgmi_complete_get_duration (object,
                                           invocation,
@@ -449,15 +653,30 @@ static gboolean
 on_handle_cgmi_get_rate_range (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId )
+    GVariant *arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     float rewindRate = 0;
     float fForwardRate = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_GetRateRange( (void *)arg_sessionId, &rewindRate, &fForwardRate );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetRateRange( (void *)pSession, &rewindRate, &fForwardRate );
+
+    }while(0);
 
     org_cisco_cgmi_complete_get_rate_range (object,
                                             invocation,
@@ -472,17 +691,32 @@ static gboolean
 on_handle_cgmi_set_video_rectangle (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
+    GVariant *arg_sessionId,
     int x,
     int y, 
     int w,
     int h )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_SetVideoRectangle( (void *)arg_sessionId, x, y, w, h );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_SetVideoRectangle( (void *)pSession, x, y, w, h );
+
+    }while(0);
 
     org_cisco_cgmi_complete_set_video_rectangle (object,
             invocation,
@@ -495,14 +729,29 @@ static gboolean
 on_handle_cgmi_get_num_audio_languages (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId )
+    GVariant *arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     gint count = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_GetNumAudioLanguages( (void *)arg_sessionId, &count );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetNumAudioLanguages( (void *)pSession, &count );
+
+    }while(0);    
 
     org_cisco_cgmi_complete_get_num_audio_languages (object,
             invocation,
@@ -516,26 +765,45 @@ static gboolean
 on_handle_cgmi_get_audio_lang_info (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
+    GVariant *arg_sessionId,
     gint index,
     gint bufSize )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
-    GVariantBuilder *bufferBuilder = NULL;
-    int idx;
     char *buffer = NULL;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
-
-    if ( bufSize > 0 )
-    {
-        buffer = g_malloc0(bufSize);        
-    }
     
-    if ( NULL == buffer )
-        retStat = CGMI_ERROR_OUT_OF_MEMORY;    
-    else
-        retStat = cgmi_GetAudioLangInfo( (void *)arg_sessionId, index, buffer, bufSize );
+    do{
+        if ( bufSize <= 0 )
+        {
+            retStat = CGMI_ERROR_BAD_PARAM;
+            break;
+    
+        }
+
+        buffer = g_malloc0(bufSize);    
+        if ( NULL == buffer )
+        {
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+         
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetAudioLangInfo( (void *)pSession, index, buffer, bufSize );
+
+    }while(0);
        
     org_cisco_cgmi_complete_get_audio_lang_info (object,
             invocation,
@@ -552,14 +820,29 @@ static gboolean
 on_handle_cgmi_set_audio_stream (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
+    GVariant *arg_sessionId,
     gint index )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_SetAudioStream( (void *)arg_sessionId, index );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_SetAudioStream( (void *)pSession, index );
+
+    }while(0);
 
     org_cisco_cgmi_complete_set_audio_stream (object,
             invocation,
@@ -572,14 +855,29 @@ static gboolean
 on_handle_cgmi_set_default_audio_lang (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
+    GVariant *arg_sessionId,
     const char *language )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    retStat = cgmi_SetDefaultAudioLang( (void *)arg_sessionId, language );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_SetDefaultAudioLang( (void *)pSession, language );
+
+    }while(0);
 
     org_cisco_cgmi_complete_set_default_audio_lang (object,
             invocation,
@@ -592,22 +890,65 @@ static gboolean
 on_handle_cgmi_create_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId )
+    GVariant *arg_sessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     void *pFilterId;
+    GVariant *sessVar = NULL;
+    GVariant *filterIdVar = NULL, *dbusVar = NULL;
+    tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
 
-    // Provide a pointer to the sessionId as the private data.
-    retStat = cgmi_CreateSectionFilter( (void *)arg_sessionId,
-                                     (void *)object,
-                                     &pFilterId );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
 
-    org_cisco_cgmi_complete_create_section_filter (object,
-            invocation,
-            (guint64)pFilterId,
-            retStat);
+        // Provide a pointer to the sessionId as the private data.
+        retStat = cgmi_CreateSectionFilter( (void *)pSession,
+                                         (void *)object,
+                                         &pFilterId );
+
+        // Build GVariant to return filter ID pointer
+        filterIdVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pFilterId );
+        if( filterIdVar == NULL )
+        {
+            CGMID_INFO("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        filterIdVar = g_variant_ref_sink(filterIdVar);
+
+        dbusVar = g_variant_new ( "v", filterIdVar );
+        if( dbusVar == NULL )
+        {
+            CGMID_INFO("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        // Return results
+        org_cisco_cgmi_complete_create_section_filter (object,
+                invocation,
+                dbusVar,
+                retStat);
+
+    }while(0);
+
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( filterIdVar != NULL ) { g_variant_unref(filterIdVar); }
+
+    if( retStat != CGMI_ERROR_SUCCESS )
+    {
+        CGMID_ERROR("Failed with error %s.", cgmi_ErrorString(retStat) );
+    }
 
     return TRUE;
 }
@@ -616,15 +957,39 @@ static gboolean
 on_handle_cgmi_destroy_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
-    guint64 arg_filterId )
+    GVariant *arg_sessionId,
+    GVariant *arg_filterId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL, *filterIdVar = NULL;
+    tCgmiDbusPointer pSession, pFilterId;
 
     CGMID_ENTER();
 
-    retStat = cgmi_DestroySectionFilter( (void *)arg_sessionId,
-                                      (void *)arg_filterId );
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        g_variant_get( arg_filterId, "v", &filterIdVar );
+        if( filterIdVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( filterIdVar, DBUS_POINTER_TYPE, &pFilterId );
+        g_variant_unref( filterIdVar );
+
+        retStat = cgmi_DestroySectionFilter( (void *)pSession,
+                                          (void *)pFilterId );
+
+
+    }while(0);
 
     org_cisco_cgmi_complete_destroy_section_filter (object,
             invocation,
@@ -637,8 +1002,8 @@ static gboolean
 on_handle_cgmi_set_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
-    guint64 arg_filterId,
+    GVariant *arg_sessionId,
+    GVariant *arg_filterId,
     gint arg_filterPid,
     GVariant *arg_filterValue,
     GVariant *arg_filterMask,
@@ -647,6 +1012,8 @@ on_handle_cgmi_set_section_filter (
     gint arg_filterComparitor )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL, *filterIdVar = NULL;
+    tCgmiDbusPointer pSession, pFilterId;
     tcgmi_FilterData pFilter;
     GVariantIter *iter = NULL;
     guchar *filterValue = NULL;
@@ -690,13 +1057,32 @@ on_handle_cgmi_set_section_filter (
 
         // Populate the filter struct
         pFilter.pid = arg_filterPid;
-        pFilter.value = arg_filterValue;
-        pFilter.mask = arg_filterMask;
+        pFilter.value = filterValue;
+        pFilter.mask = filterMask;
         pFilter.length = arg_filterLength;
         pFilter.comparitor = arg_filterComparitor;
 
-        retStat = cgmi_SetSectionFilter( (void *)arg_sessionId,
-                                      (void *)arg_filterId, 
+        // Unmarshal id pointers
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        g_variant_get( arg_filterId, "v", &filterIdVar );
+        if( filterIdVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( filterIdVar, DBUS_POINTER_TYPE, &pFilterId );
+        g_variant_unref( filterIdVar );
+
+        retStat = cgmi_SetSectionFilter( (void *)pSession,
+                                      (void *)pFilterId, 
                                       &pFilter );
 
     }while(0);
@@ -716,26 +1102,49 @@ static gboolean
 on_handle_cgmi_start_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    guint64 arg_sessionId,
-    guint64 arg_filterId,
+    GVariant *arg_sessionId,
+    GVariant *arg_filterId,
     gint timeout,
     gint oneShot,
     gint enableCRC )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL, *filterIdVar = NULL;
+    tCgmiDbusPointer pSession, pFilterId;
 
     CGMID_ENTER();
 
+    do{
+        // Unmarshal id pointers
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        g_variant_get( arg_filterId, "v", &filterIdVar );
+        if( filterIdVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( filterIdVar, DBUS_POINTER_TYPE, &pFilterId );
+        g_variant_unref( filterIdVar );
+
+        retStat = cgmi_StartSectionFilter( (void *)pSession,
+                                        (void *)pFilterId,
+                                        timeout,
+                                        oneShot,
+                                        enableCRC,
+                                        cgmiQueryBufferCallback,
+                                        cgmiSectionBufferCallback );
+
+    }while(0);
+
     //TODO handle callbacks
-
-    retStat = cgmi_StartSectionFilter( (void *)arg_sessionId,
-                                    (void *)arg_filterId,
-                                    timeout,
-                                    oneShot,
-                                    enableCRC,
-                                    cgmiQueryBufferCallback,
-                                    cgmiSectionBufferCallback );
-
     org_cisco_cgmi_complete_start_section_filter (object,
             invocation,
             retStat);
@@ -747,17 +1156,39 @@ static gboolean
 on_handle_cgmi_stop_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    const guint64 arg_sessionId,
-    const guint64 arg_filterId )
+    GVariant *arg_sessionId,
+    GVariant *arg_filterId )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL, *filterIdVar = NULL;
+    tCgmiDbusPointer pSession, pFilterId;
 
     CGMID_ENTER();
 
-    //TODO handle callbacks
+    do{
+        // Unmarshal id pointers
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
 
-    retStat = cgmi_StopSectionFilter( (void *)arg_sessionId,
-                                   (void *)arg_filterId );
+        g_variant_get( arg_filterId, "v", &filterIdVar );
+        if( filterIdVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( filterIdVar, DBUS_POINTER_TYPE, &pFilterId );
+        g_variant_unref( filterIdVar );
+
+        retStat = cgmi_StopSectionFilter( (void *)pSession,
+                                       (void *)pFilterId );
+
+    }while(0);
 
     org_cisco_cgmi_complete_stop_section_filter (object,
             invocation,
