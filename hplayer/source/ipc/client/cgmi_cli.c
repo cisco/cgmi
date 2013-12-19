@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include <signal.h>
 #include <stdbool.h>
 
 // put this in a define. #include "diaglib.h"
@@ -20,10 +20,18 @@
 #define MAX_HISTORY 50
 
 static void *filterid = NULL;
-/* End defines for section filtering. */
+static struct termios oldt, newt;
 
 /* Prototypes */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event );
+
+/* Signal Handler */
+void sig_handler(int signum)
+{
+    tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
+    printf("\n\nNext time you may want to use Ctrl+D to exit correctly. :-)\n");
+    exit(1);
+}
 
 /* Play Command */
 static cgmi_Status play(void *pSessionId, char *src)
@@ -430,9 +438,6 @@ int main(int argc, char **argv)
     int len = 0;
     int err = 0;
 
-    /* Terminal settings */
-    struct termios oldt, newt;
-
     // need to put this in a define diagInit (DIAGTYPE_DEFAULT, NULL, 0);
 
     /* Init CGMI. */
@@ -465,6 +470,9 @@ int main(int argc, char **argv)
     newt.c_lflag &= ~(ICANON); // Disable line buffering
     newt.c_lflag &= ~(ECHO); // Disable local echo
     tcsetattr( STDIN_FILENO, TCSANOW, &newt);
+
+    /* Signal handler to clean up console. */
+    signal(SIGINT, sig_handler);
 
     /* Main Command Loop */
     while (!quit)
@@ -544,6 +552,14 @@ int main(int argc, char **argv)
                     break;
                 case 0xa:       /* Enter */
                     printf( "\n" );
+                    retcom = 1;
+                    break;
+                case 0x10:      /* Ctrl+P */
+                    /* This is for fun.  Enjoy! */
+                    printf( "\nYour pizza order has been placed and should"
+                            " arrive in 20-30 minutes or it's FREE!!!\n" );
+                    command[0] = '\0';
+                    a = 0;
                     retcom = 1;
                     break;
                 default:
@@ -639,8 +655,9 @@ int main(int argc, char **argv)
             }
         }
         /* stop or unload */
-        else if ((strncmp(command, "stop", 4) == 0) || 
-                 (strncmp(command, "unload", 6) == 0))
+        else if (
+                ((strncmp(command, "stop", 4) == 0) && (strlen(command) == 4))
+                || (strncmp(command, "unload", 6) == 0))
         {
             retCode = stop(pSessionId);
             playing = 0;
