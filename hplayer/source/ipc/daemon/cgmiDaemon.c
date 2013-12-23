@@ -5,7 +5,13 @@
 #include <stdlib.h>
 #include <glib.h>
 #include <syslog.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include <glib/gprintf.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <gst/gst.h>
 // put in a #define #include "diaglib.h"
 #include "dbusPtrCommon.h"
 #include "cgmiPlayerApi.h"
@@ -15,7 +21,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Defines
 ////////////////////////////////////////////////////////////////////////////////
-#define DEFAULT_SECTION_FILTER_BUFFER_SIZE 256;
+#define DEFAULT_SECTION_FILTER_BUFFER_SIZE 256
+#define CMGI_FIFO_NAME_MAX 64
 
 ////////////////////////////////////////////////////////////////////////////////
 // Logging for daemon.  TODO:  Send to syslog when in background
@@ -39,13 +46,32 @@
 #define CGMID_ENTER()
 #endif
 
+////////////////////////////////////////////////////////////////////////////////
+// typedefs
+////////////////////////////////////////////////////////////////////////////////
+typedef enum
+{
+    CGMI_FIFO_STATE_CLOSED,
+    CGMI_FIFO_STATE_CREATED,
+    CGMI_FIFO_STATE_OPENED,
+    CGMI_FIFO_STATE_FAILED
+}tcgmi_FifoState;
+
+typedef struct
+{
+    char fifoName[CMGI_FIFO_NAME_MAX];
+    int  fd;
+    tcgmi_FifoState state;
+    pthread_t thread;
+} tcgmi_FifoCallbackSink;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Globals
 ////////////////////////////////////////////////////////////////////////////////
-static gboolean gCgmiInited = FALSE;
-static gboolean gInForeground = FALSE;
-
+static gboolean         gCgmiInited                 = FALSE;
+static gboolean         gInForeground               = FALSE;
+static GHashTable       *gUserDataCallbackHash      = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Logging
@@ -76,6 +102,79 @@ static void gPrintToSylog(const gchar *message)
 static void gPrintErrToSylog(const gchar *message)
 {
     syslog(LOG_ERR, "%-20s - %s", "CGMI ERROR", message);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Utility functions
+////////////////////////////////////////////////////////////////////////////////
+static void * createFifoThreadFnc( void *data )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    tcgmi_FifoCallbackSink *callbackData = data;
+    int ret;
+
+    if( NULL == callbackData )
+    {
+        CGMID_ERROR("Failed start callback fifo thread\n" );
+        return NULL;  
+    }
+
+    // Open fifo
+    callbackData->fd = open(callbackData->fifoName, O_WRONLY);
+    if( -1 == callbackData->fd ) 
+    {
+        callbackData->state = CGMI_FIFO_STATE_FAILED;
+        retStat = CGMI_ERROR_FAILED;
+        unlink(callbackData->fifoName);
+        callbackData->fd = -1;
+    }
+    else
+    {
+        // Set to nonblocking
+        fcntl(callbackData->fd, F_SETFL, 
+            fcntl(callbackData->fd, F_GETFL) | O_NONBLOCK);
+    }
+
+    // Success if we reach here.
+    callbackData->state = CGMI_FIFO_STATE_OPENED;
+}
+
+static cgmi_Status asyncCreateFifo( tcgmi_FifoCallbackSink *cbData )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    int ret;
+
+    if( NULL == cbData )
+    {
+        CGMID_ERROR("Failed start callback fifo thread with NULL cbData\n" );
+        return CGMI_ERROR_FAILED;  
+    }
+
+    // Create fifo
+    unlink(cbData->fifoName);
+    ret = mkfifo(cbData->fifoName, 0777);
+    if( 0 != ret ) 
+    {
+        cbData->state = CGMI_FIFO_STATE_FAILED;
+        return CGMI_ERROR_FAILED; 
+    }
+
+    cbData->state = CGMI_FIFO_STATE_CREATED;
+
+    if ( 0 != pthread_create(&cbData->thread, NULL, createFifoThreadFnc, cbData) )
+    {
+        g_print("Error launching thread for CreateFifo\n");
+        return CGMI_ERROR_FAILED;
+    }
+    return CGMI_ERROR_SUCCESS;
+}
+
+static cgmi_Status closeFifo( tcgmi_FifoCallbackSink *cbData )
+{
+    close(cbData->fd);
+    unlink(cbData->fifoName);
+
+    return CGMI_ERROR_SUCCESS;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -227,6 +326,62 @@ static cgmi_Status cgmiSectionBufferCallback(
 
     // Free buffer allocated in cgmiQueryBufferCallback
     g_free( pSection );
+
+    return retStat;
+}
+
+static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    tcgmi_FifoCallbackSink *callbackData;
+    GstBuffer *pGstbuffer;
+    int bytesWritten, bytesRemaining;
+    guint8 *bufferData;
+    guint bufferSize;
+
+    if( pUserData == NULL || pBuffer == NULL )
+    {
+        CGMID_ERROR("NULL userData/buffer passed to cgmiUserDataBufferCB.\n");
+        return CGMI_ERROR_BAD_PARAM;  
+    }
+
+    //CGMID_INFO("cgmiUserDataBufferCB -- pUserData: %lu, pBuffer: %lu \n",
+    //        (tCgmiDbusPointer)pUserData, (tCgmiDbusPointer)pBuffer);
+
+    // Casting fun
+    callbackData = (tcgmi_FifoCallbackSink *)pUserData;
+    pGstbuffer = (GstBuffer *)pBuffer;
+
+    // Verify fifo is open
+    if( callbackData->state != CGMI_FIFO_STATE_OPENED )
+    {
+        return CGMI_ERROR_WRONG_STATE;
+    }
+
+    bufferData = GST_BUFFER_DATA( pGstbuffer );
+    bufferSize = GST_BUFFER_SIZE( pGstbuffer );
+    bytesRemaining = bufferSize;
+
+    if( bufferSize < 0 )
+    {
+        CGMID_ERROR("Empty buffer?.\n");
+        return CGMI_ERROR_BAD_PARAM;  
+    }
+
+    // Write to fifo
+    do
+    {
+        //CGMID_INFO("Sending buffer of size (%u)...\n", bufferSize);
+        bytesWritten = write( callbackData->fd, bufferData, bytesRemaining );
+        bytesRemaining -= bytesWritten;
+        bufferData += bytesWritten;
+    }while( bytesRemaining > 0 && bytesWritten > 0 );
+    
+    if( -1 == bytesWritten ) {
+        CGMID_ERROR("Failed writing to fifo with (%d).\n", errno);
+        retStat = CGMI_ERROR_FAILED;
+        callbackData->state = CGMI_FIFO_STATE_FAILED;
+    }
 
     return retStat;
 }
@@ -1197,6 +1352,129 @@ on_handle_cgmi_stop_section_filter (
     return TRUE;
 }
 
+static gboolean
+on_handle_cgmi_start_user_data_filter (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+    tcgmi_FifoCallbackSink *callbackData;
+
+    CGMID_ENTER();
+
+    do{
+        // Unmarshal id pointers
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            CGMID_ERROR("Failed to get variant\n");
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+
+        // Create entry to track CC callbacks
+        callbackData = g_malloc0(sizeof(tcgmi_FifoCallbackSink));
+        if( NULL == callbackData )
+        {
+            CGMID_ERROR("Failed to allocate memory\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        g_hash_table_insert( gUserDataCallbackHash, (gpointer)pSession,
+                             (gpointer)callbackData );
+
+        // Create unique fifo name
+        snprintf(callbackData->fifoName, CMGI_FIFO_NAME_MAX, 
+            "/tmp/cgmiUserData-%016lx.fifo", pSession);
+
+        // Create thread to open fifo
+        CGMID_INFO("Creating fifo\n");
+        callbackData->state = CGMI_FIFO_STATE_CLOSED;
+        // Opening the fifo blocks until the reading side of the fifo is opened.
+        // The DBUS client opens the reading side following the return call to
+        // DBUS below.
+        retStat = asyncCreateFifo( callbackData );
+        if( CGMI_ERROR_SUCCESS != retStat )
+        {
+            CGMID_ERROR("Failed to create fifo (%s)\n", callbackData->fifoName );
+            break; 
+        }
+
+        CGMID_INFO("Calling lib cgmi_startUserDataFilter\n");
+        retStat = cgmi_startUserDataFilter( (void *)pSession,
+                                            cgmiUserDataBufferCB,
+                                            (void *)callbackData );
+
+    }while(0);
+
+    CGMID_INFO("Calling DBUS return\n");
+
+    org_cisco_cgmi_complete_start_user_data_filter (object,
+            invocation,
+            callbackData->fifoName,
+            retStat);
+
+    return TRUE;
+}
+
+static gboolean
+on_handle_cgmi_stop_user_data_filter (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+    tcgmi_FifoCallbackSink *callbackData;
+
+    CGMID_ENTER();
+
+    do{
+        // Unmarshal id pointers
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_stopUserDataFilter( (void *)pSession,
+                                           (void *)cgmiUserDataBufferCB );
+
+        // Look up the callbackData
+        callbackData = (tcgmi_FifoCallbackSink *) g_hash_table_lookup(
+            gUserDataCallbackHash, (gpointer)pSession );
+
+        if (callbackData == NULL)
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        // Clean up file descriptor and fifo file
+        retStat = closeFifo( callbackData );
+
+        // Remove callbackData from hash... this will free callbackData
+        g_hash_table_remove( gUserDataCallbackHash, (gpointer)pSession );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_stop_user_data_filter (object,
+            invocation,
+            retStat);
+
+    return TRUE;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS setup callbacks
 ////////////////////////////////////////////////////////////////////////////////
@@ -1354,6 +1632,16 @@ on_bus_acquired (GDBusConnection *connection,
                       G_CALLBACK (on_handle_cgmi_stop_section_filter),
                       NULL);
 
+    g_signal_connect (interface,
+                      "handle-start-user-data-filter",
+                      G_CALLBACK (on_handle_cgmi_start_user_data_filter),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-stop-user-data-filter",
+                      G_CALLBACK (on_handle_cgmi_stop_user_data_filter),
+                      NULL);
+
     if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (interface),
                                            connection,
                                            "/org/cisco/cgmi",
@@ -1406,6 +1694,12 @@ int main( int argc, char *argv[] )
         }
     }
 
+    /* Init Callback Globals */
+    gUserDataCallbackHash = g_hash_table_new_full(g_direct_hash, 
+        g_direct_equal,
+        NULL,
+        g_free);
+
     //rms put in to a #define diagInit (DIAGTYPE_DEFAULT, NULL, 0);
     /* DBUS Code */
     loop = g_main_loop_new( NULL, FALSE );
@@ -1430,6 +1724,13 @@ int main( int argc, char *argv[] )
 
     g_bus_unown_name( id );
     g_main_loop_unref( loop );
+
+    /* Clean-up global callbacks */
+    if ( gUserDataCallbackHash != NULL )
+    {
+        g_hash_table_destroy(gUserDataCallbackHash);
+        gUserDataCallbackHash = NULL;
+    }
 
     return 0;
 }

@@ -2,10 +2,19 @@
 #include <string.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <gst/gst.h>
 
 #include "dbusPtrCommon.h"
 #include "cgmiPlayerApi.h"
 #include "cgmi_dbus_client_generated.h"
+
+////////////////////////////////////////////////////////////////////////////////
+// Defines
+////////////////////////////////////////////////////////////////////////////////
+#define USER_DATA_CALLBACK_BUFFER_SIZE 128
 
 ////////////////////////////////////////////////////////////////////////////////
 // Macros
@@ -42,8 +51,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 typedef struct
 {
-    cgmi_EventCallback callback;
-    void *userParam;
+    cgmi_EventCallback  callback;
+    void                *userParam;
+    gchar               *fifoName;
+    gboolean            userDataCbRunning;
+    pthread_t           userDataCbThread;
+    userDataBufferCB    userDataCallback;
+    int                 userDataFifoDesc;
+    void                *userDataPrivate;
 
 } tcgmi_PlayerEventCallbackData;
 
@@ -86,7 +101,7 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
     tCgmiDbusPointer pSess = 0;
 
     g_print("Enter on_handle_notification sessionHandle = %lu, event = %d...\n",
-            sessionHandle, event);
+            (tCgmiDbusPointer)sessionHandle, event);
 
     // Preconditions
     if ( proxy != gProxy )
@@ -238,6 +253,81 @@ static gboolean on_handle_section_buffer_notify (  OrgCiscoCgmi *proxy,
     return TRUE;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Threads for handling streams to app
+////////////////////////////////////////////////////////////////////////////////
+
+/* Used for user data (CC) callbacks. */
+static void *cgmi_UserDataCbThread(void *data)
+{
+    tcgmi_PlayerEventCallbackData *cbData = (tcgmi_PlayerEventCallbackData *)data;
+    gchar *dataBuf;
+    int bytesRead;
+    GstBuffer *pGstBuff;
+
+    // Preconditions
+    if( NULL == cbData || NULL == cbData->userDataCallback )
+    {
+        g_print("Bad parameter (NULL) sent to UserDataCbThread.\n");
+        return NULL;
+    }
+
+    // Open fifo
+    cbData->userDataFifoDesc = open(cbData->fifoName, O_RDONLY);
+    if( -1 == cbData->userDataFifoDesc )
+    {
+        g_print("Failed to open fifo (%s)\n", cbData->fifoName);
+        return NULL;
+    }
+
+    cbData->userDataCbRunning = TRUE;
+
+    while( cbData->userDataCbRunning )
+    {
+        dataBuf = g_malloc0(USER_DATA_CALLBACK_BUFFER_SIZE);
+        if( NULL == dataBuf )
+        {
+            g_print("Failed to allocate memory.\n");
+            break;
+        }
+
+        // Read from fifo
+        bytesRead = read( 
+            cbData->userDataFifoDesc, dataBuf, USER_DATA_CALLBACK_BUFFER_SIZE );
+
+        // If we are shuting down, then bail
+        if( cbData->userDataCbRunning == FALSE ) break;
+
+        if( 0 >= bytesRead )
+        {
+            g_print("Failed to read from UserDataCbThread fifo.\n");
+            break;
+        }
+
+        //g_print("Read (%d) bytes.\n", bytesRead );
+
+        // Wrap data with GstBuffer
+        pGstBuff = gst_buffer_new( );
+        if( NULL == pGstBuff )
+        {
+            g_print("Failed to create new gst buffer.\n");
+            return NULL; 
+        }
+        gst_buffer_set_data( pGstBuff, dataBuf, bytesRead );
+
+        // Notify callback
+        cbData->userDataCallback(cbData->userDataPrivate, (void *)pGstBuff);
+    }
+
+    // Clean up
+    close(cbData->userDataFifoDesc);
+    cbData->userDataCbRunning = FALSE;
+    cbData->userDataCallback = NULL;
+    g_free(cbData->fifoName);
+    g_print("Exiting thread.\n");
+
+    return NULL;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS client specific setup and tear down APIs
@@ -407,7 +497,7 @@ cgmi_Status cgmi_DbusInterfaceInit()
 
     gClientInited = TRUE;
 
-    return CGMI_ERROR_SUCCESS;
+    return gInitStatus;
 }
 
 /**
@@ -436,9 +526,33 @@ void cgmi_DbusInterfaceTerm()
 ////////////////////////////////////////////////////////////////////////////////
 cgmi_Status cgmi_Init (void)
 {
-    cgmi_DbusInterfaceInit();
+    cgmi_Status   retStat = CGMI_ERROR_SUCCESS; 
+    int argc =0;
+    char **argv = NULL;
+    GError   *error      = NULL;
 
-    return gInitStatus;
+    do{
+        /* Initialize gstreamer */
+        if( !gst_init_check( &argc, &argv, &error ) )
+        {
+            g_critical("Failed to initialize gstreamer :%s\n", error->message);
+            retStat = CGMI_ERROR_NOT_INITIALIZED;
+            break;
+        }
+
+        /* Verify threading system in up */
+        if( !g_thread_supported() )
+        {
+            g_critical("GLib Thread system not initialized\n");
+            retStat = CGMI_ERROR_NOT_SUPPORTED;
+            break;
+        }
+
+        retStat = cgmi_DbusInterfaceInit();
+
+    }while(0);
+
+    return retStat;
 }
 
 cgmi_Status cgmi_Term (void)
@@ -542,6 +656,9 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
 
         eventCbData->callback = eventCB;
         eventCbData->userParam = pUserData;
+        eventCbData->userDataCbRunning = FALSE;
+        eventCbData->userDataCallback = NULL;
+        eventCbData->userDataPrivate = NULL;
 
         if ( gPlayerEventCallbacks == NULL )
         {
@@ -1876,3 +1993,149 @@ cgmi_Status cgmi_StopSectionFilter(void *pSession, void *pFilterId )
 
     return retStat;
 }
+
+cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, void *pUserData)
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+    gchar *fifoName = NULL;
+    tcgmi_PlayerEventCallbackData *cbData;
+
+    // Preconditions
+    if( pSession == NULL || bufferCB == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_start_user_data_filter_sync( gProxy,
+                                       dbusVar,
+                                       &fifoName,
+                                       (gint *)&retStat,
+                                       NULL,
+                                       &error );
+
+        if( NULL == fifoName )
+        {
+            g_print("Failed to get a fifo name from DBUS.\n");
+            retStat = CGMI_ERROR_BAD_PARAM;
+            break;
+        }
+
+        cbData = g_hash_table_lookup(gPlayerEventCallbacks, (gpointer)pSession);
+        if (cbData == NULL)
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        cbData->userDataCallback = bufferCB;
+        cbData->userDataPrivate = pUserData;
+        cbData->fifoName = fifoName;
+
+        // spawn thread to read from fifo
+        if ( 0 != pthread_create(&cbData->userDataCbThread, NULL, cgmi_UserDataCbThread, cbData) )
+        {
+            g_print("Error launching thread for UserDataCbThread\n");
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_stopUserDataFilter(void *pSession, userDataBufferCB bufferCB)
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+    tcgmi_PlayerEventCallbackData *cbData;
+    
+    // Preconditions
+    if( pSession == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        cbData = g_hash_table_lookup(gPlayerEventCallbacks, (gpointer)pSession);
+        if (cbData == NULL)
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        // stop thread that reads from fifo
+        cbData->userDataCbRunning = FALSE;
+
+        org_cisco_cgmi_call_stop_user_data_filter_sync( gProxy,
+                                       dbusVar,
+                                       (gint *)&retStat,
+                                       NULL,
+                                       &error );
+
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+

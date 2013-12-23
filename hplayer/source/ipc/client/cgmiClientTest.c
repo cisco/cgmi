@@ -581,6 +581,31 @@ static cgmi_Status cgmi_SectionBufferCallback_PAT(
     return CGMI_ERROR_SUCCESS;
 }
 
+static cgmi_Status cgmiTestUserDataBufferCB(void *pUserData, void *pBuffer)
+{
+    GstBuffer *pGstBuff = (GstBuffer *)pBuffer;
+    guint8 *bufferData;
+    guint bufferSize;
+
+    if( NULL == pGstBuff )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    bufferData = GST_BUFFER_DATA( pGstBuff );
+    bufferSize = GST_BUFFER_SIZE( pGstBuff );
+
+    // Dump data recieved.
+    g_print("cgmiTestUserDataBufferCB called with buffer of size (%d)...\n",
+        bufferSize);
+    printHex( bufferData, bufferSize );
+    g_print("\n");
+
+    // Free buffer
+    gst_buffer_unref( pGstBuff );
+
+    return CGMI_ERROR_SUCCESS;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // A quick sanity test of the DBUS apis
@@ -755,6 +780,20 @@ static gpointer sanity(gpointer user_data)
         retStat = cgmi_StartSectionFilter( pSessionId, filterId2, 10, 1, 0, cgmi_QueryBufferCallback, cgmi_SectionBufferCallback_PMT );
         CHECK_ERROR(retStat);
     }
+#endif
+
+#if 1
+    g_usleep( 1 * 1000 * 1000);
+
+    g_print("Calling cgmi_startUserDataFilter...\n");
+    retStat = cgmi_startUserDataFilter( pSessionId, cgmiTestUserDataBufferCB, pSessionId );
+    CHECK_ERROR(retStat);
+
+    g_usleep( 500 * 1000);
+
+    g_print("Calling cgmi_stopUserDataFilter...\n");
+    retStat = cgmi_stopUserDataFilter( pSessionId, cgmiTestUserDataBufferCB );
+    CHECK_ERROR(retStat);
 #endif
 
     // Let it play for a few more seconds

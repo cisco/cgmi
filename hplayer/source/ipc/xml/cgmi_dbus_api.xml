@@ -157,7 +157,6 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
-        <!-- Section Filter callback -->
         <signal name="sectionBufferNotify">
             <arg name="filterId" type="v"/>
             <arg name="sectionStatus" type="i"/>
@@ -166,6 +165,18 @@
             </arg>
             <arg name="sectionSize" type="i" />
         </signal>
+
+        <!-- Closed Captioning APIs -->
+        <method name="startUserDataFilter">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="fifoName" direction="out" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="stopUserDataFilter">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
 
         <!-- Player callback -->
         <signal name="playerNotify">
