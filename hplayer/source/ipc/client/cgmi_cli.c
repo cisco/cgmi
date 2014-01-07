@@ -545,6 +545,7 @@ int main(int argc, char **argv)
                     retcom = 1;
                     break;
                 case 0x8:       /* Backspace */
+                case 0x7f:
                     a--;
                     if (a<0)
                         a=0;
