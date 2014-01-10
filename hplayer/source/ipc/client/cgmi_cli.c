@@ -20,10 +20,12 @@
 #define MAX_HISTORY 50
 
 static void *filterid = NULL;
+static bool filterRunning = false;
 static struct termios oldt, newt;
 
 /* Prototypes */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event );
+static cgmi_Status destroyfilter( void *pSessionId );
 
 /* Signal Handler */
 void sig_handler(int signum)
@@ -60,22 +62,8 @@ static cgmi_Status stop(void *pSessionId)
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
-    if ( filterid != NULL )
-    {
-        retCode = cgmi_StopSectionFilter( pSessionId, filterid );
-        if (retCode != CGMI_ERROR_SUCCESS )
-        {
-            printf("CGMI StopSectionFilterFailed\n");
-        }
-
-        retCode = cgmi_DestroySectionFilter( pSessionId, filterid );
-        if (retCode != CGMI_ERROR_SUCCESS )
-        {
-            printf("CGMI StopSectionFilterFailed\n");
-        }
-
-        filterid = NULL;
-    }
+    /* Destroy the section filter */
+    retCode = destroyfilter(pSessionId);
 
     /* Stop = Unload */
     retCode = cgmi_Unload( pSessionId );
@@ -230,16 +218,7 @@ static cgmi_Status cgmi_SectionBufferCallback(
     }
 
     // TODO:  Create a new filter to get a PMT found in the PAT above.
-
-    g_print("Calling cgmi_DestroySectionFilter...\n");
-    retStat = cgmi_DestroySectionFilter( pFilterPriv, pFilterId );
-    if (retStat != CGMI_ERROR_SUCCESS )
-    {
-        printf("CGMI StopSectionFilterFailed\n");
-    }
-
-    filterid = NULL;
-
+    filterRunning = false;
     // Free buffer allocated in cgmi_QueryBufferCallback
     g_free( pSection );
 
@@ -281,9 +260,38 @@ static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value,
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI StartSectionFilter Failed\n");
+    }else
+    {
+        filterRunning = true;
     }
 
     return retCode;
+}
+
+static cgmi_Status destroyfilter( void *pSessionId )
+{
+    cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+
+    if ( filterid != NULL )
+    {
+        if ( filterRunning == true )
+        {
+            retCode = cgmi_StopSectionFilter( pSessionId, filterid );
+            if (retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("CGMI StopSectionFilterFailed\n");
+            }
+            filterRunning == false;
+        }
+
+        retCode = cgmi_DestroySectionFilter( pSessionId, filterid );
+        if (retCode != CGMI_ERROR_SUCCESS )
+        {
+            printf("CGMI StopSectionFilterFailed\n");
+        }
+
+        filterid = NULL;
+    }    
 }
 
 /* Callback Function */
@@ -638,19 +646,8 @@ int main(int argc, char **argv)
         {
             if ( filterid != NULL )
             {
-                retCode = cgmi_StopSectionFilter( pSessionId, filterid );
-                if (retCode != CGMI_ERROR_SUCCESS )
-                {
-                    printf("CGMI StopSectionFilterFailed\n");
-                }
-        
-                retCode = cgmi_DestroySectionFilter( pSessionId, filterid );
-                if (retCode != CGMI_ERROR_SUCCESS )
-                {
-                    printf("CGMI StopSectionFilterFailed\n");
-                }
-
-                filterid = NULL;
+                /* Stop/Destroy the section filter */
+                retCode = destroyfilter(pSessionId);
                 printf("Filter stopped.\n");
             } else {
                 printf("Filter has not been started.\n");

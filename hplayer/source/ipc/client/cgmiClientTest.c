@@ -638,6 +638,7 @@ static gpointer sanity(gpointer user_data)
 
 
     /****** Call all other API's after starting playback *******/
+#if 1
     int bCanPlay = 0  ;
     g_print("Calling cgmi_canPlayType...\n");
     retStat = cgmi_canPlayType( "fakeType", &bCanPlay );
@@ -659,6 +660,8 @@ static gpointer sanity(gpointer user_data)
     CHECK_ERROR(retStat);
 
     */
+
+
 
     float curPosition;
     g_print("Calling cgmi_GetPosition...\n");
@@ -710,8 +713,10 @@ static gpointer sanity(gpointer user_data)
     retStat = cgmi_SetVideoRectangle( pSessionId, 0, 0, 400, 400 );
     CHECK_ERROR(retStat);
 
+#endif
+
     // Let it play for a few more seconds
-    g_usleep(1 * 1000 * 1000);
+    g_usleep(2 * 1000 * 1000);
 
     /* Create section filter */
     void *filterId = NULL;
@@ -782,7 +787,7 @@ static gpointer sanity(gpointer user_data)
     }
 #endif
 
-#if 1
+#if 0
     g_usleep( 1 * 1000 * 1000);
 
     g_print("Calling cgmi_startUserDataFilter...\n");
@@ -797,7 +802,7 @@ static gpointer sanity(gpointer user_data)
 #endif
 
     // Let it play for a few more seconds
-    g_usleep(10 * 1000 * 1000);
+    g_usleep(4 * 1000 * 1000);
 
     g_print("Calling cgmi_DestroySectionFilter...\n");
     retStat = cgmi_DestroySectionFilter( pSessionId, filterId );

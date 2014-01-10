@@ -13,7 +13,6 @@
 #include "cgmi-section-filter-priv.h"
 
 #define FILTER_MIN_LENGTH 16
-
 #define PRINT_HEX_WIDTH 16
 
 
@@ -124,12 +123,6 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
       return GST_FLOW_OK;
    }
 
-   // Check this filter for the correct state
-   if( secFilter->lastAction != FILTER_START )
-   {
-      return GST_FLOW_OK;
-   }
-
    // Pull the buffer
    buffer = gst_app_sink_pull_buffer( GST_APP_SINK(sink) );
 
@@ -140,6 +133,10 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
    }
 
    do{
+
+      // Check this filter for the correct state
+      if( secFilter->lastAction != FILTER_START ) { break; }
+
       sinkData = GST_BUFFER_DATA( buffer );
       sinkDataSize = GST_BUFFER_SIZE( buffer );
 
@@ -299,7 +296,7 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** p
 
       // Setup callback
       secFilter->padAddedCbId = g_signal_connect( pSess->demux, "pad-added", 
-         G_CALLBACK(cgmi_filter_gst_pad_added), secFilter );      
+         G_CALLBACK(cgmi_filter_gst_pad_added), secFilter );
 
 
       // Get a section filter handle
@@ -360,6 +357,9 @@ cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId )
    }
 
    secFilter->lastAction = FILTER_CLOSE;
+
+   //Hack until the GST tsdemux plugin CLOSE action is fixed.  Remove me.
+   if( 1 ) { return retStat; }
 
    // Unlink and remove app sink from pipeline
    gst_element_set_state( secFilter->appsink, GST_STATE_NULL );
@@ -534,6 +534,12 @@ cgmi_Status cgmi_StopSectionFilter(void *pSession, void* pFilterId )
    {
       g_print("Failed with NULL section-filter handle.  Is section filter open?\n");
       return CGMI_ERROR_FAILED;
+   }
+
+   // If the filter is already stopped, ignore the command.
+   if( FILTER_STOP == secFilter->lastAction )
+   {
+      return CGMI_ERROR_SUCCESS;
    }
 
    secFilter->lastAction = FILTER_STOP;
