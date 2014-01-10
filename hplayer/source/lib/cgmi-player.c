@@ -284,12 +284,14 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
             GString *string;
             value = g_value_array_get_nth( descriptors, z );
             string = (GString *)g_value_get_boxed( value );
-            gint len;
-            if ( string->len > 2 ) 
+            gint len, pos;
+            gint totalLen = string->len;
+            pos = 0;
+            while ( totalLen > 2 ) 
             {
-               len = (guint8)string->str[1];
-               g_print("descriptor # %d tag %02x len %d\n", z, (guint8)string->str[0], len);
-               switch ( string->str[0] )
+               len = (guint8)string->str[pos + 1];
+               g_print("descriptor # %d tag %02x len %d\n", z, (guint8)string->str[pos], len);
+               switch ( string->str[pos] )
                {
                   case 0x0A: /* ISO_639_language_descriptor */
                      g_print("Found audio language descriptor for stream %d\n", j);
@@ -298,7 +300,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                         pSess->audioLanguages[pSess->numAudioLanguages].pid = esPid;
                         pSess->audioLanguages[pSess->numAudioLanguages].streamType = esType;
                         pSess->audioLanguages[pSess->numAudioLanguages].index = j;
-                        strncpy( pSess->audioLanguages[pSess->numAudioLanguages].isoCode, &string->str[2], 3 );
+                        strncpy( pSess->audioLanguages[pSess->numAudioLanguages].isoCode, &string->str[pos+2], 3 );
                         pSess->audioLanguages[pSess->numAudioLanguages].isoCode[3] = 0;
                         
                         if ( strlen(pSess->defaultAudioLanguage) > 0 && pSess->audioStreamIndex == -1 )
@@ -318,6 +320,9 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                      }
                      break;
                }
+
+               pos += len + 2;
+               totalLen = totalLen - len - 2;
             }
          }
       }
