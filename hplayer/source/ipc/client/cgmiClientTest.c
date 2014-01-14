@@ -21,6 +21,13 @@
     CHECK_ERROR(err); \
     if( err != CGMI_ERROR_SUCCESS ) return;
 
+#define CHECK_ERROR_RETURN_STAT(err) \
+    CHECK_ERROR(err); \
+    if( err != CGMI_ERROR_SUCCESS ) return err;
+
+#define CHECK_ERROR_RETURN_NULL(err) \
+    CHECK_ERROR(err); \
+    if( err != CGMI_ERROR_SUCCESS ) return NULL;
 
 ////////////////////////////////////////////////////////////////////////////////
 // MPEG Transport Stream Parsing 
@@ -118,8 +125,13 @@ typedef struct{
 
     int CRC;
 
+    bool parsed;
+
 }tMpegTsPat;
 
+/* Statics */
+static tMpegTsPat gPat;
+static bool gPmtParsed = false;
 
 #define PRINT_HEX_WIDTH 16
 
@@ -489,6 +501,8 @@ static cgmi_Status cgmi_SectionBufferCallback_PMT(
     parsePMT( &curPmt, pSection, sectionSize );
     printPMT( &curPmt );
 
+    gPmtParsed = true;
+
     g_print("Calling cgmi_StopSectionFilter...\n");
     retStat = cgmi_StopSectionFilter( pFilterPriv, pFilterId );
     CHECK_ERROR(retStat);
@@ -535,6 +549,7 @@ static cgmi_Status cgmi_SectionBufferCallback_PAT(
 
     parsePAT( pSection, sectionSize, &gPat );
     printPAT( &gPat );
+    gPat.parsed = true;
 
     g_print("Calling cgmi_StopSectionFilter...\n");
     retStat = cgmi_StopSectionFilter( pFilterPriv, pFilterId );
@@ -608,34 +623,317 @@ static cgmi_Status cgmiTestUserDataBufferCB(void *pUserData, void *pBuffer)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// A quick sanity test of the DBUS apis
+// Convenience functions
 ////////////////////////////////////////////////////////////////////////////////
-
-static gpointer sanity(gpointer user_data)
+static cgmi_Status startPlayback(const char *url, void **ppSessionId)
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     void *pSessionId;
 
-    char *url = (char *)user_data;
-
     /****** Start playback *******/
     g_print("Calling cgmi_Init...\n");
     retStat = cgmi_Init();
-    CHECK_ERROR(retStat);
+    CHECK_ERROR_RETURN_STAT(retStat);
 
     g_print("Calling cgmi_CreateSession...\n");
     retStat = cgmi_CreateSession( cgmiCallback, NULL, &pSessionId );
-    CHECK_ERROR(retStat);
+    CHECK_ERROR_RETURN_STAT(retStat);
     g_print("create session returned sessionId = (%lx)\n", (tCgmiDbusPointer)pSessionId);
+    *ppSessionId = pSessionId;
 
     g_print("Calling cgmi_Load...\n");
     retStat = cgmi_Load( pSessionId, url );
-    CHECK_ERROR(retStat);
+    CHECK_ERROR_RETURN_STAT(retStat);
 
     g_print("Calling cgmi_Play...\n");
     retStat = cgmi_Play( pSessionId );
-    CHECK_ERROR(retStat);
+    CHECK_ERROR_RETURN_STAT(retStat);
 
+    return retStat;
+}
+
+static cgmi_Status stopPlayback(void *pSessionId)
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+
+    /****** Start playback *******/
+    g_print("Calling cgmi_Unload...\n");
+    retStat = cgmi_Unload( pSessionId );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    g_print("Calling cgmi_DestroySession...\n");
+    retStat = cgmi_DestroySession( pSessionId );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    g_print("Calling cgmi_Term...\n");
+    retStat = cgmi_Term();
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    return retStat;
+}
+
+static cgmi_Status buildSectionFilterPid(void *pSessionId, int pid, sectionBufferCB sectionCB, void **ppFilterId)
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    tcgmi_FilterData filterData;
+    void *filterId = NULL;
+
+    /* Create section filter */
+    g_print("Calling cgmi_CreateSectionFilter...\n");
+    retStat = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterId );
+    *ppFilterId = filterId;
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    /*  Init filter data */
+    filterData.pid = pid;
+    filterData.value = NULL;
+    filterData.mask = NULL;
+    filterData.length = 0;
+    filterData.comparitor = FILTER_COMP_EQUAL;
+
+    g_print("Calling cgmi_SetSectionFilter... for filterId 0x%08lx\n", filterId);
+    retStat = cgmi_SetSectionFilter( pSessionId, filterId, &filterData );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    g_print("Calling cgmi_StartSectionFilter...\n");
+    retStat = cgmi_StartSectionFilter( pSessionId, filterId, 10, 1, 0, cgmi_QueryBufferCallback, sectionCB );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    return retStat;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Fairly extensive section filter test
+////////////////////////////////////////////////////////////////////////////////
+static cgmi_Status verifySectionFilter( void *pSessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    void *filterId_1 = NULL;
+    void *filterId_2 = NULL;
+    void *filterId_3 = NULL;
+    void *filterId_4 = NULL;
+    int idx = 0;
+
+    int testFilterPid;
+    sectionBufferCB testFilterCallback;
+
+
+    /**
+     *  Verify we can create and destroy the same filter a few times
+     */
+
+    for( idx = 0; idx < 5; idx++ )
+    {
+        g_print(">>>>  Testing filter creation and destruction #(%d) <<<<\n\n", idx);
+        // Init PAT to not parsed
+        gPat.parsed = false;
+
+        // Create and start one filter
+        retStat = buildSectionFilterPid( pSessionId, 0x0, 
+            cgmi_SectionBufferCallback_PAT, &filterId_1 );
+        CHECK_ERROR_RETURN_STAT(retStat);
+
+        // Wait half a second for a callback to fire
+        g_usleep( 500 * 1000);
+
+        // Did it the CB fire?
+        if( gPat.parsed == true )
+        {
+            g_print("Section filter callback fired.");
+        }
+        else
+        {
+            g_print("ERROR:  PAT Section filter failed to fire.");
+            return CGMI_ERROR_FAILED;
+        }
+
+        // The PAT callback calls Stop.  Just destroy the filter.
+        g_print("Calling cgmi_DestroySectionFilter (%d)...\n", idx);
+        retStat = cgmi_DestroySectionFilter( pSessionId, filterId_1 );
+        CHECK_ERROR_RETURN_STAT(retStat);
+    }
+
+    /**
+     *  Verify we can create the maximum number of filters.  (3 is max currently)
+     */
+
+    //
+    // Create a PAT filter
+    //
+    retStat = buildSectionFilterPid( pSessionId, 0x0, 
+        cgmi_SectionBufferCallback_PAT, &filterId_1 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    // Wait half a second for a callback to fire
+    g_usleep( 500 * 1000);
+
+    // Did it the CB fire?
+    if( gPat.parsed == true )
+    {
+        g_print("Section filter callback fired for PAT.");
+    }
+    else
+    {
+        g_print("ERROR:  PAT Section filter failed to fire.");
+        return CGMI_ERROR_FAILED;
+    }
+
+    // If we have a PMT set the callback and pid to use
+    if( gPat.numPMTs > 0 )
+    {
+        // Use PMT as the section filter callback
+        testFilterCallback = cgmi_SectionBufferCallback_PMT;
+        testFilterPid = gPat.pmts[0].program_map_PID;
+    }
+    else
+    {
+        g_print("ERROR:  Failed to find PMT in PAT.");
+        return CGMI_ERROR_FAILED;
+    }
+
+    //
+    // Create 1st PMT filter
+    //
+    gPmtParsed = false;
+    retStat = buildSectionFilterPid( pSessionId, testFilterPid, 
+        testFilterCallback, &filterId_2 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    // Wait half a second for a callback to fire
+    g_usleep( 500 * 1000);
+
+    // Did it the CB fire?
+    if( gPmtParsed == true )
+    {
+        g_print("Section filter callback fired for PMT 1.");
+    }
+    else
+    {
+        g_print("ERROR:  PAT Section filter failed to fire.");
+        return CGMI_ERROR_FAILED;
+    }
+
+
+    //
+    // Create 2nd PMT filter
+    //
+    gPmtParsed = false;
+    retStat = buildSectionFilterPid( pSessionId, testFilterPid, 
+        testFilterCallback, &filterId_3 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    // Wait half a second for a callback to fire
+    g_usleep( 500 * 1000);
+
+    // Did it the CB fire?
+    if( gPmtParsed == true )
+    {
+        g_print("Section filter callback fired for PMT 2.\n");
+    }
+    else
+    {
+        g_print("ERROR:  PAT Section filter failed to fire.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    //
+    // Attempt to create 4th filter without closing others, should fail
+    // NOTE: This test should be updated to create filters until a graceful
+    // failure is detected instead of assuming a max of 3.
+    //
+    g_print("Creating 4th section filter that should fail...\n");
+    retStat = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterId_4 );
+
+    if( retStat != CGMI_ERROR_SUCCESS )
+    {
+        g_print("As expected the 4th filter failed to create verifying TSDEMUX error reporting.\n");
+    }
+    else
+    {
+        g_print("ERROR:  The 4th filter creation was reported successful, and we only support 3 filters.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    // Destroy the 3 successful filters
+    g_print("Calling cgmi_DestroySectionFilter 1...\n");
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId_1 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    g_print("Calling cgmi_DestroySectionFilter 2...\n");
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId_2 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    g_print("Calling cgmi_DestroySectionFilter 3...\n");
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId_3 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    /**
+     *  Verify yet another filter can still be created and destroyed.
+     */
+    gPmtParsed = false;
+    retStat = buildSectionFilterPid( pSessionId, testFilterPid, 
+        testFilterCallback, &filterId_4 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    // Wait half a second for a callback to fire
+    g_usleep( 500 * 1000);
+
+    // Did it the CB fire?
+    if( gPmtParsed == true )
+    {
+        g_print("Section filter callback fired for PMT last.");
+    }
+    else
+    {
+        g_print("ERROR:  PMT Section filter failed to fire.");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_print("Calling cgmi_DestroySectionFilter of last filter...\n");
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId_4 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    g_print("\n");
+    g_print("*************************************************************\n\n");
+    g_print(">>>>>>   Section filtering verification SUCCESSFUL!   <<<<<<<\n\n");
+    g_print("*************************************************************\n\n");
+
+    return CGMI_ERROR_SUCCESS;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Verify section filters work as expected
+////////////////////////////////////////////////////////////////////////////////
+static int secfil( const char *url )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    void *pSessionId;
+
+    retStat = startPlayback(url, &pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    // Wait for playback to start and demux to be created
+    g_usleep(2 * 1000 * 1000);
+
+    retStat = verifySectionFilter(pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    retStat = stopPlayback(pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    return retStat;
+}
+////////////////////////////////////////////////////////////////////////////////
+// A quick sanity test of the CGMI APIs
+////////////////////////////////////////////////////////////////////////////////
+
+static int sanity( const char *url )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    void *pSessionId;
+
+    retStat = startPlayback(url, &pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
 
     /****** Call all other API's after starting playback *******/
 #if 1
@@ -660,8 +958,6 @@ static gpointer sanity(gpointer user_data)
     CHECK_ERROR(retStat);
 
     */
-
-
 
     float curPosition;
     g_print("Calling cgmi_GetPosition...\n");
@@ -787,7 +1083,7 @@ static gpointer sanity(gpointer user_data)
     }
 #endif
 
-#if 0
+#if 1
     g_usleep( 1 * 1000 * 1000);
 
     g_print("Calling cgmi_startUserDataFilter...\n");
@@ -814,19 +1110,10 @@ static gpointer sanity(gpointer user_data)
 
 
     /****** Shut down session and clean up *******/
-    g_print("Calling cgmi_Unload...\n");
-    retStat = cgmi_Unload( pSessionId );
-    CHECK_ERROR(retStat);
+    retStat = stopPlayback(pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
 
-    g_print("Calling cgmi_DestroySession...\n");
-    retStat = cgmi_DestroySession( pSessionId );
-    CHECK_ERROR(retStat);
-
-    g_print("Calling cgmi_Term...\n");
-    retStat = cgmi_Term();
-    CHECK_ERROR(retStat);
-
-    return NULL;
+    return retStat;
 }
 
 
@@ -834,39 +1121,31 @@ static gpointer sanity(gpointer user_data)
 // Make all the calls to start playing video
 ////////////////////////////////////////////////////////////////////////////////
 
-static gpointer play( char *uri )
+static int play( const char *url )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     void *pSessionId;
 
-    g_print("Calling cgmi_Init...\n");
-    retStat = cgmi_Init();
-    CHECK_ERROR(retStat);
+    // Start playback
+    retStat = startPlayback(url, &pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
 
-    g_print("Calling cgmi_CreateSession...\n");
-    retStat = cgmi_CreateSession( cgmiCallback, NULL, &pSessionId );
-    CHECK_ERROR(retStat);
+    // Let it play for a few seconds.
+    g_usleep(10 * 1000 * 1000);
 
-    g_print("Calling cgmi_Load...\n");
-    retStat = cgmi_Load( pSessionId, uri );
-    CHECK_ERROR(retStat);
+    retStat = stopPlayback(pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
 
-    g_print("Calling cgmi_Play...\n");
-    retStat = cgmi_Play( pSessionId );
-    CHECK_ERROR(retStat);
-
-    // Sleep for a moment to catch any signals
-    g_usleep(500 * 1000);
-
-    return NULL;
+    return retStat;
 }
 
 int main(int argc, char **argv)
 {
+    int retStat = 0;
 
     if (argc < 2)
     {
-        g_print("usage: %s play <url> | sanity <url>\n", argv[0]);
+        g_print("usage: %s play <url> | sanity <url> | secfil <url>\n", argv[0]);
         return -1;
     }
 
@@ -877,7 +1156,7 @@ int main(int argc, char **argv)
             g_print("usage: %s sanity <url>\n", argv[0]);
             return -1;
         }
-        sanity(argv[2]);
+        retStat = sanity(argv[2]);
 
     }
     else if (strcmp(argv[1], "play") == 0)
@@ -887,8 +1166,17 @@ int main(int argc, char **argv)
             g_print("usage: %s play <url>\n", argv[0]);
             return -1;
         }
-        play(argv[2]);
+        retStat = play(argv[2]);
+    }    
+    else if (strcmp(argv[1], "secfil") == 0)
+    {
+        if (argc < 3)
+        {
+            g_print("usage: %s secfil <url>\n", argv[0]);
+            return -1;
+        }
+        retStat = secfil(argv[2]);
     }
 
-    return 0;
+    return retStat;
 }

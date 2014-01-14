@@ -255,6 +255,7 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** p
    tSession *pSess = (tSession*)pSession;
    tSectionFilter *secFilter = NULL;
    void *filterHandle = NULL;
+   int filterId = -1;
 
    // Check preconditions
    if( NULL == pSession )
@@ -320,11 +321,20 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** p
 
       g_object_set( G_OBJECT(pSess->demux), "section-filter", filterHandle, NULL );
 
+      g_object_get( G_OBJECT(filterHandle), "filter-id", &filterId, NULL );
+
+      if( -1 == filterId )
+      {
+         g_print("Failed to open section filter handle.\n");
+         retStat = CGMI_ERROR_FAILED;
+      }
+
    }while(0);
 
    // Clean up if there was an error
    if( retStat != CGMI_ERROR_SUCCESS )
    {
+      g_signal_handler_disconnect( pSess->demux, secFilter->padAddedCbId );
       g_free(secFilter);
       *pFilterId = NULL;
    }
@@ -357,9 +367,6 @@ cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId )
    }
 
    secFilter->lastAction = FILTER_CLOSE;
-
-   //Hack until the GST tsdemux plugin CLOSE action is fixed.  Remove me.
-   if( 1 ) { return retStat; }
 
    // Unlink and remove app sink from pipeline
    gst_element_set_state( secFilter->appsink, GST_STATE_NULL );
