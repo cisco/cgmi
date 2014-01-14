@@ -805,40 +805,77 @@ on_handle_cgmi_get_duration (
 }
 
 static gboolean
-on_handle_cgmi_get_rate_range (
+on_handle_cgmi_get_rates (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    GVariant *arg_sessionId )
+    GVariant *arg_sessionId,
+    unsigned int numRates )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
-    float rewindRate = 0;
-    float fForwardRate = 0;
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSession;
+    float *pRates = NULL;
+    gdouble rate = 0.0; 
+    GVariantBuilder *ratesBuilder = NULL;
+    GVariant *rateArr = NULL;
+    int ii = 0;
 
     CGMID_ENTER();
 
-    do{
-        g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
-        {
-            retStat = CGMI_ERROR_FAILED;
-            break;
-        }
+    do {
+       g_variant_get( arg_sessionId, "v", &sessVar );
+       if( sessVar == NULL ) 
+       {
+          retStat = CGMI_ERROR_FAILED;
+          break;
+       }
 
-        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
-        g_variant_unref( sessVar );
+       g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+       g_variant_unref( sessVar );
 
-        retStat = cgmi_GetRateRange( (void *)pSession, &rewindRate, &fForwardRate );
+       pRates = (float *)malloc(sizeof(float) * numRates);
+       if(NULL == pRates)
+       {
+          CGMID_ERROR("Failed to alloc memory for rates array\n" );
+          retStat = CGMI_ERROR_FAILED;
+          break;
+       }
 
+       retStat = cgmi_GetRates( (void *)pSession, pRates, &numRates );
+       CGMID_INFO("numRates = %u\n", numRates);
+
+       ratesBuilder = g_variant_builder_new( G_VARIANT_TYPE("ad") );
+       if(NULL == ratesBuilder)
+       {
+          CGMID_ERROR("Failed to create ratesBuilder\n");
+          retStat = CGMI_ERROR_FAILED;
+          break;
+       }
+       
+       for( ii = 0; ii < numRates; ii++ )
+       {
+          CGMID_INFO("pRates[%d] = %f\n", ii, pRates[ii]);
+          rate = pRates[ii];
+          g_variant_builder_add( ratesBuilder, "d", rate );
+       }
+       rateArr = g_variant_builder_end( ratesBuilder );
+
+       org_cisco_cgmi_complete_get_rates (object,
+                                          invocation,
+                                          rateArr, 
+                                          retStat);
+    
     }while(0);
-
-    org_cisco_cgmi_complete_get_rate_range (object,
-                                            invocation,
-                                            rewindRate,
-                                            fForwardRate,
-                                            retStat);
-
+    
+    if(NULL != ratesBuilder)
+    {
+       g_variant_builder_unref(ratesBuilder);
+    }
+    if(NULL != pRates)
+    {
+       free(pRates);
+       pRates = NULL;
+    }
     return TRUE;
 }
 
@@ -1578,8 +1615,8 @@ on_bus_acquired (GDBusConnection *connection,
                       NULL);
 
     g_signal_connect (interface,
-                      "handle-get-rate-range",
-                      G_CALLBACK (on_handle_cgmi_get_rate_range),
+                      "handle-get-rates",
+                      G_CALLBACK (on_handle_cgmi_get_rates),
                       NULL);
 
     g_signal_connect (interface,

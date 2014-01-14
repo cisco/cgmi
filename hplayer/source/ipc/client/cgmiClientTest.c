@@ -974,14 +974,22 @@ static int sanity( const char *url )
     CHECK_ERROR(retStat);
     g_print("cgmi_GetDuration : duration = (%f), type = (%d)\n", duration, type);
 
-
-    float rewindSpeed, fastForwardSpeed;
-    g_print("Calling cgmi_GetRateRange...\n");
-    retStat = cgmi_GetRateRange( pSessionId, &rewindSpeed, &fastForwardSpeed );
+    int ii = 0;
+    float rates[32];
+    unsigned int numRates = 32;
+    g_print("Calling cgmi_GetRates...\n");
+    retStat = cgmi_GetRates( pSessionId, rates, &numRates );
     CHECK_ERROR(retStat);
-    g_print("cgmi_GetRateRange : rewindSpeed = (%f), fastForwardSpeed = (%f)\n",
-            rewindSpeed, fastForwardSpeed);
-
+    g_print("cgmi_GetRates : numRates = (%u)\n", numRates);
+    if(numRates > 0)
+    {
+       g_print("Following rates are supported\n");
+       for(ii = 0; ii <= (int)numRates - 2; ii++) 
+       {
+          g_print("%f, ", rates[ii]);
+       }
+       g_print("%f\n", rates[ii]);
+    }
 
     int count;
     g_print("Calling cgmi_GetNumAudioLanguages...\n");

@@ -25,7 +25,7 @@
 *
 *    Thread Safe: Yes
 *
-*    \authors : Matt Snoby, Kris Kersey, Zack Wine, Chris Foster, Tankut Akgul
+*    \authors : Matt Snoby, Kris Kersey, Zack Wine, Chris Foster, Tankut Akgul, Saravanakumar Periyaswamy
 *    Platform Dependencies: Gstreamer 0.10.
 *  \ingroup CGMI
 */
@@ -357,13 +357,13 @@ cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition);
 cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionType *type);
 
 /**
- *  \brief \b cgmi_GetRateRange
+ *  \brief \b cgmi_GetRates
  *
- *  This is a request to find out what speed trick mode that this playing asset supports. 
+ *  This is a request to find out what trick mode rates that this playing asset supports. 
  *  \param[in] pSession  This is a handle to the active session.
  *
- *  \param[out] pRewind  This is the speed at which we can rewind the asset. 
- *  \param[out] pFFoward This is the speed at which we can ffwrd the asset. 
+ *  \param[out] pRates An array of rewind and fast forward speeds supported.
+ *  \param[in,out] pNumRates  Len of the trickSpeeds array passed in. Total number of speeds in the trickSpeeds array returned.
  *
  *  \pre    The Session must be open the the url must be loaded
  *
@@ -372,7 +372,7 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_GetRateRange (void *pSession,  float *pRewind, float *pFFoward );
+cgmi_Status cgmi_GetRates(void *pSession,  float pRates[],  unsigned int *pNumRates);
 
 /**
  *  \brief \b cgmi_SetVideoRectangle

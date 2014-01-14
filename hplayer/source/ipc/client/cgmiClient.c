@@ -1145,19 +1145,28 @@ cgmi_Status cgmi_GetDuration( void *pSession,  float *pDuration,
     return retStat;
 }
 
-cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward )
+cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumRates)
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
-    gdouble localRewind = 0;
-    gdouble localFForward = 0;
     GVariant *sessVar = NULL, *dbusVar = NULL;
+    GVariant *pOutRates = NULL;
+    gdouble rate = 0.0;
+    GVariantIter *iter = NULL;
+    unsigned int inNumRates = 0;
 
     // Preconditions
-    if( pSession == NULL || pRewind == NULL || pFForward == NULL )
+    if( pSession == NULL || pRates == NULL || pNumRates == NULL )
     {
         return CGMI_ERROR_BAD_PARAM;
     }
+    if(*pNumRates == 0)
+    {
+       g_print("CGMI_CLIENT: *pNumRates is 0 which is invalid\n");
+       return CGMI_ERROR_BAD_PARAM;
+    }
+    inNumRates = *pNumRates;
+    g_print("CGMI_CLIENT: inNumRates = %u\n", inNumRates); 
 
     enforce_session_preconditions(pSession);
 
@@ -1167,7 +1176,7 @@ cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward 
         sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
         if( sessVar == NULL )
         {
-            g_print("Failed to create new variant\n");
+            g_print("CGMI_CLIENT: Failed to create new variant\n");
             retStat = CGMI_ERROR_OUT_OF_MEMORY;
             break;
         }
@@ -1176,16 +1185,16 @@ cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward 
         dbusVar = g_variant_new ( "v", sessVar );
         if( dbusVar == NULL )
         {
-            g_print("Failed to create new variant\n");
+            g_print("CGMI_CLIENT: Failed to create new variant\n");
             retStat = CGMI_ERROR_OUT_OF_MEMORY;
             break;
         }
         dbusVar = g_variant_ref_sink(dbusVar);
 
-        org_cisco_cgmi_call_get_rate_range_sync( gProxy,
+        org_cisco_cgmi_call_get_rates_sync( gProxy,
                 dbusVar,
-                &localRewind,
-                &localFForward,
+                inNumRates,
+                &pOutRates,
                 (gint *)&retStat,
                 NULL,
                 &error );
@@ -1198,8 +1207,22 @@ cgmi_Status cgmi_GetRateRange( void *pSession, float *pRewind, float *pFForward 
 
     dbus_check_error(error);
 
-    *pRewind = (float)localRewind;
-    *pFForward = (float)localFForward;
+    g_variant_get(pOutRates, "ad", &iter); 
+    if( NULL != iter )
+    {
+       *pNumRates = 0;
+       while((*pNumRates < inNumRates) && (g_variant_iter_loop(iter, "d", &rate)))
+       {
+          pRates[(*pNumRates)++] = rate;
+          g_print("CGMI_CLIENT: pRates[%u] = %f\n", *pNumRates - 1, pRates[*pNumRates - 1]); 
+       }
+       g_variant_iter_free(iter);
+       g_print("CGMI_CLIENT: Number of rates = %u\n", *pNumRates); 
+    }
+    else
+    {
+       g_print("CGMI_CLIENT: Getting iter by calling g_variant_get(pOutRates) failed\n"); 
+    }
 
     return retStat;
 }

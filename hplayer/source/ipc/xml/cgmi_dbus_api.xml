@@ -71,10 +71,10 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
-        <method name="getRateRange">
+        <method name="getRates">
             <arg name="sessionId" direction="in" type="v"/>
-            <arg name="rewind" direction="out" type="d"/>
-            <arg name="fForward" direction="out" type="d"/>
+            <arg name="numRates" direction="in" type="u"/>
+            <arg name="rates" direction="out" type="ad"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 

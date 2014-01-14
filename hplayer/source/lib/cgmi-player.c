@@ -4,6 +4,7 @@
 
 
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -953,19 +954,121 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
    return stat;
 
 }
-cgmi_Status cgmi_GetRateRange (void *pSession,  float *pRewind, float *pFFoward )
+
+cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumRates)
 {
 
    tSession *pSess = (tSession*)pSession;
-   cgmi_Status stat =CGMI_ERROR_NOT_IMPLEMENTED ;
+   cgmi_Status stat = CGMI_ERROR_FAILED ;
+      
+   GstStructure *structure = NULL;
+   GstQuery     *query = NULL;
+   char         *pTrickSpeedsStr = NULL; 
+   gboolean     ret = FALSE;
+   unsigned int inNumRates = 0;
+   char         *token = NULL;
+   char         seps[] = ",";
+   int          ii = 0;
 
+   g_print("%s: ENTER %s >>>>\n", __FILE__, __FUNCTION__);
    do
    {
+      if(NULL == pSess)
+      {
+         g_print("%s: %s(%d): param pSess is NULL\n", __FILE__, __FUNCTION__, __LINE__);
+         stat = CGMI_ERROR_BAD_PARAM;
+         break;
+      }
+      if(NULL == pRates)
+      {
+         g_print("%s: %s(%d): param pRates is NULL\n", __FILE__, __FUNCTION__, __LINE__);
+         stat = CGMI_ERROR_BAD_PARAM;
+         break;
+      }
+      if(NULL == pNumRates)
+      {
+         g_print("%s: %s(%d): param pNumSpeeds is NULL\n", __FILE__, __FUNCTION__, __LINE__);
+         stat = CGMI_ERROR_BAD_PARAM;
+         break;
+      }
+      if(*pNumRates == 0)
+      {
+         g_print("%s: %s(%d): *pNumRates is 0 which is invalid\n", __FILE__, __FUNCTION__, __LINE__);
+         stat = CGMI_ERROR_BAD_PARAM;
+         break;
+      }
+      
+      inNumRates = *pNumRates;
+      g_print("%s: %s(%d): inNumRates = %u\n", __FILE__, __FUNCTION__, __LINE__, inNumRates);
+      
+      pRates[0] = 1;
+      *pNumRates = 1;
+      stat = CGMI_ERROR_SUCCESS;
 
+      structure = gst_structure_new ("getTrickSpeeds",
+                                     "trickSpeedsStr", G_TYPE_STRING, NULL, 
+                                     NULL);
+
+      query = gst_query_new_application (GST_QUERY_CUSTOM, structure);
+
+      ret = gst_element_query (pSess->pipeline, query);
+      if(ret)
+      {
+         structure = gst_query_get_structure (query);
+
+         pTrickSpeedsStr = g_value_dup_string (gst_structure_get_value (structure,
+                                               "trickSpeedsStr"));
+         if(NULL == pTrickSpeedsStr)
+         {
+            g_print("%s: %s(%d): g_value_dup_string() failed\n", __FILE__, __FUNCTION__, __LINE__);
+            break;
+         }
+
+         g_print("%s: %s(%d): pTrickSpeedsStr: %s\n", __FILE__, __FUNCTION__, __LINE__, pTrickSpeedsStr);
+
+         for(ii = 0; ii < strlen(pTrickSpeedsStr); ii++)
+         {
+            if((!isdigit(pTrickSpeedsStr[ii])) && (pTrickSpeedsStr[ii] != '.') && 
+               (pTrickSpeedsStr[ii] != ',') && (pTrickSpeedsStr[ii] != '-'))
+            {
+               g_print("%s: %s(%d): pTrickSpeedsStr: %s is invalid. It has a char(%c) that is not a digit, '.' and ','\n",
+                       __FILE__, __FUNCTION__, __LINE__, pTrickSpeedsStr, pTrickSpeedsStr[ii]);
+               break;
+            }
+         }
+
+         if(ii >= strlen(pTrickSpeedsStr))
+         {
+            *pNumRates = 0;
+            token = strtok(pTrickSpeedsStr, seps);
+            while((token != NULL) && (*pNumRates < inNumRates))
+            {
+               sscanf(token, "%f", &pRates[(*pNumRates)++]);
+               g_print("%s: %s(%d): pRates[%d] = %f\n", __FILE__, __FUNCTION__, __LINE__, 
+                       *pNumRates - 1, pRates[*pNumRates - 1]);
+               token = strtok(NULL, seps);
+            }
+         }
+      }
+      else
+      {
+         g_print("%s: %s(%d): GST_QUERY_CUSTOM - getTrickSpeeds failed / unsupported\n", __FILE__, __FUNCTION__, __LINE__);
+      }
 
    } while (0);
-   return stat;
+   
+   if(NULL != query)
+   {
+      gst_query_unref (query);
+      query = NULL;
+   }
+   if(NULL != pTrickSpeedsStr)
+   {
+      g_free(pTrickSpeedsStr);
+      pTrickSpeedsStr = NULL;
+   }
 
+   return stat;
 }
 
 cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay )
