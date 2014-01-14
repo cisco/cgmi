@@ -107,12 +107,13 @@ static cgmi_Status setposition(void *pSessionId, float Position)
 static cgmi_Status getraterange(void *pSessionId, float *pRewind, float *pFFoward)
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
-
+#if 0
     retCode = cgmi_GetRateRange( pSessionId, pRewind, pFFoward );
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI GetRateRange Failed\n");
     }
+#endif
 
     return retCode;
 }
