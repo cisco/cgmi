@@ -106,7 +106,7 @@ static cgmi_Status setposition(void *pSessionId, float Position)
 /* GetRateRange Command */
 static cgmi_Status getraterange(void *pSessionId, float *pRewind, float *pFFoward)
 {
-    cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+    cgmi_Status retCode = CGMI_ERROR_FAILED;
 #if 0
     retCode = cgmi_GetRateRange( pSessionId, pRewind, pFFoward );
     if (retCode != CGMI_ERROR_SUCCESS)
