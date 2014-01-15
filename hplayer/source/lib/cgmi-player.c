@@ -1026,6 +1026,12 @@ cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumR
 
          g_print("%s: %s(%d): pTrickSpeedsStr: %s\n", __FILE__, __FUNCTION__, __LINE__, pTrickSpeedsStr);
 
+         if(0 == strlen(pTrickSpeedsStr))
+         {
+            g_print("%s: %s(%d): getTrickSpeeds GST_QUERY_CUSTOM returned an empty string" , __FILE__, __FUNCTION__, __LINE__);
+            break;
+         }
+
          for(ii = 0; ii < strlen(pTrickSpeedsStr); ii++)
          {
             if((!isdigit(pTrickSpeedsStr[ii])) && (pTrickSpeedsStr[ii] != '.') && 
