@@ -104,16 +104,15 @@ static cgmi_Status setposition(void *pSessionId, float Position)
 }
 
 /* GetRateRange Command */
-static cgmi_Status getraterange(void *pSessionId, float *pRewind, float *pFFoward)
+static cgmi_Status getrates(void *pSessionId, float pRates[], unsigned int *pNumRates)
 {
     cgmi_Status retCode = CGMI_ERROR_FAILED;
-#if 0
-    retCode = cgmi_GetRateRange( pSessionId, pRewind, pFFoward );
+
+    retCode = cgmi_GetRates( pSessionId, pRates, pNumRates );
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI GetRateRange Failed\n");
     }
-#endif
 
     return retCode;
 }
@@ -362,7 +361,7 @@ void help(void)
            "\tplay <url>\n"
            "\tstop (or unload)\n"
            "\n"
-           "\tgetraterange\n"
+           "\tgetrates\n"
            "\tsetrate <rate (float)>\n"
            "\n"
            "\tgetposition\n"
@@ -423,8 +422,8 @@ int main(int argc, char **argv)
     /* Status Variables */
     gfloat Position = 0.0;
     gfloat Rate = 0.0;
-    gfloat Rewind = 0.0;
-    gfloat FFoward = 0.0;
+    gfloat Rates[32];
+    unsigned int NumRates = 32;
     gfloat Duration = 0.0;
     cgmi_SessionType type = cgmi_Session_Type_UNKNOWN;
     gint pbCanPlay = 0;
@@ -662,14 +661,23 @@ int main(int argc, char **argv)
             retCode = stop(pSessionId);
             playing = 0;
         }
-        /* getraterange */
-        else if (strncmp(command, "getraterange", 12) == 0)
+        /* getrates */
+        else if (strncmp(command, "getrates", 8) == 0)
         {
-            retCode = getraterange(pSessionId, &Rewind, &FFoward);
+            /* Pass in the size of the array for NumRates... */
+            retCode = getrates(pSessionId, Rates, &NumRates);
+            /* Get back the actual number of elements filled in for NumRates. */
             if (!retCode)
             {
-                printf( "Rate Range: %f : %f\n", Rewind, FFoward );
+                printf( "Rates: " );
+                for ( i=0; i<NumRates; i++ )
+                {
+                    printf( "%f ", Rates[i] );
+                }
+                printf( "\n" );
             }
+            /* Be sure to reset the size of the array for the next call. */
+            NumRates = 32;
         }
         /* setrate */
         else if (strncmp(command, "setrate", 7) == 0)

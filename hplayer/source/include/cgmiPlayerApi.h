@@ -363,7 +363,7 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
  *  \param[in] pSession  This is a handle to the active session.
  *
  *  \param[out] pRates An array of rewind and fast forward speeds supported.
- *  \param[in,out] pNumRates  Len of the trickSpeeds array passed in. Total number of speeds in the trickSpeeds array returned.
+ *  \param[in,out] pNumRates  In: Length of the trickSpeeds array passed in.  Out: Total number of speeds in the trickSpeeds array returned.
  *
  *  \pre    The Session must be open the the url must be loaded
  *
