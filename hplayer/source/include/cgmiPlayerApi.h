@@ -466,14 +466,175 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index);
  */
 cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language);
 
+/**
+ *  \brief \b cgmi_CreateSectionFilter 
+ *
+ *  Create a section filter for a playing CGMI session.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterPriv  Private data that will be passed to section filter callbacks.
+ *
+ *  \param[out] pFilterId   This pointer will be set to a pointer to the section filter instance created.
+ *
+ *  \pre     The Session must be open and the url must be loaded.
+ *
+ *  \post    On success the user can now SET the section filter.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when handle allocation succeeds.
+ *
+ *
+ *  \image html SectionFiltering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
 cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** pFilterId  );
+
+/**
+ *  \brief \b cgmi_DestroySectionFilter 
+ *
+ *  Destroy a section filter.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterId    This is a handle to an active filter ID.
+ *
+ *  \pre     A section filter ID must have be acquired via a successful cgmi_CreateSectionFilter call.
+ *
+ *  \post    On success the resources associated with the provided section filter ID will be freed
+ *
+ *  \return  CGMI_ERROR_SUCCESS when resources are freed successfully.
+ *
+ *
+ *  \image html SectionFiltering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
 cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId  );
+
+/**
+ *  \brief \b cgmi_SetSectionFilter 
+ *
+ *  Set the section filter parameters (see the tcgmi_FilterData for specifics).
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterId    This is a handle to an active filter ID.
+ *
+ *  \param[in] pFilter      A pointer to the section filter parameters.  The value/mask values are limited to 16 bytes, and 3rd byte is ignored due to a Broadcom bug.
+ *
+ *  \pre     A section filter ID must have be acquired via a successful cgmi_CreateSectionFilter call, and not be started.
+ *
+ *  \post    On success the section filter will be ready to start.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when parameters valid.
+ *
+ *
+ *  \image html SectionFiltering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
 cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterData *pFilter  );
+
+/**
+ *  \brief \b cgmi_StartSectionFilter 
+ *
+ *  Start receiving callbacks for a section filter.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterId    This is a handle to an active filter ID.
+ *
+ *  \param[in] timeout      [Not Implemented]  Section filter timeout value in seconds.  Callback is fired with error code when expired.
+ *
+ *  \param[in] bOneShot     [Not Implemented]  When non-zero the first successful callback will automatically trigger cgmi_StopSectionFilter.
+ *
+ *  \param[in] bEnableCRC   [Not Implemented]
+ *
+ *  \param[in] bufferCB     Callback utilized to acquire a buffer from the user to be filled and returned via sectionCB.
+ *
+ *  \param[in] sectionCB    Callback to be fired providing a stream of data (matching section filter parameters).
+ *
+ *  \pre     The section filter handle must have successfully been created and set (via cgmi_CreateSectionFilter and cgmi_SetSectionFilter).
+ *
+ *  \post    The callback (sectionCB) will be called with a stream of matching data, or with an error code once timeout expires without finding matching data.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when section filter is started awaiting callbacks.
+ *
+ *
+ *  \image html SectionFiltering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
 cgmi_Status cgmi_StartSectionFilter(void *pSession, void* pFilterId, int timeout, int bOneShot , int bEnableCRC, queryBufferCB bufferCB,  sectionBufferCB sectionCB);
+
+/**
+ *  \brief \b cgmi_StopSectionFilter 
+ *
+ *  Stop filtering and callbacks for a section filter.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterId    This is a handle to an active filter ID.
+ *
+ *  \pre     The section filter handle must have successfully been created, set, and started (via cgmi_StartSectionFilter).
+ *
+ *  \post    The section filter will stop calling bufferCB/sectionCB.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when filtering/callbacks have successfully been stopped.
+ *
+ *
+ *  \image html SectionFiltering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
 cgmi_Status cgmi_StopSectionFilter(void *pSession, void* pFilterId );
 
-
+/**
+ *  \brief \b cgmi_startUserDataFilter 
+ *
+ *  Start receiving user data (CC data) via callbacks.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] bufferCB     User data callback to be called with a stream of data.
+ *
+ *  \param[in] pUserData    Private user data pointer to be passed to subsequent calls to bufferCB.
+ *
+ *  \pre     The Session must be open and the url must be loaded.
+ *
+ *  \post    On success the callback will be called continuously with a stream of user data (if present).
+ *
+ *  \return  CGMI_ERROR_SUCCESS when user data filter has started and is awaiting callback.
+ *
+ *  \ingroup CGMI
+ *
+ */
 cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, void *pUserData);
+
+/**
+ *  \brief \b cgmi_stopUserDataFilter 
+ *
+ *  Stop receiving user data callbacks.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] bufferCB     User data callback that has been started.
+ *
+ *  \pre     The user data filter must be started (via cgmi_startUserDataFilter).
+ *
+ *  \post    On success the user data callbacks will stop.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when the callbacks have been successfully disabled.
+ *
+ *  \ingroup CGMI
+ *
+ */
 cgmi_Status cgmi_stopUserDataFilter(void *pSession, userDataBufferCB bufferCB);
 
 /**

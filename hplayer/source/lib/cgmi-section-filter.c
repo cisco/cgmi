@@ -12,10 +12,12 @@
 #include <gst/app/gstappsink.h>
 #include "cgmi-section-filter-priv.h"
 
-#define FILTER_MIN_LENGTH 16
+#define FILTER_MAX_LENGTH 16
 #define PRINT_HEX_WIDTH 16
 
+//#define CGMI_SECTTION_FILTER_HEX_DUMP
 
+#ifdef CGMI_SECTTION_FILTER_HEX_DUMP
 static void printHex (void *buffer, int size) {
     gint hexBufSize = (PRINT_HEX_WIDTH*3) + 8;
     guchar asciiBuf[PRINT_HEX_WIDTH + 1];
@@ -57,6 +59,7 @@ static void printHex (void *buffer, int size) {
     }
     g_print("  %s\n", asciiBuf);
 }
+#endif
 
 
 static cgmi_Status charBufToGValueArray( char * buffer, 
@@ -169,9 +172,11 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
       //g_print("Filling buffer of size (%d)\n", sinkDataSize);
       memcpy( retBuffer, sinkData, sinkDataSize );
 
-      //g_print("Sending buffer:\n");
-      //printHex(retBuffer, sinkDataSize);
-      //g_print("\n\n");
+#ifdef CGMI_SECTTION_FILTER_HEX_DUMP
+      g_print("Sending buffer:\n");
+      printHex(retBuffer, sinkDataSize);
+      g_print("\n\n");
+#endif
 
       // Return filled buffer to the app
       retStat = secFilter->sectionCB( pSess->usrParam, secFilter->filterPrivate, 
@@ -422,36 +427,53 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
 
    do{
 
+      // If a value/mask was provided marshal values for gstreamer
       if ( pFilterData->length > 0 )
       {
-          // Convert the filter data to a glib compatible format
-          retStat = charBufToGValueArray( pFilterData->value,
-             pFilterData->length,
-             &valueArray );
 
-          if( CGMI_ERROR_SUCCESS != retStat ) 
-          {
-             g_print("Failed setting section filter value.\n");
-             break; 
-          }
+         // Broadcom bug workaround.  The section filter drivers/hardware 
+         // doesn't mask the 3rd byte correctly, so mask it out
+         if( pFilterData->length > 2 )
+         {
+            pFilterData->mask[2] = 0x00;
+         }
+
+         // If the mask is larger than what is supported by broadcom print warning.
+         if( pFilterData->length > FILTER_MAX_LENGTH )
+         {
+            g_print("Warning the filter mask (%d) is larger than supported (%d).",
+               pFilterData->length, FILTER_MAX_LENGTH);
+         }
+
+         // Convert the filter data to a glib compatible format
+         retStat = charBufToGValueArray( pFilterData->value,
+            pFilterData->length,
+            &valueArray );
+
+         if( CGMI_ERROR_SUCCESS != retStat ) 
+         {
+            g_print("Failed setting section filter value.\n");
+            break; 
+         }
     
-          g_object_set( secFilter->handle, "filter-data", valueArray, NULL );
-          g_value_array_free( valueArray );
+         g_object_set( secFilter->handle, "filter-data", valueArray, NULL );
+         g_value_array_free( valueArray );
 
 
+         // Convert the filter data to a glib compatible format
+         retStat = charBufToGValueArray( pFilterData->mask,
+            pFilterData->length,
+            &valueArray );
 
-          retStat = charBufToGValueArray( pFilterData->mask,
-             pFilterData->length,
-             &valueArray );
+         if( CGMI_ERROR_SUCCESS != retStat ) 
+         {
+            g_print("Failed setting section filter mask.\n");
+            break; 
+         }
 
-          if( CGMI_ERROR_SUCCESS != retStat ) 
-          {
-             g_print("Failed setting section filter mask.\n");
-             break; 
-          }
+         g_object_set( secFilter->handle, "filter-mask", valueArray, NULL );
+         g_value_array_free( valueArray );
 
-          g_object_set( secFilter->handle, "filter-mask", valueArray, NULL );
-          g_value_array_free( valueArray );
       }
 
       secFilter->lastAction = FILTER_SET;
