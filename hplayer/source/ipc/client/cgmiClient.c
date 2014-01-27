@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <gst/gst.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 #include "dbusPtrCommon.h"
 #include "cgmiPlayerApi.h"
@@ -14,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Defines
 ////////////////////////////////////////////////////////////////////////////////
-#define USER_DATA_CALLBACK_BUFFER_SIZE 128
+#define USER_DATA_CALLBACK_BUFFER_SIZE 512
 
 ////////////////////////////////////////////////////////////////////////////////
 // Macros
@@ -261,9 +263,14 @@ static gboolean on_handle_section_buffer_notify (  OrgCiscoCgmi *proxy,
 static void *cgmi_UserDataCbThread(void *data)
 {
     tcgmi_PlayerEventCallbackData *cbData = (tcgmi_PlayerEventCallbackData *)data;
-    gchar *dataBuf;
-    int bytesRead;
-    GstBuffer *pGstBuff;
+    gchar *dataBuf = NULL;
+    int bytesRead = 0;
+    int targetBytesRead = USER_DATA_CALLBACK_BUFFER_SIZE;
+    GstBuffer *pGstBuff = NULL;
+    struct timeval selectTimeout;
+    fd_set selectFdSet;
+    int readyFd;
+
 
     // Preconditions
     if( NULL == cbData || NULL == cbData->userDataCallback )
@@ -282,44 +289,80 @@ static void *cgmi_UserDataCbThread(void *data)
 
     cbData->userDataCbRunning = TRUE;
 
-    while( cbData->userDataCbRunning )
+    while( cbData->userDataCbRunning == TRUE )
     {
-        dataBuf = g_malloc0(USER_DATA_CALLBACK_BUFFER_SIZE);
+
+        if( NULL == dataBuf )
+        {
+            dataBuf = g_malloc0(targetBytesRead);
+        }
+
         if( NULL == dataBuf )
         {
             g_print("Failed to allocate memory.\n");
             break;
         }
 
+        // Init fd_set for select statement
+        FD_ZERO(&selectFdSet);
+        FD_SET(cbData->userDataFifoDesc, &selectFdSet);
+
+        // Timeout in 1 second.  Note this must be reset each loop, 
+        // because select updates the struct to time left.
+        selectTimeout.tv_sec = 1;
+        selectTimeout.tv_usec = 0;
+
+        // Wait for data with timeout to ensure this read thread exits gracefully
+        readyFd = select( cbData->userDataFifoDesc + 1, &selectFdSet, NULL, NULL, &selectTimeout );
+
+        // Handle select timeout
+        if( readyFd == 0 ) { continue; }
+
+        // Handle select error
+        if( readyFd == -1 ) 
+        {
+            g_print("Failed to call select on pipe with error (%d).\n", errno);
+            continue;
+        }
+
         // Read from fifo
         bytesRead = read( 
-            cbData->userDataFifoDesc, dataBuf, USER_DATA_CALLBACK_BUFFER_SIZE );
+            cbData->userDataFifoDesc, dataBuf, targetBytesRead );
 
-        // If we are shuting down, then bail
+        // If main thread has asked nicely to stop running, then bail
         if( cbData->userDataCbRunning == FALSE ) break;
 
+        // Did we actually get some data?
         if( 0 >= bytesRead )
         {
             g_print("Failed to read from UserDataCbThread fifo.\n");
-            break;
+            continue;
         }
 
         //g_print("Read (%d) bytes.\n", bytesRead );
+
+        // optimize memory allocations to avoid over allocation, the first read usually matches subsequent reads in size
+        if( targetBytesRead == USER_DATA_CALLBACK_BUFFER_SIZE ) targetBytesRead = bytesRead;
 
         // Wrap data with GstBuffer
         pGstBuff = gst_buffer_new( );
         if( NULL == pGstBuff )
         {
             g_print("Failed to create new gst buffer.\n");
-            return NULL; 
+            continue; 
         }
         gst_buffer_set_data( pGstBuff, dataBuf, bytesRead );
 
         // Notify callback
         cbData->userDataCallback(cbData->userDataPrivate, (void *)pGstBuff);
+
+        // Set dataBuf to NULL so we know not to reuse/free it.  Ownership has passed to the app.
+        dataBuf = NULL;
     }
 
     // Clean up
+
+    if( dataBuf != NULL ) { g_free( dataBuf ); }
     close(cbData->userDataFifoDesc);
     cbData->userDataCbRunning = FALSE;
     cbData->userDataCallback = NULL;

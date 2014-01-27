@@ -132,6 +132,7 @@ typedef struct{
 /* Statics */
 static tMpegTsPat gPat;
 static bool gPmtParsed = false;
+static int gUserDataCbCalled = 0;
 
 #define PRINT_HEX_WIDTH 16
 
@@ -619,6 +620,8 @@ static cgmi_Status cgmiTestUserDataBufferCB(void *pUserData, void *pBuffer)
     // Free buffer
     gst_buffer_unref( pGstBuff );
 
+    gUserDataCbCalled++;
+
     return CGMI_ERROR_SUCCESS;
 }
 
@@ -698,6 +701,77 @@ static cgmi_Status buildSectionFilterPid(void *pSessionId, int pid, sectionBuffe
     g_print("Calling cgmi_StartSectionFilter...\n");
     retStat = cgmi_StartSectionFilter( pSessionId, filterId, 10, 1, 0, cgmi_QueryBufferCallback, sectionCB );
     CHECK_ERROR_RETURN_STAT(retStat);
+
+    return retStat;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Fairly extensive user data test
+////////////////////////////////////////////////////////////////////////////////
+static cgmi_Status verifyUserData( void *pSessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+
+    gUserDataCbCalled = 0;
+
+    g_print("Calling cgmi_startUserDataFilter...\n");
+    retStat = cgmi_startUserDataFilter( pSessionId, cgmiTestUserDataBufferCB, pSessionId );
+    CHECK_ERROR(retStat);
+
+    g_usleep( 1 * 1000 * 1000 );
+
+    g_print("Calling cgmi_stopUserDataFilter...\n");
+    retStat = cgmi_stopUserDataFilter( pSessionId, cgmiTestUserDataBufferCB );
+    CHECK_ERROR(retStat);
+
+    if( gUserDataCbCalled == 0 )
+    {
+        g_print("ERROR:  User data callback failed to fire.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_usleep( 2 * 1000 * 1000 );
+
+    gUserDataCbCalled = 0;
+
+    g_print("Calling cgmi_startUserDataFilter...\n");
+    retStat = cgmi_startUserDataFilter( pSessionId, cgmiTestUserDataBufferCB, pSessionId );
+    CHECK_ERROR(retStat);
+
+    g_usleep( 2 * 1000 * 1000 );
+
+    g_print("Calling cgmi_stopUserDataFilter...\n");
+    retStat = cgmi_stopUserDataFilter( pSessionId, cgmiTestUserDataBufferCB );
+    CHECK_ERROR(retStat);
+
+    if( gUserDataCbCalled == 0 )
+    {
+        g_print("ERROR:  User data callback failed to fire.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_usleep( 2 * 1000 * 1000 );
+
+    g_print("Calling cgmi_startUserDataFilter...\n");
+    retStat = cgmi_startUserDataFilter( pSessionId, cgmiTestUserDataBufferCB, pSessionId );
+    CHECK_ERROR(retStat);
+
+    g_usleep( 3 * 1000 * 1000 );
+
+    g_print("Calling cgmi_stopUserDataFilter...\n");
+    retStat = cgmi_stopUserDataFilter( pSessionId, cgmiTestUserDataBufferCB );
+    CHECK_ERROR(retStat);
+
+    if( gUserDataCbCalled == 0 )
+    {
+        g_print("ERROR:  User data callback failed to fire.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_print("\n");
+    g_print("*************************************************************\n\n");
+    g_print(">>>>>>   User Data verification SUCCESSFUL!   <<<<<<<\n\n");
+    g_print("*************************************************************\n\n");
 
     return retStat;
 }
@@ -901,6 +975,28 @@ static cgmi_Status verifySectionFilter( void *pSessionId )
     return CGMI_ERROR_SUCCESS;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Verify section filters work as expected
+////////////////////////////////////////////////////////////////////////////////
+static int userdata( const char *url )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    void *pSessionId;
+
+    retStat = startPlayback(url, &pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    // Wait for playback to start and demux to be created
+    g_usleep(2 * 1000 * 1000);
+
+    retStat = verifyUserData(pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    retStat = stopPlayback(pSessionId);
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    return retStat;
+}
 ////////////////////////////////////////////////////////////////////////////////
 // Verify section filters work as expected
 ////////////////////////////////////////////////////////////////////////////////
@@ -1153,7 +1249,7 @@ int main(int argc, char **argv)
 
     if (argc < 2)
     {
-        g_print("usage: %s play <url> | sanity <url> | secfil <url>\n", argv[0]);
+        g_print("usage: %s play <url> | sanity <url> | secfil <url> | userdata <url>\n", argv[0]);
         return -1;
     }
 
@@ -1184,6 +1280,15 @@ int main(int argc, char **argv)
             return -1;
         }
         retStat = secfil(argv[2]);
+    }
+    else if (strcmp(argv[1], "userdata") == 0)
+    {
+        if (argc < 3)
+        {
+            g_print("usage: %s userdata <url>\n", argv[0]);
+            return -1;
+        }
+        retStat = userdata(argv[2]);
     }
 
     return retStat;
