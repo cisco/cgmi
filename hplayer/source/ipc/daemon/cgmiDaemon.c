@@ -630,7 +630,8 @@ static gboolean
 on_handle_cgmi_play (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    GVariant *arg_sessionId )
+    GVariant *arg_sessionId,
+    gint arg_autoPlay)
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     GVariant *sessVar = NULL;
@@ -649,7 +650,7 @@ on_handle_cgmi_play (
         g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
         g_variant_unref( sessVar );
 
-        retStat = cgmi_Play( (void *)pSession );
+        retStat = cgmi_Play( (void *)pSession, arg_autoPlay );
 
     }while(0);
 
@@ -1512,6 +1513,116 @@ on_handle_cgmi_stop_user_data_filter (
     return TRUE;
 }
 
+static gboolean
+on_handle_cgmi_get_num_pids (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    gint count = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetNumPids( (void *)pSession, &count );
+
+    }while(0);    
+
+    org_cisco_cgmi_complete_get_num_pids (object,
+            invocation,
+            count,
+            retStat);
+
+    return TRUE;
+}
+
+static gboolean
+on_handle_cgmi_get_pid_info (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId,
+    gint index )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+    tcgmi_PidData pidData;
+
+    CGMID_ENTER();
+    
+    do{       
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetPidInfo( (void *)pSession, index, &pidData );
+
+    }while(0);
+       
+    org_cisco_cgmi_complete_get_pid_info (object,
+            invocation,
+            pidData.pid,
+            pidData.streamType,
+            retStat);
+
+    return TRUE;
+}
+
+static gboolean
+on_handle_cgmi_set_pid_info (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId,
+    gint index,
+    gint type )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_SetPidInfo( (void *)pSession, index, type );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_set_pid_info (object,
+            invocation,
+            retStat);
+
+    return TRUE;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS setup callbacks
 ////////////////////////////////////////////////////////////////////////////////
@@ -1677,6 +1788,21 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-stop-user-data-filter",
                       G_CALLBACK (on_handle_cgmi_stop_user_data_filter),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-num-pids",
+                      G_CALLBACK (on_handle_cgmi_get_num_pids),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-pid-info",
+                      G_CALLBACK (on_handle_cgmi_get_pid_info),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-set-pid-info",
+                      G_CALLBACK (on_handle_cgmi_set_pid_info),
                       NULL);
 
     if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (interface),

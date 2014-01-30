@@ -22,6 +22,7 @@
 static void *filterid = NULL;
 static bool filterRunning = false;
 static struct termios oldt, newt;
+static int gAutoPlay = true;
 
 /* Prototypes */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event );
@@ -36,7 +37,7 @@ void sig_handler(int signum)
 }
 
 /* Play Command */
-static cgmi_Status play(void *pSessionId, char *src)
+static cgmi_Status play(void *pSessionId, char *src, int autoPlay)
 {   
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
@@ -47,7 +48,8 @@ static cgmi_Status play(void *pSessionId, char *src)
         printf("CGMI Load failed\n");
     } else {
         /* Play the URL if load succeeds. */
-        retCode = cgmi_Play( pSessionId );
+        gAutoPlay = autoPlay;
+        retCode = cgmi_Play( pSessionId, autoPlay );
         if (retCode != CGMI_ERROR_SUCCESS)
         {
             printf("CGMI Play failed\n");
@@ -297,7 +299,7 @@ static cgmi_Status destroyfilter( void *pSessionId )
 /* Callback Function */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
 {
-    printf("CGMI Event Recevied : ");
+    printf("CGMI Event Received : ");
 
     switch (event)
     {
@@ -318,6 +320,43 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
             break;
         case NOTIFY_END_OF_STREAM:
             printf("NOTIFY_END_OF_STREAM");
+            break;
+        case NOTIFY_PSI_READY:
+            {
+               printf("NOTIFY_PSI_READY");
+               gint i, count = 0;
+               tcgmi_PidData pidData;
+               cgmi_Status retCode;
+               retCode = cgmi_GetNumPids( pSession, &count );
+               if ( retCode != CGMI_ERROR_SUCCESS )
+               {
+                   printf("Error returned %d\n", retCode);                
+               }
+               
+               printf("\nAvailable streams: %d\n", count);
+               printf("--------------------------\n");
+               for ( i = 0; i < count; i++ )
+               {
+                   retCode = cgmi_GetPidInfo( pSession, i, &pidData );
+                   if ( retCode != CGMI_ERROR_SUCCESS )
+                       break;
+                   printf("index = %d, pid = %d, stream type = %d\n", i, pidData.pid, pidData.streamType);
+               }
+               printf("--------------------------\n");
+               if ( false == gAutoPlay )
+               {
+                  printf("Now set the A/V PID indices via the setpid command for decoding to start.\n");
+                  printf("Decoding will start when the video PID index is set.\n");
+                  printf("If the video PID does not exist, just set the index to anything.\n");
+                  printf("Setting a PID index to -1 selects the first corresponding stream in the PMT.");
+               }
+#if 0
+               usleep(3000000);
+               printf("Setting pids...\n");
+               cgmi_SetPidInfo( pSession, 1, 1 );
+               cgmi_SetPidInfo( pSession, 0, 0 );
+#endif
+            }
             break;
         case NOTIFY_DECRYPTION_FAILED:
             printf("NOTIFY_DECRYPTION_FAILED");
@@ -358,7 +397,7 @@ void help(void)
 {
     printf( "Supported commands:\n"
             "Single APIs:\n"
-           "\tplay <url>\n"
+           "\tplay <url> [autoplay]\n"
            "\tstop (or unload)\n"
            "\n"
            "\tgetrates\n"
@@ -381,6 +420,10 @@ void help(void)
            "\tsetdefaudiolang <lang>\n"
            "\n"
            "\tsetvideorect <x,y,w,h>\n"
+           "\n"
+           "\tgetpidinfo\n"
+           "\n"
+           "\tsetpid <index> <A/V type (0:audio, 1:video)>\n"
            "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
@@ -604,6 +647,9 @@ int main(int argc, char **argv)
         /* play */
         if (strncmp(command, "play", 4) == 0)
         {
+            char *arg2;
+            int autoPlay = true;
+
             if (playing)
             {
                 printf( "Stop playback before starting a new one.\n" );
@@ -611,11 +657,20 @@ int main(int argc, char **argv)
             }
             if ( strlen( command ) <= 5 )
             {
-                printf( "\tplay <url>\n" );
+                printf( "\tplay <url> [autoplay]\n" );
                 continue;
             }
             strncpy( arg, command + 5, strlen(command) - 5 );
             arg[strlen(command) - 5] = '\0';
+
+            arg2 = strchr( arg, ' ' );
+            if ( arg2 )
+            {
+               *arg2 = 0;
+               arg2++;
+               autoPlay = atoi( arg2 );
+            }
+
             /* Check First */
             printf("Checking if we can play this...");
             retCode = cgmi_canPlayType( arg, &pbCanPlay );
@@ -623,7 +678,7 @@ int main(int argc, char **argv)
             {
                 printf( "cgmi_canPlayType Not Implemented\n" );
                 printf( "Playing \"%s\"...\n", arg );
-                retCode = play(pSessionId, arg);
+                retCode = play(pSessionId, arg, autoPlay);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     playing = 1;
@@ -632,7 +687,7 @@ int main(int argc, char **argv)
             {
                 printf( "Yes\n" );
                 printf( "Playing \"%s\"...\n", arg );
-                retCode = play(pSessionId, arg);
+                retCode = play(pSessionId, arg, autoPlay);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     playing = 1;
@@ -1034,6 +1089,66 @@ int main(int argc, char **argv)
                 printf("Error returned %d\n", retCode);                
             }
         }
+        /* get num pids */
+        else if (strncmp(command, "getpidinfo", 10) == 0)
+        {
+            gint count = 0;
+            tcgmi_PidData pidData;
+            retCode = cgmi_GetNumPids( pSessionId, &count );
+            if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);                
+            }
+            
+            printf("\nAvailable streams: %d\n", count);
+            printf("--------------------------\n");
+            for ( i = 0; i < count; i++ )
+            {
+                retCode = cgmi_GetPidInfo( pSessionId, i, &pidData );
+                if ( retCode != CGMI_ERROR_SUCCESS )
+                    break;
+                printf("%d: pid = %d, stream type = %d\n", i, pidData.pid, pidData.streamType);
+            }
+        }
+        /* set pid */
+        else if (strncmp(command, "setpid", 6) == 0)
+        {
+            gint index;
+            gint type;
+            char *arg2;
+            if ( strlen( command ) <= 7 )
+            {
+                printf( "\tsetpid <index> <A/V type (0:audio, 1:video)>\n" );
+                continue;
+            }
+            strncpy( arg, command + 7, strlen(command) - 7 );
+            arg[strlen(command) - 13] = '\0';
+
+            arg2 = strchr( arg, ' ' );
+            if ( arg2 )
+            {
+               *arg2 = 0;
+               arg2++;
+            }
+            else
+            {
+                printf( "\tsetpid <index> <A/V type (0:audio, 1:video)>\n" );
+                continue;
+            }
+            
+            index = atoi( arg );
+            type = atoi( arg2 );
+
+            retCode = cgmi_SetPidInfo( pSessionId, index, type );
+            if ( retCode == CGMI_ERROR_BAD_PARAM )
+            {
+                printf("Invalid index or type, use getpidinfo to see available indexes %d\n", retCode);                
+            }
+            else if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);                
+            }
+        }
         /* Channel Change Test */
         else if (strncmp(command, "cct", 3) == 0)
         {
@@ -1090,7 +1205,7 @@ int main(int argc, char **argv)
             {
                 i++;
                 printf( "(%d) Playing %s...\n", i, str );
-                retCode = play(pSessionId, str);
+                retCode = play(pSessionId, str, true);
                 sleep( interval );
                 retCode = stop(pSessionId);
 

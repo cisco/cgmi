@@ -9,6 +9,7 @@ extern "C"
 #endif
 
 #define MAX_AUDIO_LANGUAGE_DESCRIPTORS 32
+#define MAX_STREAMS                    32
 #define SOCKET_RECEIVE_BUFFER_SIZE     1000000
 #define UDP_CHUNK_SIZE                 (1316*32)
 #define VIDEO_MAX_WIDTH                1280
@@ -24,11 +25,17 @@ typedef struct
 
 typedef struct
 {
-    gint x;
-    gint y;
-    gint w;
-    gint h;
+   gint x;
+   gint y;
+   gint w;
+   gint h;
 }tCgmiRect;
+
+typedef struct
+{
+   gint pid;
+   gint streamType;
+}tCgmiStream;
 
 typedef struct
 {
@@ -52,7 +59,9 @@ typedef struct
    tAudioLang         audioLanguages[MAX_AUDIO_LANGUAGE_DESCRIPTORS];
    gchar              defaultAudioLanguage[4];
    gint               numAudioLanguages;
-   gint               audioStreamIndex;
+   gint               audioLanguageIndex;
+   gint               numStreams;
+   tCgmiStream        streams[MAX_STREAMS];
    /* user registered data */ 
    cgmi_EventCallback eventCB;
    GstElement         *userDataAppsink;
@@ -60,6 +69,12 @@ typedef struct
    GstPad             *userDataAppsinkPad;
    userDataBufferCB   userDataBufferCB;
    void               *userDataBufferParam;
+   gint               autoPlay;
+   gboolean           waitingOnPids;
+   GMutex             *autoPlayMutex;
+   GCond              *autoPlayCond; 
+   gint               videoStreamIndex;
+   gint               audioStreamIndex;
 
 }tSession;
 

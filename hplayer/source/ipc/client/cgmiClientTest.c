@@ -649,7 +649,7 @@ static cgmi_Status startPlayback(const char *url, void **ppSessionId)
     CHECK_ERROR_RETURN_STAT(retStat);
 
     g_print("Calling cgmi_Play...\n");
-    retStat = cgmi_Play( pSessionId );
+    retStat = cgmi_Play( pSessionId, true );
     CHECK_ERROR_RETURN_STAT(retStat);
 
     return retStat;

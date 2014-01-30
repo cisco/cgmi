@@ -20,6 +20,8 @@
 GST_DEBUG_CATEGORY_STATIC (cgmi); 
 #define GST_CAT_DEFAULT cgmi
 
+#define INVALID_INDEX      -2
+
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
 
 static gchar gDefaultAudioLanguage[4];
@@ -272,6 +274,9 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
 
       g_print("PMT: Program: %04x Version: %d pcr: %04x Streams: %d " "Descriptors: %d\n",
               (guint16)program, version, (guint16)pcrPid, streamInfos->n_values, descriptors->n_values);
+
+      pSess->numStreams = streamInfos->n_values;
+
       for ( j = 0; j < streamInfos->n_values; j++ ) 
       {
          value = g_value_array_get_nth( streamInfos, j );
@@ -280,6 +285,10 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
          g_object_get( streamInfo, "stream-type", &esType, NULL);
          g_object_get( streamInfo, "descriptors", &descriptors, NULL);
          g_print("Pid: %04x type: %x Descriptors: %d\n",(guint16)esPid, (guint8) esType, descriptors->n_values);
+
+         pSess->streams[j].pid = esPid;
+         pSess->streams[j].streamType = esType;
+
          for ( z = 0; z < descriptors->n_values; z++ )
          {
             GString *string;
@@ -304,12 +313,12 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                         strncpy( pSess->audioLanguages[pSess->numAudioLanguages].isoCode, &string->str[pos+2], 3 );
                         pSess->audioLanguages[pSess->numAudioLanguages].isoCode[3] = 0;
                         
-                        if ( strlen(pSess->defaultAudioLanguage) > 0 && pSess->audioStreamIndex == -1 )
+                        if ( strlen(pSess->defaultAudioLanguage) > 0 && pSess->audioLanguageIndex == INVALID_INDEX )
                         {
                            if ( strncmp(pSess->audioLanguages[pSess->numAudioLanguages].isoCode, pSess->defaultAudioLanguage, 3) == 0 )
                            {
                               g_print("Stream (%d) audio language matched to default audio lang %s\n", j, pSess->defaultAudioLanguage);
-                              pSess->audioStreamIndex = j;
+                              pSess->audioLanguageIndex = j;
                            }
                         }
                         pSess->numAudioLanguages++;
@@ -330,10 +339,24 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
       g_print ("------------------------------------------------------------------------- \n");
    }
 
-   if ( pSess->audioStreamIndex != -1 )
+   if ( pSess->audioLanguageIndex != INVALID_INDEX )
    {
-      g_print("Selecting audio stream index %d...\n");
-      g_object_set( G_OBJECT(pSess->demux), "audio-stream", pSess->audioStreamIndex, NULL );
+      g_print("Selecting audio language index %d...\n");
+      g_object_set( G_OBJECT(pSess->demux), "audio-stream", pSess->audioLanguageIndex, NULL );
+   }
+
+   if ( NULL != pSess->eventCB )
+      pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_PSI_READY);
+
+   if ( FALSE == pSess->autoPlay )
+   {
+	   g_mutex_lock (pSess->autoPlayMutex);
+      if (pSess->videoStreamIndex == INVALID_INDEX && pSess->audioStreamIndex == INVALID_INDEX)
+      {
+         pSess->waitingOnPids = TRUE;
+         g_cond_wait (pSess->autoPlayCond, pSess->autoPlayMutex);	
+      }
+	   g_mutex_unlock (pSess->autoPlayMutex);
    }
 }
 
@@ -594,12 +617,18 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->vidDestRect.y = 0;
    pSess->vidDestRect.w = VIDEO_MAX_WIDTH;
    pSess->vidDestRect.h = VIDEO_MAX_HEIGHT;
+   pSess->audioStreamIndex = INVALID_INDEX;
+   pSess->videoStreamIndex = INVALID_INDEX;
 
    strncpy( pSess->defaultAudioLanguage, gDefaultAudioLanguage, sizeof(pSess->defaultAudioLanguage) );
    pSess->defaultAudioLanguage[sizeof(pSess->defaultAudioLanguage) - 1] = 0;
-   pSess->audioStreamIndex = -1;
+   pSess->audioLanguageIndex = INVALID_INDEX;
 
    pSess->thread_ctx = g_main_context_new();
+
+	pSess->autoPlayMutex = g_mutex_new ();
+	pSess->autoPlayCond = g_cond_new (); 
+
    pSess->loop = g_main_loop_new (pSess->thread_ctx, FALSE);
    if (pSess->loop == NULL)
    {
@@ -651,9 +680,12 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    {
       g_print("No thread to free... odd\n");
    }
+
    if (pSess->playbackURI) {g_free(pSess->playbackURI);}
    if (pSess->manualPipeline) {g_free(pSess->manualPipeline);}
    if (pSess->pipeline) {gst_object_unref (GST_OBJECT (pSess->pipeline));}
+   if (pSess->autoPlayCond) {g_cond_free(pSess->autoPlayCond);}
+   if (pSess->autoPlayMutex) {g_mutex_free(pSess->autoPlayMutex);}
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
    g_free(pSess);
    return stat;
@@ -680,6 +712,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       return CGMI_ERROR_OUT_OF_MEMORY;
    }
 
+   pSess->numAudioLanguages = 0;
+   pSess->numStreams = 0;
+   pSess->videoStreamIndex = INVALID_INDEX;
+   pSess->audioStreamIndex = INVALID_INDEX;
+   pSess->audioLanguageIndex = INVALID_INDEX;
 
    pSess->playbackURI = g_strdup(uri);
    if (pSess->playbackURI == NULL)
@@ -693,7 +730,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    //
    // This section makes DLNA content hardcoded.  Need to optimize.
    //
-   if (g_strrstr(pSess->playbackURI, ".mpeg") != NULL)
+   if (g_strrstr(pSess->playbackURI, ".mpeg") != NULL)   
    {
       // This url is pointing to DLNA content, build a manual pipeline.
       memset(manualPipeline, 0, 1024);
@@ -802,6 +839,12 @@ cgmi_Status cgmi_Unload  ( void *pSession )
 
    do
    {
+      //Signal psi callback on unload in case it is blocked on PID selection
+      g_mutex_lock( pSess->autoPlayMutex );	
+      if ( TRUE == pSess->waitingOnPids )
+		   g_cond_signal( pSess->autoPlayCond );
+		g_mutex_unlock( pSess->autoPlayMutex );
+
       g_print ("Changing state of pipeline to NULL \n");
       gst_element_set_state (pSess->pipeline, GST_STATE_NULL);
       // I dont' think that we have to free any memory associated
@@ -815,23 +858,25 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       pSess->udpsrc = NULL;
       pSess->videoSink = NULL;
       pSess->videoDecoder = NULL;
-      pSess->audioStreamIndex = -1;
 
    }while (0);
    g_print("Exiting %s pipeline is now null\n",__FUNCTION__);
    return stat;
 }
-cgmi_Status cgmi_Play    (void *pSession)
+
+cgmi_Status cgmi_Play (void *pSession, int autoPlay)
 {
    tSession *pSess = (tSession*)pSession;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
 
+   pSess->autoPlay = autoPlay;
+
    cisco_gst_setState( pSess, GST_STATE_PLAYING);
    return stat;
 }
-cgmi_Status cgmi_SetRate (void *pSession,  float rate)
-{
 
+cgmi_Status cgmi_SetRate (void *pSession, float rate)
+{
    tSession *pSess = (tSession*)pSession;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    GstFormat format = GST_FORMAT_TIME;
@@ -861,7 +906,6 @@ cgmi_Status cgmi_SetRate (void *pSession,  float rate)
       return CGMI_ERROR_FAILED;
    }
 
-
    if (rate >=1.0)
    {
       seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
@@ -879,8 +923,6 @@ cgmi_Status cgmi_SetRate (void *pSession,  float rate)
       seek_event = gst_event_new_seek(1.0, GST_FORMAT_TIME, 0, GST_SEEK_TYPE_NONE, -1, GST_SEEK_TYPE_NONE, -1);
    }
 
-
-
    /* Send the event */
    if (seek_event)
    {
@@ -889,7 +931,7 @@ cgmi_Status cgmi_SetRate (void *pSession,  float rate)
    return stat;
 }
 
-cgmi_Status cgmi_SetPosition  (void *pSession,  float position)
+cgmi_Status cgmi_SetPosition (void *pSession, float position)
 {
 
    tSession *pSess = (tSession*)pSession;
@@ -911,10 +953,9 @@ cgmi_Status cgmi_SetPosition  (void *pSession,  float position)
 
    } while (0);
    return stat;
-
 }
 
-cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition)
+cgmi_Status cgmi_GetPosition (void *pSession, float *pPosition)
 {
 
    tSession *pSess = (tSession*)pSession;
@@ -934,7 +975,7 @@ cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition)
    return stat;
 
 }
-cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionType *type)
+cgmi_Status cgmi_GetDuration (void *pSession, float *pDuration, cgmi_SessionType *type)
 {
 
    tSession *pSess = (tSession*)pSession;
@@ -952,12 +993,10 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
 
    } while (0);
    return stat;
-
 }
 
-cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumRates)
+cgmi_Status cgmi_GetRates (void *pSession, float pRates[], unsigned int *pNumRates)
 {
-
    tSession *pSess = (tSession*)pSession;
    cgmi_Status stat = CGMI_ERROR_FAILED ;
       
@@ -1179,7 +1218,7 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
 
 
 
-cgmi_Status cgmi_SetAudioStream (void *pSession,  int index )
+cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
 {
    cgmi_Status stat;
    tSession *pSess = (tSession*)pSession;
@@ -1201,25 +1240,17 @@ cgmi_Status cgmi_SetAudioStream (void *pSession,  int index )
       return CGMI_ERROR_NOT_READY;
    }
 
-   stat = cgmi_Unload( pSess );
-   if ( stat != CGMI_ERROR_SUCCESS )
-       return stat;
-
    g_print("Setting audio stream index to %d for language %s\n", 
            pSess->audioLanguages[index].index, pSess->audioLanguages[index].isoCode);
 
-   pSess->audioStreamIndex = pSess->audioLanguages[index].index;
+   pSess->audioLanguageIndex = pSess->audioLanguages[index].index;
 
-   stat = cgmi_Load( pSess, pSess->playbackURI );
-   if ( stat != CGMI_ERROR_SUCCESS )
-       return stat;
+   g_object_set( G_OBJECT(pSess->demux), "audio-stream", pSess->audioLanguageIndex, NULL );
 
-   stat = cgmi_Play( pSess );
-
-   return stat;
+   return CGMI_ERROR_SUCCESS;
 }
 
-cgmi_Status cgmi_SetDefaultAudioLang (void *pSession, const char *language )
+cgmi_Status cgmi_SetDefaultAudioLang ( void *pSession, const char *language )
 {
    char *ptr;
    tSession *pSess = (tSession*)pSession;
@@ -1357,6 +1388,99 @@ cgmi_Status cgmi_stopUserDataFilter( void *pSession, userDataBufferCB bufferCB )
    pSess->userDataBufferParam = NULL;
 
    g_print("Successfully stopped user data filter\n");
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_GetNumPids( void *pSession, int *pCount )
+{
+   tSession *pSess = (tSession*)pSession;
+   if ( NULL == pSess )
+   {
+      g_print("Invalid session handle!\n");
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == pCount )
+   {
+      g_print("Bad pCount pointer passed!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   *pCount = pSess->numStreams;
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_GetPidInfo( void *pSession, int index, tcgmi_PidData *pPidData )
+{
+   tSession *pSess = (tSession*)pSession;
+   if ( NULL == pSess )
+   {
+      g_print("Invalid session handle!\n");
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == pPidData )
+   {
+      g_print("Bad pPidData pointer passed!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   if ( index < 0 || index > pSess->numStreams - 1 )
+   {
+      g_print("Index out of range [0, %d]!\n", pSess->numStreams - 1);
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   pPidData->pid = pSess->streams[index].pid;
+   pPidData->streamType = pSess->streams[index].streamType;
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type )
+{
+   tSession *pSess = (tSession*)pSession;
+   if ( NULL == pSess )
+   {
+      g_print("Invalid session handle!\n");
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == pSess->demux )
+   {
+      g_print("Demux is not ready yet, cannot set pid!\n");
+      return CGMI_ERROR_NOT_READY;
+   }
+
+   if ( STREAM_TYPE_VIDEO == type )
+   {
+      if ( AUTO_SELECT_STREAM != index )
+         g_object_set( G_OBJECT(pSess->demux), "video-stream", index, NULL );  
+	   g_mutex_lock (pSess->autoPlayMutex);
+      pSess->videoStreamIndex = index;
+      g_print("Waiting on pids: %s\n", pSess->waitingOnPids?"TRUE":"FALSE");
+      if ( TRUE == pSess->waitingOnPids )
+      {
+         g_print("Signalling playback start...\n");
+         g_cond_signal( pSess->autoPlayCond );
+      }
+	   g_mutex_unlock (pSess->autoPlayMutex);
+   }
+   else if ( STREAM_TYPE_AUDIO == type )
+   {
+      if ( AUTO_SELECT_STREAM != index )
+         g_object_set( G_OBJECT(pSess->demux), "audio-stream", index, NULL );  
+	   g_mutex_lock (pSess->autoPlayMutex);
+      pSess->audioStreamIndex = index;
+	   g_mutex_unlock (pSess->autoPlayMutex);
+   }
+   else
+   {
+      g_print("Invalid stream type!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
 
    return CGMI_ERROR_SUCCESS;
 }

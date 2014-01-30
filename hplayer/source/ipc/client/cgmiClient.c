@@ -914,7 +914,7 @@ cgmi_Status cgmi_Unload( void *pSession )
     return retStat;
 }
 
-cgmi_Status cgmi_Play( void *pSession )
+cgmi_Status cgmi_Play( void *pSession, int autoPlay )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -951,6 +951,7 @@ cgmi_Status cgmi_Play( void *pSession )
 
         org_cisco_cgmi_call_play_sync( gProxy,
                                        dbusVar,
+                                       (gint)autoPlay,
                                        (gint *)&retStat,
                                        NULL,
                                        &error );
@@ -966,7 +967,7 @@ cgmi_Status cgmi_Play( void *pSession )
     return retStat;
 }
 
-cgmi_Status cgmi_SetRate( void *pSession,  float rate )
+cgmi_Status cgmi_SetRate( void *pSession, float rate )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -1326,7 +1327,7 @@ cgmi_Status cgmi_SetVideoRectangle( void *pSession, int x, int y, int w, int h  
     return retStat;
 }
 
-cgmi_Status cgmi_GetNumAudioLanguages( void *pSession,  int *count )
+cgmi_Status cgmi_GetNumAudioLanguages( void *pSession, int *count )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -2193,6 +2194,168 @@ cgmi_Status cgmi_stopUserDataFilter(void *pSession, userDataBufferCB bufferCB)
                                        NULL,
                                        &error );
 
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_GetNumPids( void *pSession, int *pCount )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( pSession == NULL || pCount == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_get_num_pids_sync( gProxy,
+                dbusVar,
+                pCount,
+                (gint *)&retStat,
+                NULL,
+                &error );
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_GetPidInfo( void *pSession, int index, tcgmi_PidData *pPidData )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( pSession == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_get_pid_info_sync( gProxy,
+                dbusVar,
+                index,
+                &pPidData->pid,
+                &pPidData->streamType,
+                (gint *)&retStat,
+                NULL,
+                &error );
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( pSession == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_set_pid_info_sync( gProxy,
+                dbusVar,
+                index,
+                (gint)type,
+                (gint *)&retStat,
+                NULL,
+                &error );
 
     }while(0);
 

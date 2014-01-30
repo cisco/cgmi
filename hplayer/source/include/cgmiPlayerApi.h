@@ -44,6 +44,7 @@ extern "C"
 #endif
 
 #define SECTION_FILTER_EMPTY_PID 0x1FFF // Indicates filter shouldn't match PID
+#define AUTO_SELECT_STREAM       -1     // Indicates the first stream of specified type in the PMT will be auto selected
 
 /** Function return status values
  */
@@ -78,6 +79,7 @@ typedef enum
    NOTIFY_SEEK_DONE,                      ///< The seek has completed
    NOTIFY_START_OF_STREAM,                ///< The Current position is now at the Start of the stream
    NOTIFY_END_OF_STREAM,                  ///< You are at the end of stream or EOF
+   NOTIFY_PSI_READY,                      ///< PSI is detected, ready to decode (valid for TS content only)
    NOTIFY_DECRYPTION_FAILED,              ///< Not able to decrypt the stream, we don't know how to decrypt
    NOTIFY_NO_DECRYPTION_KEY,              ///<No key has been provided to decrypt this content.
    NOTIFY_VIDEO_ASPECT_RATIO_CHANGED,     ///<The stream has changed it's aspect ratio
@@ -112,8 +114,20 @@ typedef struct
    unsigned char *mask;
    int length;
    cgmi_FilterComparitor comparitor;
-
 }tcgmi_FilterData; 
+
+typedef enum
+{
+   STREAM_TYPE_AUDIO,
+   STREAM_TYPE_VIDEO,
+   STREAM_TYPE_UNKNOWN
+}tcgmi_StreamType;
+
+typedef struct
+{
+   int pid;
+   int streamType;
+}tcgmi_PidData;
 
 
 typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event );
@@ -134,7 +148,7 @@ typedef cgmi_Status (*userDataBufferCB)(void *pUserData, void *pBuffer);
  *  \ingroup CGMI
  *
  */
-char* cgmi_ErrorString(cgmi_Status stat);
+char* cgmi_ErrorString (cgmi_Status stat);
 /**
  *  \brief \b cgmi_Init
  *
@@ -205,7 +219,7 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_DestroySession(void *pSession );
+cgmi_Status cgmi_DestroySession (void *pSession );
 
 /**
  *  \brief \b cgmi_canPlay 
@@ -243,7 +257,7 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_Load    (void *pSession, const char *uri );
+cgmi_Status cgmi_Load (void *pSession, const char *uri );
 
 /**
  *  \brief \b cgmi_Unload 
@@ -261,7 +275,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri );
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_Unload  (void *pSession );
+cgmi_Status cgmi_Unload (void *pSession );
 
 /**
  *  \brief \b cgmi_Play
@@ -269,6 +283,10 @@ cgmi_Status cgmi_Unload  (void *pSession );
  *  Play the asset that is currently loaded. If the uri can not be found
  *  an error will be returned in the callback.
  *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[in] autoPlay A flag that determines whether the playback should start automatically
+ *             or after PIDs are set manually (this flag currently is a don't care for non-transport 
+ *             stream content, that is, playback will always start automatically for other content types).
  *
  *  \pre    The Session must be open the the url must be loaded
  *
@@ -280,7 +298,7 @@ cgmi_Status cgmi_Unload  (void *pSession );
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_Play    (void *pSession);
+cgmi_Status cgmi_Play (void *pSession, int autoPlay);
 
 /**
  *  \brief \b cgmi_SetRate
@@ -300,7 +318,7 @@ cgmi_Status cgmi_Play    (void *pSession);
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_SetRate      (void *pSession,  float rate);
+cgmi_Status cgmi_SetRate (void *pSession,  float rate);
 
 /**
  *  \brief \b cgmi_SetPosition
@@ -319,7 +337,7 @@ cgmi_Status cgmi_SetRate      (void *pSession,  float rate);
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_SetPosition  (void *pSession,  float position);
+cgmi_Status cgmi_SetPosition (void *pSession,  float position);
 
 /**
  *  \brief \b cgmi_GetPosition
@@ -336,7 +354,7 @@ cgmi_Status cgmi_SetPosition  (void *pSession,  float position);
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_GetPosition  (void *pSession,  float *pPosition);
+cgmi_Status cgmi_GetPosition (void *pSession,  float *pPosition);
 
 /**
  *  \brief \b cgmi_GetDuration
@@ -372,7 +390,7 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_GetRates(void *pSession,  float pRates[],  unsigned int *pNumRates);
+cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumRates);
 
 /**
  *  \brief \b cgmi_SetVideoRectangle
@@ -489,7 +507,7 @@ cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language);
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** pFilterId  );
+cgmi_Status cgmi_CreateSectionFilter (void *pSession, void* pFilterPriv, void** pFilterId  );
 
 /**
  *  \brief \b cgmi_DestroySectionFilter 
@@ -512,7 +530,7 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** p
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId  );
+cgmi_Status cgmi_DestroySectionFilter (void *pSession, void* pFilterId  );
 
 /**
  *  \brief \b cgmi_SetSectionFilter 
@@ -537,7 +555,7 @@ cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId  );
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterData *pFilter  );
+cgmi_Status cgmi_SetSectionFilter (void *pSession, void* pFilterId, tcgmi_FilterData *pFilter  );
 
 /**
  *  \brief \b cgmi_StartSectionFilter 
@@ -570,7 +588,7 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_StartSectionFilter(void *pSession, void* pFilterId, int timeout, int bOneShot , int bEnableCRC, queryBufferCB bufferCB,  sectionBufferCB sectionCB);
+cgmi_Status cgmi_StartSectionFilter (void *pSession, void* pFilterId, int timeout, int bOneShot , int bEnableCRC, queryBufferCB bufferCB,  sectionBufferCB sectionCB);
 
 /**
  *  \brief \b cgmi_StopSectionFilter 
@@ -593,7 +611,7 @@ cgmi_Status cgmi_StartSectionFilter(void *pSession, void* pFilterId, int timeout
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_StopSectionFilter(void *pSession, void* pFilterId );
+cgmi_Status cgmi_StopSectionFilter (void *pSession, void* pFilterId );
 
 /**
  *  \brief \b cgmi_startUserDataFilter 
@@ -615,7 +633,7 @@ cgmi_Status cgmi_StopSectionFilter(void *pSession, void* pFilterId );
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, void *pUserData);
+cgmi_Status cgmi_startUserDataFilter (void *pSession, userDataBufferCB bufferCB, void *pUserData);
 
 /**
  *  \brief \b cgmi_stopUserDataFilter 
@@ -635,7 +653,7 @@ cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, 
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_stopUserDataFilter(void *pSession, userDataBufferCB bufferCB);
+cgmi_Status cgmi_stopUserDataFilter (void *pSession, userDataBufferCB bufferCB);
 
 /**
  * \section How To section

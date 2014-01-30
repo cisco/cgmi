@@ -43,6 +43,7 @@
 
         <method name="play">
             <arg name="sessionId" direction="in" type="v"/>
+            <arg name="autoPlay" direction="in" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
@@ -165,6 +166,29 @@
             </arg>
             <arg name="sectionSize" type="i" />
         </signal>
+
+        <!-- Mosaic APIs -->
+        <method name="getNumPids">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="count" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getPidInfo">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="index" direction="in" type="i"/>
+            <arg name="pid" direction="out" type="i"/>
+            <arg name="streamType" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="setPidInfo">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="index" direction="in" type="i"/>
+            <arg name="type" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
 
         <!-- Closed Captioning APIs -->
         <method name="startUserDataFilter">
