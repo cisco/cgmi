@@ -235,7 +235,7 @@ static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value,
 
     tcgmi_FilterData filterdata;
 
-    retCode = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterid );
+    retCode = cgmi_CreateSectionFilter( pSessionId, pid, pSessionId, &filterid );
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI CreateSectionFilter Failed\n");
@@ -243,7 +243,6 @@ static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value,
         return retCode;
     }
 
-    filterdata.pid = pid;
     filterdata.value = value;
     filterdata.mask = mask;
     filterdata.length = length;

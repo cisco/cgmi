@@ -118,6 +118,7 @@
         <!-- Section Filter APIs -->
         <method name="createSectionFilter">
             <arg name="sessionId" direction="in" type="v"/>
+            <arg name="filterPid" direction="in" type="i"/>
             <arg name="filterId" direction="out" type="v"/>
             <arg name="status" direction="out" type="i"/>
         </method>
@@ -131,7 +132,6 @@
         <method name="setSectionFilter">
             <arg name="sessionId" direction="in" type="v"/>
             <arg name="filterId" direction="in" type="v"/>
-            <arg name="filterPid" direction="in" type="i"/>
             <arg name="filterValue" direction="in" type="ay">
                 <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
             </arg>

@@ -28,11 +28,11 @@ typedef enum
 
 typedef struct
 {
+   int                   pid;
    void                  *parentSession;
    void                  *filterPrivate;
    void                  *handle;
    gulong                padAddedCbId;
-   int                   pid;
    int                   timeout;
    int                   bOneShot;
    int                   bEnableCRC;

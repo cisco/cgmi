@@ -254,7 +254,7 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
    }
 }
 
-cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** pFilterId  )
+cgmi_Status cgmi_CreateSectionFilter(void *pSession, int pid, void* pFilterPriv, void** pFilterId  )
 {
    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
    tSession *pSess = (tSession*)pSession;
@@ -278,6 +278,7 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, void* pFilterPriv, void** p
    *pFilterId = secFilter;
 
    // Init sectionFilter values
+   secFilter->pid = pid;
    secFilter->parentSession = pSession;
    secFilter->filterPrivate = pFilterPriv;
    secFilter->handle = NULL;
@@ -480,10 +481,9 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
    
       // Set other filter params
       g_print("Filtering for pid: 0x%04x, with secFilter: 0x%08x\n", 
-        pFilterData->pid, secFilter->handle );
-
-      secFilter->pid = pFilterData->pid;
-      g_object_set( secFilter->handle, "filter-pid", pFilterData->pid, NULL );
+        secFilter->pid, secFilter->handle );
+      
+      g_object_set( secFilter->handle, "filter-pid", secFilter->pid, NULL );
       g_object_set( secFilter->handle, "filter-mode", pFilterData->comparitor, NULL );
       g_object_set( secFilter->handle, "filter-type", FILTER_TYPE_IP, NULL );
       g_object_set( secFilter->handle, "filter-action", FILTER_SET, NULL );

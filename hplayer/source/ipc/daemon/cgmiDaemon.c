@@ -1083,7 +1083,8 @@ static gboolean
 on_handle_cgmi_create_section_filter (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
-    GVariant *arg_sessionId )
+    GVariant *arg_sessionId,
+    gint arg_filterPid )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     void *pFilterId;
@@ -1105,6 +1106,7 @@ on_handle_cgmi_create_section_filter (
 
         // Provide a pointer to the sessionId as the private data.
         retStat = cgmi_CreateSectionFilter( (void *)pSession,
+                                         arg_filterPid,
                                          (void *)object,
                                          &pFilterId );
 
@@ -1197,7 +1199,6 @@ on_handle_cgmi_set_section_filter (
     GDBusMethodInvocation *invocation,
     GVariant *arg_sessionId,
     GVariant *arg_filterId,
-    gint arg_filterPid,
     GVariant *arg_filterValue,
     GVariant *arg_filterMask,
     gint arg_filterLength,
@@ -1249,7 +1250,6 @@ on_handle_cgmi_set_section_filter (
         }
 
         // Populate the filter struct
-        pFilter.pid = arg_filterPid;
         pFilter.value = filterValue;
         pFilter.mask = filterMask;
         pFilter.length = arg_filterLength;

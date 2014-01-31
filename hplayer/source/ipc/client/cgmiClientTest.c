@@ -8,8 +8,10 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// Logging
+// Macros
 ////////////////////////////////////////////////////////////////////////////////
+
+#define CLIENT_TEST_VERSION "1.0"
 
 #define CHECK_ERROR(err) \
     if( err != CGMI_ERROR_SUCCESS ) \
@@ -569,11 +571,10 @@ static cgmi_Status cgmi_SectionBufferCallback_PAT(
     {
         void *pNewFilterId = NULL;
         g_print("Calling cgmi_CreateSectionFilter...\n");
-        retStat = cgmi_CreateSectionFilter( pFilterPriv, pFilterPriv, &pNewFilterId );
+        retStat = cgmi_CreateSectionFilter( pFilterPriv, pat.pmts[0].program_map_PID, pFilterPriv, &pNewFilterId );
         CHECK_ERROR(retStat);
 
         // Use the PID of the first PMT
-        filterData.pid = pat.pmts[0].program_map_PID;
         filterData.value = NULL;
         filterData.mask = NULL;
         filterData.length = 0;
@@ -683,12 +684,11 @@ static cgmi_Status buildSectionFilterPid(void *pSessionId, int pid, sectionBuffe
 
     /* Create section filter */
     g_print("Calling cgmi_CreateSectionFilter...\n");
-    retStat = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterId );
+    retStat = cgmi_CreateSectionFilter( pSessionId, pid, pSessionId, &filterId );
     *ppFilterId = filterId;
     CHECK_ERROR_RETURN_STAT(retStat);
 
     /*  Init filter data */
-    filterData.pid = pid;
     filterData.value = NULL;
     filterData.mask = NULL;
     filterData.length = 0;
@@ -916,7 +916,7 @@ static cgmi_Status verifySectionFilter( void *pSessionId )
     // failure is detected instead of assuming a max of 3.
     //
     g_print("Creating 4th section filter that should fail...\n");
-    retStat = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterId_4 );
+    retStat = cgmi_CreateSectionFilter( pSessionId, 0x0, pSessionId, &filterId_4 );
 
     if( retStat != CGMI_ERROR_SUCCESS )
     {
@@ -1122,13 +1122,12 @@ static int sanity( const char *url )
     void *filterId = NULL;
     void *filterId2 = NULL;
     g_print("Calling cgmi_CreateSectionFilter...\n");
-    retStat = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterId );
+    retStat = cgmi_CreateSectionFilter( pSessionId, 0x0, pSessionId, &filterId );
     CHECK_ERROR(retStat);
 
     /* */
 
     tcgmi_FilterData filterData;
-    filterData.pid = 0x0;
     filterData.value = NULL;
     filterData.mask = NULL;
     filterData.length = 0;
@@ -1165,12 +1164,11 @@ static int sanity( const char *url )
     {
         /* Create section filter */
         g_print("Calling cgmi_CreateSectionFilter...\n");
-        retStat = cgmi_CreateSectionFilter( pSessionId, pSessionId, &filterId2 );
+        retStat = cgmi_CreateSectionFilter( pSessionId, gPat.pmts[0].program_map_PID, pSessionId, &filterId2 );
         CHECK_ERROR(retStat);
 
 
         // Use the PID of the first PMT
-        filterData.pid = gPat.pmts[0].program_map_PID;
         filterData.value = NULL;
         filterData.mask = NULL;
         filterData.length = 0;
@@ -1246,6 +1244,8 @@ static int play( const char *url )
 int main(int argc, char **argv)
 {
     int retStat = 0;
+
+    g_print("Starting client test v%s...\n", CLIENT_TEST_VERSION);
 
     if (argc < 2)
     {

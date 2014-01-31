@@ -1552,7 +1552,7 @@ cgmi_Status cgmi_SetDefaultAudioLang( void *pSession, const char *language )
     return retStat;
 }
 
-cgmi_Status cgmi_CreateSectionFilter( void *pSession, void *pFilterPriv, void **pFilterId )
+cgmi_Status cgmi_CreateSectionFilter( void *pSession, int pid, void *pFilterPriv, void **pFilterId )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -1593,6 +1593,7 @@ cgmi_Status cgmi_CreateSectionFilter( void *pSession, void *pFilterPriv, void **
 
         org_cisco_cgmi_call_create_section_filter_sync( gProxy,
                 sessDbusVar,
+                pid,
                 &filterDbusVar,
                 (gint *)&retStat,
                 NULL,
@@ -1842,7 +1843,6 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void *pFilterId, tcgmi_FilterD
         org_cisco_cgmi_call_set_section_filter_sync( gProxy,
                 sessDbusVar,
                 filterDbusVar,
-                (gint)pFilter->pid,
                 value,
                 mask,
                 (gint)pFilter->length,

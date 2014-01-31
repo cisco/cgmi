@@ -109,7 +109,6 @@ typedef enum
 
 typedef struct
 {
-   int pid;
    unsigned char *value;
    unsigned char *mask;
    int length;
@@ -489,6 +488,8 @@ cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language);
  *
  *  Create a section filter for a playing CGMI session.
  *
+ *  \param[in] pid          This is the pid to filter.  A pFilterId can be reused only for the same pid.
+ *
  *  \param[in] pSession     This is a handle to the active session.
  *
  *  \param[in] pFilterPriv  Private data that will be passed to section filter callbacks.
@@ -507,7 +508,7 @@ cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language);
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_CreateSectionFilter (void *pSession, void* pFilterPriv, void** pFilterId  );
+cgmi_Status cgmi_CreateSectionFilter(void *pSession, int pid, void* pFilterPriv, void** pFilterId  );
 
 /**
  *  \brief \b cgmi_DestroySectionFilter 
