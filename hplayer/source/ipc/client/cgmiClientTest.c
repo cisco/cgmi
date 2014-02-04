@@ -497,7 +497,7 @@ static cgmi_Status cgmi_SectionBufferCallback_PMT(
         return CGMI_ERROR_BAD_PARAM;
     }
 
-    g_print("Received section pFilterId: 0x%lx, sectionSize %d\n\n", pFilterId, sectionSize);
+    g_print("Received section pFilterId: %p, sectionSize %d\n\n", pFilterId, sectionSize);
     printHex( pSection, sectionSize );
     g_print("\n\n");
 
@@ -546,7 +546,7 @@ static cgmi_Status cgmi_SectionBufferCallback_PAT(
         return CGMI_ERROR_BAD_PARAM;
     }
 
-    g_print("Received section pFilterId: 0x%lx, sectionSize %d\n\n", pFilterId, sectionSize);
+    g_print("Received section pFilterId: %p, sectionSize %d\n\n", pFilterId, sectionSize);
     printHex( pSection, sectionSize );
     g_print("\n\n");
 
@@ -694,7 +694,7 @@ static cgmi_Status buildSectionFilterPid(void *pSessionId, int pid, sectionBuffe
     filterData.length = 0;
     filterData.comparitor = FILTER_COMP_EQUAL;
 
-    g_print("Calling cgmi_SetSectionFilter... for filterId 0x%08lx\n", filterId);
+    g_print("Calling cgmi_SetSectionFilter... for filterId %p\n", filterId);
     retStat = cgmi_SetSectionFilter( pSessionId, filterId, &filterData );
     CHECK_ERROR_RETURN_STAT(retStat);
 
@@ -786,6 +786,11 @@ static cgmi_Status verifySectionFilter( void *pSessionId )
     void *filterId_2 = NULL;
     void *filterId_3 = NULL;
     void *filterId_4 = NULL;
+    void *filterId_5 = NULL;
+    void *filterId_6 = NULL;
+    void *filterId_7 = NULL;
+    void *filterId_8 = NULL;
+    void *filterId_9 = NULL;
     int idx = 0;
 
     int testFilterPid;
@@ -911,34 +916,86 @@ static cgmi_Status verifySectionFilter( void *pSessionId )
     }
 
     //
-    // Attempt to create 4th filter without closing others, should fail
+    // Attempt to create 9 filters total without closing others, 9th should fail
     // NOTE: This test should be updated to create filters until a graceful
     // failure is detected instead of assuming a max of 3.
     //
-    g_print("Creating 4th section filter that should fail...\n");
+    g_print("Creating 4th section filter...\n");
     retStat = cgmi_CreateSectionFilter( pSessionId, 0x0, pSessionId, &filterId_4 );
-
     if( retStat != CGMI_ERROR_SUCCESS )
     {
-        g_print("As expected the 4th filter failed to create verifying TSDEMUX error reporting.\n");
-    }
-    else
-    {
-        g_print("ERROR:  The 4th filter creation was reported successful, and we only support 3 filters.\n");
+        g_print("ERROR:  The 4th filter failed to create.\n");
         return CGMI_ERROR_FAILED;
     }
 
-    // Destroy the 3 successful filters
-    g_print("Calling cgmi_DestroySectionFilter 1...\n");
+    g_print("Creating 5th section filter...\n");
+    retStat = cgmi_CreateSectionFilter( pSessionId, 0x0, pSessionId, &filterId_5 );
+    if( retStat != CGMI_ERROR_SUCCESS )
+    {
+        g_print("ERROR:  The 5th filter failed to create.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_print("Creating 6th section filter...\n");
+    retStat = cgmi_CreateSectionFilter( pSessionId, 0x0, pSessionId, &filterId_6 );
+    if( retStat != CGMI_ERROR_SUCCESS )
+    {
+        g_print("ERROR:  The 6th filter failed to create.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_print("Creating 7th section filter...\n");
+    retStat = cgmi_CreateSectionFilter( pSessionId, 0x0, pSessionId, &filterId_7 );
+    if( retStat != CGMI_ERROR_SUCCESS )
+    {
+        g_print("ERROR:  The 7th filter failed to create.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_print("Creating 8th section filter...\n");
+    retStat = cgmi_CreateSectionFilter( pSessionId, 0x0, pSessionId, &filterId_8 );
+    if( retStat != CGMI_ERROR_SUCCESS )
+    {
+        g_print("ERROR:  The 8th filter failed to create.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_print("Creating 9th section filter which should FAIL...\n");
+    retStat = cgmi_CreateSectionFilter( pSessionId, 0x0, pSessionId, &filterId_9 );
+    if( retStat == CGMI_ERROR_SUCCESS )
+    {
+        g_print("ERROR:  The 9th filter should have failed.  (Assumed max of 8 filters)\n");
+        return CGMI_ERROR_FAILED;
+    }
+    else
+    {
+        g_print("The 9th filter failed as expected.  (Assumed max of 8 filters)\n");
+    }
+
+    // Destroy the successful filters
+    g_print("Destroy filters...\n");
     retStat = cgmi_DestroySectionFilter( pSessionId, filterId_1 );
     CHECK_ERROR_RETURN_STAT(retStat);
 
-    g_print("Calling cgmi_DestroySectionFilter 2...\n");
     retStat = cgmi_DestroySectionFilter( pSessionId, filterId_2 );
     CHECK_ERROR_RETURN_STAT(retStat);
 
-    g_print("Calling cgmi_DestroySectionFilter 3...\n");
     retStat = cgmi_DestroySectionFilter( pSessionId, filterId_3 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId_4 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId_5 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId_6 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId_7 );
+    CHECK_ERROR_RETURN_STAT(retStat);
+
+    retStat = cgmi_DestroySectionFilter( pSessionId, filterId_8 );
     CHECK_ERROR_RETURN_STAT(retStat);
 
     /**
@@ -1033,7 +1090,7 @@ static int sanity( const char *url )
 
     /****** Call all other API's after starting playback *******/
 #if 1
-    int bCanPlay = 0  ;
+    int bCanPlay = 0;
     g_print("Calling cgmi_canPlayType...\n");
     retStat = cgmi_canPlayType( "fakeType", &bCanPlay );
     CHECK_ERROR(retStat);
@@ -1133,7 +1190,7 @@ static int sanity( const char *url )
     filterData.length = 0;
     filterData.comparitor = FILTER_COMP_EQUAL;
 
-    g_print("Calling cgmi_SetSectionFilter... for filterId 0x%08lx\n", filterId);
+    g_print("Calling cgmi_SetSectionFilter... for filterId %p\n", filterId);
     retStat = cgmi_SetSectionFilter( pSessionId, filterId, &filterData );
     CHECK_ERROR(retStat);
 
@@ -1174,7 +1231,7 @@ static int sanity( const char *url )
         filterData.length = 0;
         filterData.comparitor = FILTER_COMP_EQUAL;
 
-        g_print("Calling cgmi_SetSectionFilter... for filterId 0x%08lx\n", filterId2);
+        g_print("Calling cgmi_SetSectionFilter... for filterId %p\n", filterId2);
         retStat = cgmi_SetSectionFilter( pSessionId, filterId2, &filterData );
         CHECK_ERROR(retStat);
 

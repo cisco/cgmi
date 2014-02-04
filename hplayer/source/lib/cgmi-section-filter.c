@@ -320,8 +320,6 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, int pid, void* pFilterPriv,
 
       secFilter->lastAction = FILTER_OPEN;
 
-      g_print("secFilter->handle = 0x%08x, filterHandle = 0x%08x \n", secFilter->handle, filterHandle);
-
       g_object_set( filterHandle, "filter-action", FILTER_OPEN, NULL );
       g_object_set( filterHandle, "filter-pid", 0x1FFF, NULL );
 
@@ -334,6 +332,8 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, int pid, void* pFilterPriv,
          g_print("Failed to open section filter handle.\n");
          retStat = CGMI_ERROR_FAILED;
       }
+
+      g_print("Created filter with handle = %p \n", secFilter->handle);
 
    }while(0);
 
@@ -480,7 +480,7 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
       secFilter->lastAction = FILTER_SET;
    
       // Set other filter params
-      g_print("Filtering for pid: 0x%04x, with secFilter: 0x%08x\n", 
+      g_print("Filtering for pid: 0x%04x, with secFilter: %p\n", 
         secFilter->pid, secFilter->handle );
       
       g_object_set( secFilter->handle, "filter-pid", secFilter->pid, NULL );

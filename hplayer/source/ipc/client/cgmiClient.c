@@ -1665,10 +1665,6 @@ cgmi_Status cgmi_CreateSectionFilter( void *pSession, int pid, void *pFilterPriv
         {
             g_print("Can't find the new filter in the hash!!!\n");
         }
-        else
-        {
-            g_print("Found the new filter in the hash!!!\n");
-        }
 
     }while(0);
 

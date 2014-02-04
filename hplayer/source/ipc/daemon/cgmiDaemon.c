@@ -1451,8 +1451,6 @@ on_handle_cgmi_start_user_data_filter (
 
     }while(0);
 
-    CGMID_INFO("Calling DBUS return\n");
-
     org_cisco_cgmi_complete_start_user_data_filter (object,
             invocation,
             callbackData->fifoName,
