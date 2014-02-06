@@ -735,7 +735,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       // This url is pointing to DLNA content, build a manual pipeline.
       memset(manualPipeline, 0, 1024);
       g_print("DLNA content, using Manual Pipeline");
-      g_sprintf(manualPipeline, "rovidmp location=%s %s", pSess->playbackURI,"! decodebin2 name=dec ! brcmvideosink dec. ! brcmaudiosink");
+      /* FIXME: Broadcom decodebin2 bug. gst-launch rovidmp location=http://6.4.92.100:8200/MediaItems/21.mpg  ! decodebin2 name=dec ! brcmvideosink dec. ! brcmaudiosink, 
+       * it appears that decodebin2 is linking its own sinks and is ignoring brcmvideosink dec. ! brcmaudiosink. Because of this bug the app does goes not get the EOS event. 
+       * Temporary fix - remove the sinks after decodebin2.
+       */
+      g_sprintf(manualPipeline, "rovidmp location=%s %s", pSess->playbackURI,"! decodebin2 name=dec");
       g_strlcpy(pPipeline, manualPipeline,1024);
       pSess->manualPipeline = g_strdup(manualPipeline);
    }
