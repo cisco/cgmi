@@ -1271,7 +1271,7 @@ cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumR
     return retStat;
 }
 
-cgmi_Status cgmi_SetVideoRectangle( void *pSession, int x, int y, int w, int h  )
+cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw, int srch, int dstx, int dsty, int dstw, int dsth )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -1308,10 +1308,14 @@ cgmi_Status cgmi_SetVideoRectangle( void *pSession, int x, int y, int w, int h  
 
         org_cisco_cgmi_call_set_video_rectangle_sync( gProxy,
                 dbusVar,
-                x,
-                y,
-                w,
-                h,
+                srcx,
+                srcy,
+                srcw,
+                srch,
+                dstx,
+                dsty,
+                dstw,
+                dsth,
                 (gint *)&retStat,
                 NULL,
                 &error );

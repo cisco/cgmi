@@ -55,6 +55,7 @@ typedef struct
    GstBus             *bus;
    GstMessage         *msg;
    void*              usrParam;
+   tCgmiRect          vidSrcRect;
    tCgmiRect          vidDestRect;
    tAudioLang         audioLanguages[MAX_AUDIO_LANGUAGE_DESCRIPTORS];
    gchar              defaultAudioLanguage[4];

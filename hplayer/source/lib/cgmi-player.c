@@ -1125,7 +1125,7 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay )
    return CGMI_ERROR_NOT_IMPLEMENTED;
 }
 
-cgmi_Status cgmi_SetVideoRectangle (void *pSession, int x, int y, int w, int h )
+cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw, int srch, int dstx, int dsty, int dstw, int dsth )
 {
    char *ptr;
    tSession *pSess = (tSession*)pSession;
@@ -1136,36 +1136,57 @@ cgmi_Status cgmi_SetVideoRectangle (void *pSession, int x, int y, int w, int h )
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
-   if ( x < 0 )
-      x = 0;
-   if ( x >= VIDEO_MAX_WIDTH )
-      x = VIDEO_MAX_WIDTH - 1;
+   if ( srcx < 0 )
+      srcx = 0;
+   if ( srcx >= VIDEO_MAX_WIDTH )
+      srcx = VIDEO_MAX_WIDTH - 1;
 
-   if ( y < 0 )
-      y = 0;
-   if ( y >= VIDEO_MAX_HEIGHT )
-      y = VIDEO_MAX_HEIGHT - 1;
+   if ( srcy < 0 )
+      srcy = 0;
+   if ( srcy >= VIDEO_MAX_HEIGHT )
+      srcy = VIDEO_MAX_HEIGHT - 1;
 
-   if ( x + w > VIDEO_MAX_WIDTH )
-      w = VIDEO_MAX_WIDTH - x;
-   if ( y + h > VIDEO_MAX_HEIGHT )
-      h = VIDEO_MAX_HEIGHT - y;
+   if ( srcx + srcw > VIDEO_MAX_WIDTH )
+      srcw = VIDEO_MAX_WIDTH - srcx;
+   if ( srcy + srch > VIDEO_MAX_HEIGHT )
+      srch = VIDEO_MAX_HEIGHT - srcy;
 
-   if ( w < 10 || h < 10 )
+   if ( dstx < 0 )
+      dstx = 0;
+   if ( dstx >= VIDEO_MAX_WIDTH )
+      dstx = VIDEO_MAX_WIDTH - 1;
+
+   if ( dsty < 0 )
+      dsty = 0;
+   if ( dsty >= VIDEO_MAX_HEIGHT )
+      dsty = VIDEO_MAX_HEIGHT - 1;
+
+   if ( dstx + dstw > VIDEO_MAX_WIDTH )
+      dstw = VIDEO_MAX_WIDTH - dstx;
+   if ( dsty + dsth > VIDEO_MAX_HEIGHT )
+      dsth = VIDEO_MAX_HEIGHT - dsty;
+
+   if ( dstw < 10 || dsth < 10 )
    {
-      g_print("Adjusted video size too small, must be bigger than 10x10 pixels!");
+      g_print("Adjusted video dest size too small, must be bigger than 10x10 pixels!");
       return CGMI_ERROR_BAD_PARAM;
    }
 
-   pSess->vidDestRect.x = x;
-   pSess->vidDestRect.y = y;
-   pSess->vidDestRect.w = w;
-   pSess->vidDestRect.h = h;
+   pSess->vidSrcRect.x = srcx;
+   pSess->vidSrcRect.y = srcy;
+   pSess->vidSrcRect.w = srcw;
+   pSess->vidSrcRect.h = srch;
+
+   pSess->vidDestRect.x = dstx;
+   pSess->vidDestRect.y = dsty;
+   pSess->vidDestRect.w = dstw;
+   pSess->vidDestRect.h = dsth;
 
    if ( NULL != pSess->videoSink )
    {
       gchar dim[64];
-      snprintf( dim, sizeof(dim), "%d,%d,%d,%d", 
+      snprintf( dim, sizeof(dim), "%d,%d,%d,%d,%d,%d,%d,%d", 
+                pSess->vidSrcRect.x, pSess->vidSrcRect.y, pSess->vidSrcRect.w, pSess->vidSrcRect.h,
                 pSess->vidDestRect.x, pSess->vidDestRect.y, pSess->vidDestRect.w, pSess->vidDestRect.h);
       g_object_set( G_OBJECT(pSess->videoSink), "window_set", dim, NULL );
    }

@@ -418,7 +418,7 @@ void help(void)
            "\n"
            "\tsetdefaudiolang <lang>\n"
            "\n"
-           "\tsetvideorect <x,y,w,h>\n"
+           "\tsetvideorect <srcx,srcy,srcw,srch,dstx,dsty,dstw,dsth>\n"
            "\n"
            "\tgetpidinfo\n"
            "\n"
@@ -1052,27 +1052,27 @@ int main(int argc, char **argv)
         {
             char *ptr;
             char *dim;
-            int i, size[4];
+            int i, size[8];
             if ( strlen( command ) <= 13 )
             {
-                printf( "\tsetvideorect <x,y,w,h>\n" );
+                printf( "\tsetvideorect <srcx,srcy,srcw,srch,dstx,dsty,dstw,dsth>\n" );
                 continue;
             }
             strncpy( arg, command + 13, strlen(command) - 13 );
             arg[strlen(command) - 13] = '\0';
             
             dim = arg;
-            for ( i = 0; i < 4; i++ )
+            for ( i = 0; i < 8; i++ )
             {                
-                if ( i != 3 )
+                if ( i != 7 )
                     ptr = strchr(dim, ',');
 
                 if ( NULL == ptr )
                 {
-                  printf("Error parsing arguments, please specify rectangle dimensions in the format x,y,w,h\n");
+                  printf("Error parsing arguments, please specify rectangle dimensions in the format srcx,srcy,srcw,srch,dstx,dsty,dstw,dsth\n");
                   break;
                 }
-                if ( i != 3 )
+                if ( i != 7 )
                     *ptr = 0;
 
                 size[i] = atoi( dim );
@@ -1082,7 +1082,7 @@ int main(int argc, char **argv)
             if ( NULL == ptr )
                 continue;
 
-            retCode = cgmi_SetVideoRectangle( pSessionId, size[0], size[1], size[2], size[3] );
+            retCode = cgmi_SetVideoRectangle( pSessionId, size[0], size[1], size[2], size[3], size[4], size[5], size[6], size[7] );
             if ( retCode != CGMI_ERROR_SUCCESS )
             {
                 printf("Error returned %d\n", retCode);                

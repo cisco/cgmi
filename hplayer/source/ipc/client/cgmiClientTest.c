@@ -1167,7 +1167,7 @@ static int sanity( const char *url )
     CHECK_ERROR(retStat);
 
     g_print("Calling cgmi_SetVideoRectangle...\n");
-    retStat = cgmi_SetVideoRectangle( pSessionId, 0, 0, 400, 400 );
+    retStat = cgmi_SetVideoRectangle( pSessionId, 0, 0, 0, 0, 0, 0, 400, 400 );
     CHECK_ERROR(retStat);
 
 #endif

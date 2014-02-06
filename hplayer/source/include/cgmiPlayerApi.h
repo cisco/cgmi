@@ -397,21 +397,30 @@ cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumR
  *  This is a request to scale the video wrt fullscreen coordinates (0,0,1280,720)
  *  \param[in] pSession  This is a handle to the active session.
  *
- *  \param[in] x  Video destination rectangle x-position
+ *  \param[in] srcx  Video source rectangle x-position
  *
- *  \param[in] y  Video destination rectangle y-position
+ *  \param[in] srcy  Video source rectangle y-position
  *
- *  \param[in] w  Video destination rectangle width
+ *  \param[in] srcw  Video source rectangle width
  *
- *  \param[in] h  Video destination rectangle height
+ *  \param[in] srch  Video source rectangle height
  *
- *  \pre    The Session must be open the the url must be loaded.
+ *  \param[in] dstx  Video destination rectangle x-position
+ *
+ *  \param[in] dsty  Video destination rectangle y-position
+ *
+ *  \param[in] dstw  Video destination rectangle width
+ *
+ *  \param[in] dsth  Video destination rectangle height
+ *
+ *  \pre    The Session must be open the url must be loaded.
  *
  * \return  CGMI_ERROR_SUCCESS when the API succeeds
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_SetVideoRectangle (void *pSession, int x, int y, int w, int h );
+cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw, int srch, 
+                                    int dstx, int dsty, int dstw, int dsth );
 
 /**
  *  \brief \b cgmi_GetNumAudioLanguages

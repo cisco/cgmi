@@ -885,10 +885,14 @@ on_handle_cgmi_set_video_rectangle (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
     GVariant *arg_sessionId,
-    int x,
-    int y, 
-    int w,
-    int h )
+    int srcx,
+    int srcy, 
+    int srcw,
+    int srch,
+    int dstx,
+    int dsty,
+    int dstw,
+    int dsth)
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     GVariant *sessVar = NULL;
@@ -907,7 +911,7 @@ on_handle_cgmi_set_video_rectangle (
         g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
         g_variant_unref( sessVar );
 
-        retStat = cgmi_SetVideoRectangle( (void *)pSession, x, y, w, h );
+        retStat = cgmi_SetVideoRectangle( (void *)pSession, srcx, srcy, srcw, srch, dstx, dsty, dstw, dsth );
 
     }while(0);
 
