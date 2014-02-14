@@ -28,7 +28,7 @@ static gchar gDefaultAudioLanguage[4];
 
 static int  cgmi_CheckSessionHandle(tSession *pSess)
 {
-   if (pSess->cookie != MAGIC_COOKIE)
+   if (NULL == pSess || pSess->cookie != MAGIC_COOKIE)
    {
       GST_ERROR("The pointer to the session handle is invalid!!!!\n");
       return FALSE;
@@ -82,7 +82,10 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
 {
    tSession *pSess = (tSession*)data;
   
-   if (cgmi_CheckSessionHandle(pSess) == FALSE) {return FALSE;}
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE ) 
+   {
+      return FALSE;
+   }
 
    switch( GST_MESSAGE_TYPE(msg) )
    {
@@ -215,7 +218,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
    tSession *pSess = (tSession*)data;
    unsigned int videoStream, audioStream, programNumber;
    
-   if ( NULL == pSess )
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
       g_print("%s:Invalid session handle\n", __FUNCTION__);
       return;
@@ -351,7 +354,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
    if ( FALSE == pSess->autoPlay )
    {
 	   g_mutex_lock (pSess->autoPlayMutex);
-      if (pSess->videoStreamIndex == INVALID_INDEX && pSess->audioStreamIndex == INVALID_INDEX)
+      if ( pSess->videoStreamIndex == INVALID_INDEX && pSess->audioStreamIndex == INVALID_INDEX )
       {
          pSess->waitingOnPids = TRUE;
          g_cond_wait (pSess->autoPlayCond, pSess->autoPlayMutex);	
@@ -447,6 +450,7 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
    GstElement *demux = NULL;
    GstElement *videoSink = NULL;
    GstElement *videoDecoder = NULL;
+   GstElement *audioDecoder = NULL;
    tSession *pSess = (tSession*)data;
 
    gchar *name = gst_element_get_name( element );
@@ -483,7 +487,18 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
          pSess->videoDecoder = videoDecoder;
       }
    }
- 
+
+   if ( NULL == pSess->audioDecoder )
+   {
+      audioDecoder = cgmi_gst_find_element( bin, "audiodecoder" );
+
+      if( NULL != audioDecoder )
+      {
+         pSess->audioDecoder = audioDecoder;
+      }
+   }
+
+
    // If this element is a bin ensure this callback is called when elements
    // are added.
    if ( GST_IS_BIN(element) )
@@ -503,7 +518,7 @@ static GstFlowReturn cgmi_gst_new_user_data_buffer_available (GstAppSink *sink, 
    GstBuffer *buffer;
    tSession *pSess = (tSession*)data;
 
-   if ( NULL == pSess )
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
       return GST_FLOW_OK;
    }
@@ -613,12 +628,14 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->udpsrc = NULL;
    pSess->videoSink = NULL;
    pSess->videoDecoder = NULL;
+   pSess->audioDecoder = NULL;
    pSess->vidDestRect.x = 0;
    pSess->vidDestRect.y = 0;
    pSess->vidDestRect.w = VIDEO_MAX_WIDTH;
    pSess->vidDestRect.h = VIDEO_MAX_HEIGHT;
    pSess->audioStreamIndex = INVALID_INDEX;
    pSess->videoStreamIndex = INVALID_INDEX;
+   pSess->isAudioMuted = FALSE;
 
    strncpy( pSess->defaultAudioLanguage, gDefaultAudioLanguage, sizeof(pSess->defaultAudioLanguage) );
    pSess->defaultAudioLanguage[sizeof(pSess->defaultAudioLanguage) - 1] = 0;
@@ -657,6 +674,12 @@ cgmi_Status cgmi_DestroySession (void *pSession)
 {
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    tSession *pSess = (tSession*)pSession;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
 
    GST_INFO("Entered Destroy\n");
    if (g_main_loop_is_running(pSess->loop))
@@ -704,6 +727,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    gchar manualPipeline[1024];
 
    tSession *pSess = (tSession*)pSession;
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
 
    pPipeline = g_strnfill(1024, '\0');
    if (pPipeline == NULL)
@@ -717,6 +745,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    pSess->videoStreamIndex = INVALID_INDEX;
    pSess->audioStreamIndex = INVALID_INDEX;
    pSess->audioLanguageIndex = INVALID_INDEX;
+   pSess->isAudioMuted = FALSE;
 
    pSess->playbackURI = g_strdup(uri);
    if (pSess->playbackURI == NULL)
@@ -841,6 +870,12 @@ cgmi_Status cgmi_Unload  ( void *pSession )
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    // we need to tear down the pipeline
 
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
    do
    {
       //Signal psi callback on unload in case it is blocked on PID selection
@@ -862,6 +897,7 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       pSess->udpsrc = NULL;
       pSess->videoSink = NULL;
       pSess->videoDecoder = NULL;
+      pSess->audioDecoder = NULL;
 
    }while (0);
    g_print("Exiting %s pipeline is now null\n",__FUNCTION__);
@@ -872,6 +908,12 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
 {
    tSession *pSess = (tSession*)pSession;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
 
    pSess->autoPlay = autoPlay;
 
@@ -888,6 +930,12 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    gint64 position; 
    GstState  curState;
    GstQuery *streamInfo;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
 
    streamInfo = gst_query_new_segment (GST_FORMAT_TIME);
    gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE); 
@@ -940,6 +988,13 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
 
    tSession *pSess = (tSession*)pSession;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
    do
    {
       g_print("Setting position to %f (ns)  \n", (position* GST_SECOND));
@@ -967,6 +1022,12 @@ cgmi_Status cgmi_GetPosition (void *pSession, float *pPosition)
    GstFormat gstFormat = GST_FORMAT_TIME;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
 
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
    // this returns nano seconds, change it to seconds.
    do
    {
@@ -986,7 +1047,15 @@ cgmi_Status cgmi_GetDuration (void *pSession, float *pDuration, cgmi_SessionType
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    gint64 Duration = 0; 
    GstFormat gstFormat = GST_FORMAT_TIME;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
    *type = FIXED;
+
    do
    {
       gst_element_query_duration( pSess->pipeline, &gstFormat, &Duration );
@@ -1014,14 +1083,15 @@ cgmi_Status cgmi_GetRates (void *pSession, float pRates[], unsigned int *pNumRat
    int          ii = 0;
 
    g_print("%s: ENTER %s >>>>\n", __FILE__, __FUNCTION__);
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
    do
    {
-      if(NULL == pSess)
-      {
-         g_print("%s: %s(%d): param pSess is NULL\n", __FILE__, __FUNCTION__, __LINE__);
-         stat = CGMI_ERROR_BAD_PARAM;
-         break;
-      }
       if(NULL == pRates)
       {
          g_print("%s: %s(%d): param pRates is NULL\n", __FILE__, __FUNCTION__, __LINE__);
@@ -1106,14 +1176,14 @@ cgmi_Status cgmi_GetRates (void *pSession, float pRates[], unsigned int *pNumRat
 
    } while (0);
    
-   if(NULL != query)
+   if( NULL != query )
    {
-      gst_query_unref (query);
+      gst_query_unref ( query );
       query = NULL;
    }
-   if(NULL != pTrickSpeedsStr)
+   if( NULL != pTrickSpeedsStr )
    {
-      g_free(pTrickSpeedsStr);
+      g_free( pTrickSpeedsStr );
       pTrickSpeedsStr = NULL;
    }
 
@@ -1130,9 +1200,9 @@ cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw
    char *ptr;
    tSession *pSess = (tSession*)pSession;
 
-   if ( NULL == pSess )
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("Invalid session handle!\n");
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
@@ -1197,11 +1267,13 @@ cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw
 cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
 {
    tSession *pSess = (tSession*)pSession;
-   if ( NULL == pSess )
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("Invalid session handle!\n");
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
+
    if ( NULL == count )
    {
       g_print("Null count pointer passed for audio language!\n");
@@ -1217,9 +1289,9 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
 {
    tSession *pSess = (tSession*)pSession;
 
-   if ( NULL == pSess )
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("Invalid session handle!\n");
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
@@ -1241,15 +1313,14 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
    return CGMI_ERROR_SUCCESS;
 }
 
-
-
 cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
 {
    cgmi_Status stat;
    tSession *pSess = (tSession*)pSession;
-   if ( NULL == pSess )
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("Invalid session handle!\n");
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
@@ -1305,9 +1376,9 @@ cgmi_Status cgmi_startUserDataFilter( void *pSession, userDataBufferCB bufferCB,
    GstCaps *caps = NULL;
 
    tSession *pSess = (tSession*)pSession;
-   if ( NULL == pSess )
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("Invalid session handle!\n");
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
@@ -1380,9 +1451,9 @@ cgmi_Status cgmi_startUserDataFilter( void *pSession, userDataBufferCB bufferCB,
 cgmi_Status cgmi_stopUserDataFilter( void *pSession, userDataBufferCB bufferCB )
 {
    tSession *pSess = (tSession*)pSession;
-   if ( NULL == pSess )
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("Invalid session handle!\n");
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
@@ -1420,9 +1491,9 @@ cgmi_Status cgmi_stopUserDataFilter( void *pSession, userDataBufferCB bufferCB )
 cgmi_Status cgmi_GetNumPids( void *pSession, int *pCount )
 {
    tSession *pSess = (tSession*)pSession;
-   if ( NULL == pSess )
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("Invalid session handle!\n");
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
@@ -1440,9 +1511,9 @@ cgmi_Status cgmi_GetNumPids( void *pSession, int *pCount )
 cgmi_Status cgmi_GetPidInfo( void *pSession, int index, tcgmi_PidData *pPidData )
 {
    tSession *pSess = (tSession*)pSession;
-   if ( NULL == pSess )
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("Invalid session handle!\n");
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
@@ -1464,12 +1535,12 @@ cgmi_Status cgmi_GetPidInfo( void *pSession, int index, tcgmi_PidData *pPidData 
    return CGMI_ERROR_SUCCESS;
 }
 
-cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type )
+cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, int enable )
 {
    tSession *pSess = (tSession*)pSession;
-   if ( NULL == pSess )
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("Invalid session handle!\n");
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
@@ -1481,25 +1552,43 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type )
 
    if ( STREAM_TYPE_VIDEO == type )
    {
-      if ( AUTO_SELECT_STREAM != index )
-         g_object_set( G_OBJECT(pSess->demux), "video-stream", index, NULL );  
-	   g_mutex_lock (pSess->autoPlayMutex);
-      pSess->videoStreamIndex = index;
-      g_print("Waiting on pids: %s\n", pSess->waitingOnPids?"TRUE":"FALSE");
-      if ( TRUE == pSess->waitingOnPids )
+      if ( AUTO_SELECT_STREAM != index && pSess->videoStreamIndex != index )
       {
-         g_print("Signalling playback start...\n");
-         g_cond_signal( pSess->autoPlayCond );
+         g_object_set( G_OBJECT(pSess->demux), "video-stream", index, NULL );  
+	      g_mutex_lock (pSess->autoPlayMutex);
+         pSess->videoStreamIndex = index;
+         g_print("Waiting on pids: %s\n", pSess->waitingOnPids?"TRUE":"FALSE");
+         if ( TRUE == pSess->waitingOnPids )
+         {
+            g_print("Signalling playback start...\n");
+            g_cond_signal( pSess->autoPlayCond );
+         }
+	      g_mutex_unlock (pSess->autoPlayMutex);
       }
-	   g_mutex_unlock (pSess->autoPlayMutex);
    }
    else if ( STREAM_TYPE_AUDIO == type )
    {
-      if ( AUTO_SELECT_STREAM != index )
+      if ( AUTO_SELECT_STREAM != index && pSess->audioStreamIndex != index )
+      {
          g_object_set( G_OBJECT(pSess->demux), "audio-stream", index, NULL );  
-	   g_mutex_lock (pSess->autoPlayMutex);
-      pSess->audioStreamIndex = index;
-	   g_mutex_unlock (pSess->autoPlayMutex);
+	      g_mutex_lock (pSess->autoPlayMutex);
+         pSess->audioStreamIndex = index;
+	      g_mutex_unlock (pSess->autoPlayMutex);
+      }
+
+      if ( pSess->isAudioMuted == enable )
+      {
+         if ( NULL != pSess->audioDecoder )
+         {
+            g_print("%s audio decoder...\n", enable?"Unmuting":"Muting");
+            g_object_set( G_OBJECT(pSess->audioDecoder), "decoder-mute", !enable, NULL ); 
+         }
+         else
+         {
+            g_print("Audio decoder is not opened, cannot change audio mute state!\n");
+         }
+         pSess->isAudioMuted = !enable;
+      }
    }
    else
    {
@@ -1509,3 +1598,4 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type )
 
    return CGMI_ERROR_SUCCESS;
 }
+

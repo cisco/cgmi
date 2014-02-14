@@ -666,6 +666,69 @@ cgmi_Status cgmi_startUserDataFilter (void *pSession, userDataBufferCB bufferCB,
 cgmi_Status cgmi_stopUserDataFilter (void *pSession, userDataBufferCB bufferCB);
 
 /**
+ *  \brief \b cgmi_GetNumPids 
+ *
+ *  Get number of available stream PIDs in the PMT.
+ *
+ *  \param[in]  pSession     This is a handle to the active session.
+ *
+ *  \param[out] pCount       Pointer to a integer to return the number of PIDs
+ *
+ *  \pre                     The Session must be open and the url must be loaded.
+ *
+ *  \return                  CGMI_ERROR_SUCCESS when call succeeds.
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetNumPids( void *pSession, int *pCount );
+
+/**
+ *  \brief \b cgmi_GetPidInfo 
+ *
+ *  Get information about a stream in the PMT.
+ *
+ *  \param[in]  pSession     This is a handle to the active session.
+ *
+ *  \param[in]  index        Index to the stream to get info about, 
+ *                           index is 0-based upto number of pids minus one
+ *
+ *  \param[out] pPidData     Structure to hold returned PID info
+ *
+ *  \pre                     The Session must be open and the url must be loaded.
+ *
+ *  \return                  CGMI_ERROR_SUCCESS when call succeeds.
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetPidInfo( void *pSession, int index, tcgmi_PidData *pPidData );
+
+
+/**
+ *  \brief \b cgmi_SetPidInfo 
+ *
+ *  Sets the specified stream the active stream or enables or disables the active stream
+ *
+ *  \param[in]  pSession     This is a handle to the active session.
+ *
+ *  \param[in]  index        Index to the PID to set active 
+ *                           index is 0-based index upto number of pids minus one
+ *
+ *  \param[in]  type         Stream type for the stream to set active
+ *
+ *  \param[in]  enable       A flag that determines whether to enable or disable the active stream
+ *
+ *  \pre                     The Session must be open and the url must be loaded.
+ *
+ *  \return                  CGMI_ERROR_SUCCESS when call succeeds.
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, int enable );
+
+/**
  * \section How To section
  *  \attention "How to Initialize and shutdown the subsystem"
  * 
@@ -675,6 +738,8 @@ cgmi_Status cgmi_stopUserDataFilter (void *pSession, userDataBufferCB bufferCB);
 
 
 /** @} */ // end of CGMI group
+
+
 
 #ifdef __cplusplus
 }

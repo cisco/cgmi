@@ -50,6 +50,7 @@ typedef struct
    guint              tag;
    GstElement         *videoSink;
    GstElement         *videoDecoder;
+   GstElement         *audioDecoder;
    GstElement         *demux;
    GstElement         *udpsrc;   
    GstBus             *bus;
@@ -72,6 +73,7 @@ typedef struct
    void               *userDataBufferParam;
    gint               autoPlay;
    gboolean           waitingOnPids;
+   gboolean           isAudioMuted;
    GMutex             *autoPlayMutex;
    GCond              *autoPlayCond; 
    gint               videoStreamIndex;

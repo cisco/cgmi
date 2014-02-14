@@ -352,8 +352,8 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
 #if 0
                usleep(3000000);
                printf("Setting pids...\n");
-               cgmi_SetPidInfo( pSession, 1, 1 );
-               cgmi_SetPidInfo( pSession, 0, 0 );
+               cgmi_SetPidInfo( pSession, 1, 1, TRUE );
+               cgmi_SetPidInfo( pSession, 0, 0, TRUE );
 #endif
             }
             break;
@@ -399,6 +399,9 @@ void help(void)
            "\tplay <url> [autoplay]\n"
            "\tstop (or unload)\n"
            "\n"
+           "\taudioplay <url>\n"
+           "\taudiostop\n"
+           "\n"
            "\tgetrates\n"
            "\tsetrate <rate (float)>\n"
            "\n"
@@ -422,7 +425,7 @@ void help(void)
            "\n"
            "\tgetpidinfo\n"
            "\n"
-           "\tsetpid <index> <A/V type (0:audio, 1:video)>\n"
+           "\tsetpid <index> <A/V type (0:audio, 1:video)> <0:disable, 1:enable>\n"
            "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
@@ -439,7 +442,8 @@ void help(void)
 int main(int argc, char **argv)
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;   /* Return codes from cgmi */
-    void *pSessionId;                           /* CGMI Session Handle */
+    void *pSessionId = NULL;                    /* CGMI Session Handle */
+    void *pEasSessionId = NULL;                 /* CGMI Secondary (EAS) Audio Session Handle */
 
     gchar command[MAX_COMMAND_LENGTH];          /* Command buffer */
     gchar arg[MAX_COMMAND_LENGTH];              /* Command args buffer for
@@ -453,6 +457,10 @@ int main(int argc, char **argv)
                                                    buffer. */
     gint quit = 0;                              /* 1 = quit command parsing */
     gint playing = 0;                           /* Play state:
+                                                    0: stopped
+                                                    1: playing */
+
+    gint audioplaying = 0;                      /* EAS Audio Play state:
                                                     0: stopped
                                                     1: playing */
 
@@ -809,14 +817,18 @@ int main(int argc, char **argv)
             }
 
             /* Destroy the created session. */
-            retCode = cgmi_DestroySession( pSessionId );
-            if (retCode != CGMI_ERROR_SUCCESS)
+            if ( NULL != pSessionId )
             {
-                printf("CGMI DestroySession Failed: %s\n",
-                        cgmi_ErrorString( retCode ));
-                break;
-            } else {
-                printf("CGMI DestroySession Success!\n");
+               retCode = cgmi_DestroySession( pSessionId );
+               if (retCode != CGMI_ERROR_SUCCESS)
+               {
+                   printf("CGMI DestroySession Failed: %s\n",
+                           cgmi_ErrorString( retCode ));
+                   break;
+               } else {
+                   printf("CGMI DestroySession Success!\n");
+                   pSessionId = NULL;
+               }
             }
 
             /* Create a playback session. */
@@ -1114,10 +1126,11 @@ int main(int argc, char **argv)
         {
             gint index;
             gint type;
-            char *arg2;
+            gint enable;
+            char *arg2, *arg3;
             if ( strlen( command ) <= 7 )
             {
-                printf( "\tsetpid <index> <A/V type (0:audio, 1:video)>\n" );
+                printf( "\tsetpid <index> <A/V type (0:audio, 1:video)> <0:disable, 1:enable>\n" );
                 continue;
             }
             strncpy( arg, command + 7, strlen(command) - 7 );
@@ -1131,14 +1144,28 @@ int main(int argc, char **argv)
             }
             else
             {
-                printf( "\tsetpid <index> <A/V type (0:audio, 1:video)>\n" );
+               printf( "\tsetpid <index> <A/V type (0:audio, 1:video)> <1:enable, 0:disable>\n" );
                 continue;
             }
-            
+
+            arg3 = strchr( arg2, ' ' );
+            if ( arg3 )
+            {
+               *arg3 = 0;
+               arg3++;
+            }
+            else
+            {
+               printf( "\tsetpid <index> <A/V type (0:audio, 1:video)> <0:disable, 1:enable>\n" );
+                continue;
+            }
+
+
             index = atoi( arg );
             type = atoi( arg2 );
+            enable = atoi( arg3 );
 
-            retCode = cgmi_SetPidInfo( pSessionId, index, type );
+            retCode = cgmi_SetPidInfo( pSessionId, index, type, enable );
             if ( retCode == CGMI_ERROR_BAD_PARAM )
             {
                 printf("Invalid index or type, use getpidinfo to see available indexes %d\n", retCode);                
@@ -1147,6 +1174,85 @@ int main(int argc, char **argv)
             {
                 printf("Error returned %d\n", retCode);                
             }
+        }
+        /* play EAS audio */
+        else if (strncmp(command, "audioplay", 9) == 0)
+        {
+            if ( strlen( command ) <= 10 )
+            {
+                printf( "\taudioplay <url>\n" );
+                continue;
+            }
+            strncpy( arg, command + 10, strlen(command) - 10 );
+            arg[strlen(command) - 10] = '\0';
+
+            /* If we were playing EAS, stop. */
+            if ( audioplaying )
+            {
+                printf("Stopping EAS playback.\n");
+                retCode = stop( pEasSessionId );
+                audioplaying = 0;
+            }
+
+            /* Destroy the EAS session. */
+            if ( NULL != pEasSessionId )
+            {
+               retCode = cgmi_DestroySession( pEasSessionId );
+
+               if (retCode != CGMI_ERROR_SUCCESS)
+               {
+                   printf("CGMI DestroySession Failed: %s\n",
+                           cgmi_ErrorString( retCode ));
+                   break;
+               } else {
+                   printf("CGMI DestroySession Success!\n");
+                   pEasSessionId = NULL;
+               }
+            }
+
+            /* Create a playback session. */
+            retCode = cgmi_CreateSession( cgmiCallback, NULL, &pEasSessionId );
+
+            if (retCode != CGMI_ERROR_SUCCESS)
+            {
+                printf("CGMI CreateSession Failed: %s\n", cgmi_ErrorString( retCode ));
+                break;;
+            } else {
+                printf("CGMI CreateSession Success!\n");
+            }
+
+            /* Check First */
+            printf("Checking if we can play this...");
+            retCode = cgmi_canPlayType( arg, &pbCanPlay );
+            if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
+            {
+                printf( "cgmi_canPlayType Not Implemented\n" );
+                printf( "Playing \"%s\"...\n", arg );
+                cgmi_SetPidInfo( pSessionId, AUTO_SELECT_STREAM, STREAM_TYPE_AUDIO, FALSE );
+                retCode = play(pEasSessionId, arg, TRUE);
+                if ( retCode == CGMI_ERROR_SUCCESS )
+                {
+                    audioplaying = 1;
+                }
+            } else if ( !retCode && pbCanPlay )
+            {
+                printf( "Yes\n" );
+                printf( "Playing \"%s\"...\n", arg );
+                retCode = play(pEasSessionId, arg, TRUE);
+                if ( retCode == CGMI_ERROR_SUCCESS )
+                {
+                    audioplaying = 1;
+                }
+            } else {
+                printf( "No\n" );
+            }
+        }
+        /* stop or unload */
+        else if (strncmp(command, "audiostop", 9) == 0)
+        {
+            retCode = stop(pEasSessionId);
+            cgmi_SetPidInfo( pSessionId, AUTO_SELECT_STREAM, STREAM_TYPE_AUDIO, TRUE );
+            audioplaying = 0;
         }
         /* Channel Change Test */
         else if (strncmp(command, "cct", 3) == 0)
@@ -1269,6 +1375,7 @@ int main(int argc, char **argv)
         printf("CGMI DestroySession Failed: %s\n", cgmi_ErrorString( retCode ));
     } else {
         printf("CGMI DestroySession Success!\n");
+        pSessionId = NULL;
     }
 
     /* Terminate CGMI interface. */

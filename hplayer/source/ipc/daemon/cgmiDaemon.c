@@ -1595,7 +1595,8 @@ on_handle_cgmi_set_pid_info (
     GDBusMethodInvocation *invocation,
     GVariant *arg_sessionId,
     gint index,
-    gint type )
+    gint type,
+    gint enable )
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     GVariant *sessVar = NULL;
@@ -1614,7 +1615,7 @@ on_handle_cgmi_set_pid_info (
         g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
         g_variant_unref( sessVar );
 
-        retStat = cgmi_SetPidInfo( (void *)pSession, index, type );
+        retStat = cgmi_SetPidInfo( (void *)pSession, index, type, enable );
 
     }while(0);
 

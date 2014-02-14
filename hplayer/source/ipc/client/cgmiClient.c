@@ -2314,7 +2314,7 @@ cgmi_Status cgmi_GetPidInfo( void *pSession, int index, tcgmi_PidData *pPidData 
     return retStat;
 }
 
-cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type )
+cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, int enable )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -2353,6 +2353,7 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type )
                 dbusVar,
                 index,
                 (gint)type,
+                enable,
                 (gint *)&retStat,
                 NULL,
                 &error );

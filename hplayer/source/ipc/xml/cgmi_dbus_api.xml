@@ -190,6 +190,7 @@
             <arg name="sessionId" direction="in" type="v"/>
             <arg name="index" direction="in" type="i"/>
             <arg name="type" direction="in" type="i"/>
+            <arg name="enable" direction="in" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
