@@ -795,6 +795,9 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
                                               ctx,
                                               GST_PARSE_FLAG_FATAL_ERRORS,
                                               &g_error_str);
+
+      g_free(pPipeline);
+
       if (pSess->pipeline == NULL)
       {
          GST_WARNING("PipeLine was not able to be created\n");
