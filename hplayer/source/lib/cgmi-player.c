@@ -750,6 +750,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    pSess->playbackURI = g_strdup(uri);
    if (pSess->playbackURI == NULL)
    {
+      g_free(pPipeline);
       printf("Not able to allocate memory\n");
       return CGMI_ERROR_OUT_OF_MEMORY;
    }
