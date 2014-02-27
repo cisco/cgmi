@@ -711,52 +711,87 @@ static cgmi_Status buildSectionFilterPid(void *pSessionId, int pid, sectionBuffe
 static cgmi_Status verifyUserData( void *pSessionId )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    int cntr = 0;
 
+    //
+    // Start/stop cycle #1
+    //
     gUserDataCbCalled = 0;
 
     g_print("Calling cgmi_startUserDataFilter...\n");
     retStat = cgmi_startUserDataFilter( pSessionId, cgmiTestUserDataBufferCB, pSessionId );
     CHECK_ERROR(retStat);
 
+    // Wait for data
+    for( cntr = 0; cntr < 15; cntr++ )
+    {
+        g_usleep( 500 * 1000 );
+        if( gUserDataCbCalled > 0 ) break;
+    }
+
+    g_print("Calling cgmi_stopUserDataFilter...\n");
+    retStat = cgmi_stopUserDataFilter( pSessionId, cgmiTestUserDataBufferCB );
+    CHECK_ERROR(retStat);
+
+    if( gUserDataCbCalled == 0 )
+    {
+        g_print("ERROR:  User data callback failed to fire.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_usleep( 4 * 1000 * 1000 );
+
+    //
+    // Start/stop cycle #2
+    //
+    gUserDataCbCalled = 0;
+
+    g_print("Calling cgmi_startUserDataFilter...\n");
+    retStat = cgmi_startUserDataFilter( pSessionId, cgmiTestUserDataBufferCB, pSessionId );
+    CHECK_ERROR(retStat);
+
+    // Wait for data
+    for( cntr = 0; cntr < 15; cntr++ )
+    {
+        g_usleep( 500 * 1000 );
+        if( gUserDataCbCalled > 0 ) break;
+    }
+
+    g_print("Calling cgmi_stopUserDataFilter...\n");
+    retStat = cgmi_stopUserDataFilter( pSessionId, cgmiTestUserDataBufferCB );
+    CHECK_ERROR(retStat);
+
+    if( gUserDataCbCalled == 0 )
+    {
+        g_print("ERROR:  User data callback failed to fire.\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    g_usleep( 2 * 1000 * 1000 );
+
+    //
+    // Start/stop cycle #1
+    //
+    gUserDataCbCalled = 0;
+
+    // Pause the stream
+    cgmi_SetRate( pSessionId, 0.0 );
     g_usleep( 1 * 1000 * 1000 );
 
-    g_print("Calling cgmi_stopUserDataFilter...\n");
-    retStat = cgmi_stopUserDataFilter( pSessionId, cgmiTestUserDataBufferCB );
-    CHECK_ERROR(retStat);
-
-    if( gUserDataCbCalled == 0 )
-    {
-        g_print("ERROR:  User data callback failed to fire.\n");
-        return CGMI_ERROR_FAILED;
-    }
-
-    g_usleep( 2 * 1000 * 1000 );
-
-    gUserDataCbCalled = 0;
-
     g_print("Calling cgmi_startUserDataFilter...\n");
     retStat = cgmi_startUserDataFilter( pSessionId, cgmiTestUserDataBufferCB, pSessionId );
     CHECK_ERROR(retStat);
 
-    g_usleep( 2 * 1000 * 1000 );
+    // Play stream
+    g_usleep( 1 * 1000 * 1000 );
+    cgmi_SetRate( pSessionId, 1.0 );
 
-    g_print("Calling cgmi_stopUserDataFilter...\n");
-    retStat = cgmi_stopUserDataFilter( pSessionId, cgmiTestUserDataBufferCB );
-    CHECK_ERROR(retStat);
-
-    if( gUserDataCbCalled == 0 )
+    // Wait for data
+    for( cntr = 0; cntr < 15; cntr++ )
     {
-        g_print("ERROR:  User data callback failed to fire.\n");
-        return CGMI_ERROR_FAILED;
+        g_usleep( 500 * 1000 );
+        if( gUserDataCbCalled > 0 ) break;
     }
-
-    g_usleep( 2 * 1000 * 1000 );
-
-    g_print("Calling cgmi_startUserDataFilter...\n");
-    retStat = cgmi_startUserDataFilter( pSessionId, cgmiTestUserDataBufferCB, pSessionId );
-    CHECK_ERROR(retStat);
-
-    g_usleep( 3 * 1000 * 1000 );
 
     g_print("Calling cgmi_stopUserDataFilter...\n");
     retStat = cgmi_stopUserDataFilter( pSessionId, cgmiTestUserDataBufferCB );

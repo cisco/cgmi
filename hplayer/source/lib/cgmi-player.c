@@ -1378,6 +1378,8 @@ cgmi_Status cgmi_SetDefaultAudioLang ( void *pSession, const char *language )
 cgmi_Status cgmi_startUserDataFilter( void *pSession, userDataBufferCB bufferCB, void *pUserData )
 {
    GstCaps *caps = NULL;
+   GstState pipelineState;
+   GstStateChangeReturn stateChangeRet;
 
    tSession *pSess = (tSession*)pSession;
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
@@ -1442,7 +1444,18 @@ cgmi_Status cgmi_startUserDataFilter( void *pSession, userDataBufferCB bufferCB,
    } 
    */
 
-   gst_element_sync_state_with_parent( pSess->userDataAppsink );
+   // Sync appsink state with pipeline
+   // NOTE:  The convenient sync_state_with_parent API was would not consistently work here
+   stateChangeRet = gst_element_set_state( pSess->userDataAppsink, GST_STATE(pSess->pipeline) );
+   if( stateChangeRet == GST_STATE_CHANGE_FAILURE )
+   {
+      g_print("Failed to sync appsink state to pipeline!\n");
+      return CGMI_ERROR_FAILED;
+   }
+
+   g_print("userDataAppsink in state (%s) ret (%d).\n", 
+      gst_element_state_get_name(GST_STATE(pSess->userDataAppsink)), stateChangeRet );
+
 
    pSess->userDataBufferCB = bufferCB;
    pSess->userDataBufferParam = pUserData;
