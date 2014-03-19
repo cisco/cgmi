@@ -12,8 +12,8 @@ extern "C"
 #define MAX_STREAMS                    32
 #define SOCKET_RECEIVE_BUFFER_SIZE     1000000
 #define UDP_CHUNK_SIZE                 (1316*32)
-#define VIDEO_MAX_WIDTH                1280
-#define VIDEO_MAX_HEIGHT               720
+#define VIDEO_MAX_WIDTH                1920
+#define VIDEO_MAX_HEIGHT               1080
 
 typedef struct
 {
