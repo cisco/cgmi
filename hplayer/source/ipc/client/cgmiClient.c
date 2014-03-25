@@ -8,6 +8,7 @@
 #include <gst/gst.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <stdio.h>
 
 #include "dbusPtrCommon.h"
 #include "cgmiPlayerApi.h"
@@ -81,11 +82,12 @@ typedef struct
 ////////////////////////////////////////////////////////////////////////////////
 static gboolean         gClientInited             = FALSE;
 static GMainLoop        *gLoop                    = NULL;
+static GMainContext     *gMainContext             = NULL;
 static OrgCiscoCgmi     *gProxy                   = NULL;
 static GHashTable       *gPlayerEventCallbacks    = NULL;
 static GHashTable       *gSectionFilterCbs        = NULL;
 static cgmi_Status      gInitStatus               = CGMI_ERROR_NOT_INITIALIZED;
-static pthread_t        gMainLoopThread;
+static GThread          *gMainLoopGthread;
 static sem_t            gMainThreadStartSema;
 static pthread_mutex_t  gEventCallbackMutex;
 
@@ -454,6 +456,12 @@ static void on_name_appeared (GDBusConnection *connection,
     }
 
     gInitStatus = CGMI_ERROR_SUCCESS;
+
+    if( gClientInited == FALSE )
+    {
+        g_print("%s g_main_loop is running, and DBUS name has been found.\n", __FUNCTION__);
+        sem_post(&gMainThreadStartSema);
+    }
 }
 
 /* Called whem the server losses name on dbus */
@@ -467,30 +475,19 @@ static void on_name_vanished (GDBusConnection *connection,
 }
 
 
-/* This callback posts the semaphore to indicate the main loop is running */
-static gboolean cgmi_DbusMainLoopStarted( gpointer user_data )
-{
-    // If dbus server hasn't been found yet wait a while
-    if( gProxy == NULL && user_data == NULL )
-    {
-        g_timeout_add( 200, cgmi_DbusMainLoopStarted, 
-            (gpointer *)&gMainThreadStartSema );
-    }else
-    {
-        sem_post(&gMainThreadStartSema);
-    }
-    
-    return FALSE;
-}
-
 /* This is spawned as a thread and starts the glib main loop for dbus. */
-static void *cgmi_DbusMainLoop(void *data)
+static gpointer cgmi_DbusMainLoopGthread(gpointer data)
 {
     guint watcher_id;
 
+#if !GLIB_CHECK_VERSION(2,35,0)
     g_type_init();
+#endif
 
-    gLoop = g_main_loop_new (NULL, FALSE);
+    gMainContext = g_main_context_new();
+    g_main_context_push_thread_default(gMainContext);
+
+    gLoop = g_main_loop_new (gMainContext, FALSE);
     if ( gLoop == NULL )
     {
         g_print("Error creating a new main_loop\n");
@@ -506,9 +503,6 @@ static void *cgmi_DbusMainLoop(void *data)
                                  NULL,
                                  NULL);
 
-
-    /* This timeout will be called by the main loop after it starts */
-    g_timeout_add( 5, cgmi_DbusMainLoopStarted, NULL );
     g_main_loop_run( gLoop );
 
     g_bus_unwatch_name( watcher_id );
@@ -516,11 +510,69 @@ static void *cgmi_DbusMainLoop(void *data)
     return NULL;
 }
 
+#define DBUS_SESS_BUS_ADDR "DBUS_SESSION_BUS_ADDRESS"
+#define DBUS_SESS_BUS_ADDR_FILE "/var/run/dbus/SessionBusAddress.txt"
+#define DBUS_SESS_BUS_ADDR_MAX 1024
+/**
+ *  Verify the DBUS_SESSION_BUS_ADDRESS env variable is set.  If it is not set
+ *  this function will attempt to set it by reading a vssrdk specific file.
+ *
+ *  returns:  0 on success (DBUS_SESSION_BUS_ADDRESS is set to something)
+ */
+static int verify_dbus_env()
+{
+    char dbus_addr_buffer[DBUS_SESS_BUS_ADDR_MAX];
+    char *dbus_session_bus_address;
+    FILE* fp;
+    size_t readCount;
+    char *newline = NULL;
+
+    dbus_session_bus_address = getenv(DBUS_SESS_BUS_ADDR);
+    if( dbus_session_bus_address != NULL )
+    {
+        // A dbus session is set... return success.
+        return 0;
+    }
+
+    g_print( "Warning: %s was not set in the env.  Looking for default.\n", DBUS_SESS_BUS_ADDR );
+    
+    fp = fopen("/var/run/dbus/SessionBusAddress.txt", "r");
+    if( fp == NULL )
+    {
+        g_print( "Error: Failed to find %s in %s.\n", DBUS_SESS_BUS_ADDR, DBUS_SESS_BUS_ADDR_FILE );
+        return -1;
+    }
+
+    readCount = fread(dbus_addr_buffer, 1, DBUS_SESS_BUS_ADDR_MAX, fp);
+    if( readCount < 1 )
+    {
+        g_print( "Error: Failed to find %s in %s.\n", DBUS_SESS_BUS_ADDR, DBUS_SESS_BUS_ADDR_FILE );
+        return -1;
+    }
+    if( readCount >= DBUS_SESS_BUS_ADDR_MAX )
+    {
+        g_print( "Error: Buffer too small.  Failed to find %s in %s.\n", DBUS_SESS_BUS_ADDR, DBUS_SESS_BUS_ADDR_FILE );
+        return -1;
+    }
+
+    // Terminate the string, and replace the first newline with a null byte.
+    dbus_addr_buffer[readCount] = '\0';
+    newline = strchr(dbus_addr_buffer, '\n');
+    if( newline != NULL ) { *newline = '\0'; }
+
+    g_print("Found %s == %s (%d)\n", DBUS_SESS_BUS_ADDR, dbus_addr_buffer, readCount);
+
+    return setenv(DBUS_SESS_BUS_ADDR, dbus_addr_buffer, 1);
+}
+
 /**
  *  Needs to be called prior to any DBUS APIs (called by CGMI Init)
  */
 cgmi_Status cgmi_DbusInterfaceInit()
 {
+    struct timespec ts;
+    int semaResult;
+
     if ( gClientInited == TRUE )
     {
         g_print("Dbus proxy is already open.\n");
@@ -529,16 +581,69 @@ cgmi_Status cgmi_DbusInterfaceInit()
 
     sem_init(&gMainThreadStartSema, 0, 0);
 
-    if ( 0 != pthread_create(&gMainLoopThread, NULL, cgmi_DbusMainLoop, NULL) )
+    do{
+
+        if( 0 != verify_dbus_env() )
+        {
+            gInitStatus = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        gInitStatus = CGMI_ERROR_NOT_INITIALIZED;
+        gMainLoopGthread = g_thread_new("cgmi-client", cgmi_DbusMainLoopGthread, NULL);
+        if( gMainLoopGthread == NULL )
+        {
+            g_print("Error launching thread for gmainloop\n");
+            gInitStatus = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
+        {
+            g_print("Error setting timeout for sem_timedwait()\n");
+            gInitStatus = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        // Timeout in 5 seconds
+        ts.tv_sec += 5;
+
+        while ((semaResult = sem_timedwait(&gMainThreadStartSema, &ts)) == -1 && 
+            errno == EINTR)
+        {
+            continue;       /* If semaphore is interupted, then restart */
+        }
+
+        if( semaResult == -1 )
+        {
+            g_print("Error failed to connect DBUS, or g_main_loop failed to run?.\n");
+
+            if( gLoop != NULL )
+            {
+                if( g_main_loop_is_running(gLoop) )
+                {
+                    g_print("Main loop says it is running, but it failed to fire DBUS callback.\n");
+                    g_main_loop_quit( gLoop );
+                    g_thread_join(gMainLoopGthread);
+                }
+                g_main_loop_unref( gLoop );
+                gLoop = NULL;
+            }
+
+            gInitStatus = CGMI_ERROR_FAILED;
+            break;
+        }
+
+    }while(0);
+
+    // Set init flag if success
+    if( gInitStatus == CGMI_ERROR_SUCCESS )
     {
-        g_print("Error launching thread for gmainloop\n");
-        return CGMI_ERROR_FAILED;
+        gClientInited = TRUE;
     }
 
-    sem_wait(&gMainThreadStartSema);
+    // Clean up semaphore
     sem_destroy(&gMainThreadStartSema);
-
-    gClientInited = TRUE;
 
     return gInitStatus;
 }
@@ -556,7 +661,7 @@ void cgmi_DbusInterfaceTerm()
     // Kill the thread/loop utilzied by dbus
     if( gLoop != NULL ) {
         g_main_loop_quit( gLoop );
-        pthread_join (gMainLoopThread, NULL);
+        g_thread_join(gMainLoopGthread);
         g_main_loop_unref( gLoop );
     }
 

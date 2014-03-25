@@ -1066,7 +1066,7 @@ cgmi_Status cgmi_GetDuration (void *pSession, float *pDuration, cgmi_SessionType
 
       GST_INFO("Stream: %s\n", pSess->playbackURI );
       GST_INFO("Position: %lld (seconds)\n", (Duration/GST_SECOND) );
-      *pDuration = (Duration/GST_SECOND);
+      *pDuration = (float)(Duration/GST_SECOND);
 
    } while (0);
    return stat;

@@ -1818,6 +1818,57 @@ on_bus_acquired (GDBusConnection *connection,
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////
+// DBUS environment verification/setup
+////////////////////////////////////////////////////////////////////////////////
+#define DBUS_SESS_BUS_ADDR "DBUS_SESSION_BUS_ADDRESS"
+#define DBUS_SESS_BUS_ADDR_FILE "/var/run/dbus/SessionBusAddress.txt"
+#define DBUS_SESS_BUS_ADDR_MAX 1024
+
+/**
+ *  Verify the DBUS_SESSION_BUS_ADDRESS env variable is set.  If it is not set
+ *  this function will attempt to set it by reading a vssrdk specific file.
+ *
+ *  returns:  0 on success (DBUS_SESSION_BUS_ADDRESS is set to something)
+ */
+static int verify_dbus_env()
+{
+    char dbus_addr_buffer[DBUS_SESS_BUS_ADDR_MAX];
+    char *dbus_session_bus_address;
+    FILE* fp;
+    size_t readCount;
+
+    dbus_session_bus_address = getenv(DBUS_SESS_BUS_ADDR);
+    if( dbus_session_bus_address != NULL )
+    {
+        // A dbus session is set... return success.
+        return 0;
+    }
+
+    g_print( "Warning: %s was not set in the env.  Looking for default.\n", DBUS_SESS_BUS_ADDR );
+    
+    fp = fopen("/var/run/dbus/SessionBusAddress.txt", "r");
+    if( fp == NULL )
+    {
+        g_print( "Error: Failed to find %s in %s.\n", DBUS_SESS_BUS_ADDR, DBUS_SESS_BUS_ADDR_FILE );
+        return -1;
+    }
+
+    readCount = fread(dbus_addr_buffer, 1, DBUS_SESS_BUS_ADDR_MAX, fp);
+    if( readCount < 1 )
+    {
+        g_print( "Error: Failed to find %s in %s.\n", DBUS_SESS_BUS_ADDR, DBUS_SESS_BUS_ADDR_FILE );
+        return -1;
+    }
+    dbus_addr_buffer[DBUS_SESS_BUS_ADDR_MAX-1] = '\0';
+
+    g_print("Found %s == %s (%d)\n", DBUS_SESS_BUS_ADDR, dbus_addr_buffer, readCount);
+
+    return setenv(DBUS_SESS_BUS_ADDR, dbus_addr_buffer, 1);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // Entry point for DBUS daemon
 ////////////////////////////////////////////////////////////////////////////////
@@ -1826,6 +1877,7 @@ int main( int argc, char *argv[] )
     int c = 0;
     GMainLoop *loop;
     guint id;
+
 
     /* we are using printf so disable buffering */
     setbuf(stdout, NULL);
@@ -1843,6 +1895,12 @@ int main( int argc, char *argv[] )
         default:
             printf( "Invalid option (%c).\n", c );
         }
+    }
+
+    if( 0 != verify_dbus_env() )
+    {
+        CGMID_INFO( "Error: Failed to find DBUS_SESSION_BUS_ADDRESS in the environment.\n" );
+        return -1;
     }
 
     /* Fork into background depending on args provided */
