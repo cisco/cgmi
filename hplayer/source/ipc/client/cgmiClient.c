@@ -98,14 +98,15 @@ static pthread_mutex_t  gEventCallbackMutex;
 static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
         GVariant *sessionHandle,
         gint event,
-        gint data)
+        gint data,
+        guint64 code)
 {
     tcgmi_PlayerEventCallbackData *playerCb = NULL;
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSess = 0;
 
-    g_print("Enter on_handle_notification sessionHandle = %lu, event = %d...\n",
-            (tCgmiDbusPointer)sessionHandle, event);
+    g_print("Enter on_handle_notification sessionHandle = %lu, event = %d code = %lld \n",
+            (tCgmiDbusPointer)sessionHandle, event, code);
 
     // Preconditions
     if ( proxy != gProxy )
@@ -145,7 +146,8 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
         // Execute callback
         playerCb->callback( playerCb->userParam,
                             (void *)pSess,
-                            (tcgmi_Event)event );
+                            (tcgmi_Event)event,
+                            (uint64_t)code );
 
     }
     while (0);

@@ -25,7 +25,7 @@ static struct termios oldt, newt;
 static int gAutoPlay = true;
 
 /* Prototypes */
-static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event );
+static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code );
 static cgmi_Status destroyfilter( void *pSessionId );
 
 /* Signal Handler */
@@ -296,9 +296,9 @@ static cgmi_Status destroyfilter( void *pSessionId )
 }
 
 /* Callback Function */
-static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
+static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code )
 {
-    printf("CGMI Event Received : ");
+    printf("CGMI Event Received : code = %lld event = ", code);
 
     switch (event)
     {

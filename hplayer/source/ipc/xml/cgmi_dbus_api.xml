@@ -212,6 +212,7 @@
             <arg name="sessionHandle" type="v"/>
             <arg name="event" type="i" />
             <arg name="data" type="i" />
+            <arg name="code" type="t" />
         </signal>
 
         <property name="Verbose" type="b" access="readwrite"/>

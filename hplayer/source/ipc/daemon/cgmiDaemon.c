@@ -180,7 +180,7 @@ static cgmi_Status closeFifo( tcgmi_FifoCallbackSink *cbData )
 ////////////////////////////////////////////////////////////////////////////////
 // Callbacks called by CGMI core to message client via DBUS
 ////////////////////////////////////////////////////////////////////////////////
-static void cgmiEventCallback( void *pUserData, void *pSession, tcgmi_Event event )
+static void cgmiEventCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code )
 {
     GVariant *sessVar = NULL, *sessDbusVar = NULL;
 
@@ -205,7 +205,8 @@ static void cgmiEventCallback( void *pUserData, void *pSession, tcgmi_Event even
         org_cisco_cgmi_emit_player_notify( (OrgCiscoCgmi *) pUserData,
                                            sessDbusVar,
                                            event,
-                                           0 );
+                                           0,      //data
+                                           code );
 
     }while(0);
 

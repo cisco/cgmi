@@ -94,13 +94,13 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
       case GST_MESSAGE_ASYNC_DONE:
       GST_INFO("Async Done message\n");
       {
-         pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_SEEK_DONE);
+         pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_SEEK_DONE, 0);
       }
       break;
       case GST_MESSAGE_EOS:
       {
          GST_INFO("End of Stream\n");
-         pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_END_OF_STREAM);
+         pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_END_OF_STREAM,0);
       }
       break;
       case GST_MESSAGE_ELEMENT:
@@ -115,12 +115,12 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
 
          if (0 == strcmp(ntype, "first_pts_decoded"))
          {    
-            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_FIRST_PTS_DECODED );
+            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_FIRST_PTS_DECODED, 0 );
             gst_message_unref (msg);
          }    
          else if (0 == strcmp(ntype, "stream_attrib_changed"))
          {    
-            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_VIDEO_RESOLUTION_CHANGED);
+            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_VIDEO_RESOLUTION_CHANGED, 0);
             gst_message_unref (msg);
          }    
          else 
@@ -151,14 +151,14 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
          {
             if (error->code == GST_RESOURCE_ERROR_NOT_FOUND)
             {
-               pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE);
+               pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE, 0);
             }
          }
          else if (error->domain == GST_STREAM_ERROR)
          {
             if (error->code == GST_STREAM_ERROR_FAILED) 
             {
-               pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE);
+               pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE, 0);
             }
          }
          else if (error->domain == GST_ERROR_SYSTEM)
@@ -349,7 +349,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
    }
 
    if ( NULL != pSess->eventCB )
-      pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_PSI_READY);
+      pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_PSI_READY, 0);
 
    if ( FALSE == pSess->autoPlay )
    {

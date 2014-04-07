@@ -438,9 +438,9 @@ static void printPMT( tMpegTsPmt *curPmt )
 // CGMI callbacks
 ////////////////////////////////////////////////////////////////////////////////
 
-static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event )
+static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code )
 {
-    g_print( "CGMI Player Event Recevied : %d \n", event );
+    g_print( "CGMI Player Event Recevied : %d  code:%lld \n", event, code );
 }
 
 static cgmi_Status cgmi_QueryBufferCallback(

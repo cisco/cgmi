@@ -46,6 +46,7 @@ extern "C"
 #define SECTION_FILTER_EMPTY_PID 0x1FFF // Indicates filter shouldn't match PID
 #define AUTO_SELECT_STREAM       -1     // Indicates the first stream of specified type in the PMT will be auto selected
 
+#include <stdint.h>
 /** Function return status values
  */
 typedef enum
@@ -129,7 +130,7 @@ typedef struct
 }tcgmi_PidData;
 
 
-typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event );
+typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event, uint64_t code );
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );
 typedef cgmi_Status (*sectionBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, cgmi_Status SectionStatus, char *pSection, int sectionSize);
 typedef cgmi_Status (*userDataBufferCB)(void *pUserData, void *pBuffer);
