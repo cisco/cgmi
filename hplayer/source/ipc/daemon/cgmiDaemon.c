@@ -1,6 +1,8 @@
 #include <errno.h>
 #include <string.h>
+#define _GNU_SOURCE
 #include <stdio.h>
+#undef _GNU_SOURCE
 #include <signal.h>
 #include <stdlib.h>
 #include <glib.h>
@@ -27,14 +29,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Logging for daemon.  TODO:  Send to syslog when in background
 ////////////////////////////////////////////////////////////////////////////////
-#define DAEMON_NAME "CGMI_DAEMON"
+#define DAEMON_NAME "CGMID"
 
 #define LOGGING_ENABLED
 
 #ifdef LOGGING_ENABLED
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-#define CGMID_AT DAEMON_NAME ":" TOSTRING(__LINE__)
+#define CGMID_AT "DAEMON:" TOSTRING(__LINE__)
 
 #define CGMID_INFO(...)   cgmiDaemonLog( CGMID_AT, LOG_INFO, __VA_ARGS__);
 #define CGMID_ERROR(...)  cgmiDaemonLog( CGMID_AT, LOG_ERR, __VA_ARGS__);
@@ -87,22 +89,54 @@ static void cgmiDaemonLog( const char *open, int priority, const char *format, .
 
     if( gInForeground == TRUE )
     {
-        g_print("%-20s - %s", open, message);
+        g_print("%-14s - %s", open, message);
     }else{
-        syslog(priority, "%-20s - %s", open, message);
+        syslog(priority, "%-14s - %s", open, message);
     }
 
     g_free (message);
 }
 
-static void gPrintToSylog(const gchar *message)
+static void gPrintToSyslog(const gchar *message)
 {
-    syslog(LOG_INFO, "%-20s - %s", "CGMI", message);
+    syslog(LOG_INFO, "%-14s - %s", "G_STDOUT", message);
 }
-static void gPrintErrToSylog(const gchar *message)
+static void gPrintErrToSyslog(const gchar *message)
 {
-    syslog(LOG_ERR, "%-20s - %s", "CGMI ERROR", message);
+    syslog(LOG_ERR, "%-14s - %s", "G_STDERR", message);
 }
+
+static int noop(void) { return 0; }
+
+static size_t writerStdout(void *cookie, char const *data, size_t leng)
+{
+    (void)cookie; // suppress compiler warning
+    syslog(LOG_INFO, "%-14s - %.*s", "STDOUT", (int)leng, data);
+    return leng;
+}
+
+static size_t writerStderr(void *cookie, char const *data, size_t leng)
+{
+    (void)cookie; // suppress compiler warning
+    syslog(LOG_ERR, "%-14s - %.*s", "STDERR", (int)leng, data);
+    return leng;
+}
+
+static cookie_io_functions_t stdout_log_fns = {
+    (void*) noop, (void*) writerStdout, (void*) noop, (void*) noop
+};
+
+static cookie_io_functions_t stderr_log_fns = {
+    (void*) noop, (void*) writerStderr, (void*) noop, (void*) noop
+};
+
+static void redirectStdStreamsToSyslog()
+{
+    // Replace stdout and stderr streams with our own
+    setvbuf(stdout = fopencookie(NULL, "w", stdout_log_fns), NULL, _IOLBF, 0);
+    setvbuf(stderr = fopencookie(NULL, "w", stderr_log_fns), NULL, _IOLBF, 0);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Utility functions
@@ -474,7 +508,7 @@ on_handle_cgmi_create_session (
         sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSessionId );
         if( sessVar == NULL )
         {
-            CGMID_INFO("Failed to create new variant\n");
+            CGMID_ERROR("Failed to create new variant\n");
             retStat = CGMI_ERROR_OUT_OF_MEMORY;
             break;
         }
@@ -483,7 +517,7 @@ on_handle_cgmi_create_session (
         dbusVar = g_variant_new ( "v", sessVar );
         if( dbusVar == NULL )
         {
-            CGMID_INFO("Failed to create new variant\n");
+            CGMID_ERROR("Failed to create new variant\n");
             retStat = CGMI_ERROR_OUT_OF_MEMORY;
             break;
         }
@@ -545,7 +579,7 @@ on_handle_cgmi_can_play_type (
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     gint bCanPlay = 0;
 
-    CGMID_ENTER();
+    //CGMID_ENTER();
 
     retStat = cgmi_canPlayType( arg_type, &bCanPlay );
 
@@ -743,7 +777,7 @@ on_handle_cgmi_get_position (
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSession;
 
-    CGMID_ENTER();
+    //CGMID_ENTER();
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
@@ -780,7 +814,7 @@ on_handle_cgmi_get_duration (
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSession;
 
-    CGMID_ENTER();
+    //CGMID_ENTER();
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
@@ -1869,6 +1903,16 @@ static int verify_dbus_env()
     return setenv(DBUS_SESS_BUS_ADDR, dbus_addr_buffer, 1);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Usage
+////////////////////////////////////////////////////////////////////////////////
+void printUsage( int argc, char *argv[] )
+{
+    g_print("Usage: %s [-f]|\n", argv[0]);
+    g_print("   -f -- Run in foreground.\n");
+    g_print("\n");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Entry point for DBUS daemon
@@ -1878,10 +1922,6 @@ int main( int argc, char *argv[] )
     int c = 0;
     GMainLoop *loop;
     guint id;
-
-
-    /* we are using printf so disable buffering */
-    setbuf(stdout, NULL);
 
     /* Argument handling */
     opterr = 0;
@@ -1894,7 +1934,9 @@ int main( int argc, char *argv[] )
             gInForeground = TRUE;
             break;
         default:
-            printf( "Invalid option (%c).\n", c );
+            g_print( "Invalid option (%c).\n", c );
+            printUsage(argc, argv);
+            return -1;
         }
     }
 
@@ -1909,12 +1951,16 @@ int main( int argc, char *argv[] )
     {
         /* Setup syslog when in background */
         openlog( DAEMON_NAME, LOG_CONS | LOG_PID | LOG_NDELAY, LOG_DAEMON );
-        g_set_print_handler(gPrintToSylog);
-        g_set_printerr_handler(gPrintErrToSylog);
+        g_set_print_handler(gPrintToSyslog);
+        g_set_printerr_handler(gPrintErrToSyslog);
+
+
+        g_print("Redirecting stdout/stderr to syslog.\n");
+        redirectStdStreamsToSyslog();
 
         if ( 0 != daemon( 0, 0 ) )
         {
-            CGMID_ERROR( "Failed to fork background daemon. Abort." );
+            CGMID_ERROR( "Failed to fork background daemon. Abort.\n" );
             return errno;
         }
     }
@@ -1929,7 +1975,9 @@ int main( int argc, char *argv[] )
     /* DBUS Code */
     loop = g_main_loop_new( NULL, FALSE );
 
+#if !GLIB_CHECK_VERSION(2,35,0)
     g_type_init();
+#endif
 
     id = g_bus_own_name( G_BUS_TYPE_SESSION,
                          "org.cisco.cgmi",
