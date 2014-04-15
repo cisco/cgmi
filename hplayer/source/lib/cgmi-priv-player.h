@@ -78,6 +78,7 @@ typedef struct
    GCond              *autoPlayCond; 
    gint               videoStreamIndex;
    gint               audioStreamIndex;
+   uint64_t           drmProxyHandle;
 
 }tSession;
 

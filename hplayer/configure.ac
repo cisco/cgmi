@@ -7,7 +7,7 @@ AC_INIT([cgmiPlayer], [0.00.11.0],[snobym@cisco.com])
 #
 AC_USE_SYSTEM_EXTENSIONS
 
-# This will detect the host that is building this software, it will enable us to switch to cross compile mode 
+# This will detect the host that is building this software, it will enable us to switch to cross compile mode
 # when necessary
 AC_CANONICAL_HOST
 
@@ -28,13 +28,13 @@ AM_PROG_AR
 LT_PREREQ([2.2])
 LT_INIT([dlopen disable-static ])
 
-#This is just used to get some configuration data it's aslo so that the 
-#configure script knows the directory on which it is being executed 
+#This is just used to get some configuration data it's aslo so that the
+#configure script knows the directory on which it is being executed
 #on is actually the project directory
 AC_CONFIG_SRCDIR([source/lib/cgmi-player.c])
 
 #this tells autoconf where to find the makefiles to execute.
-AC_CONFIG_FILES([ Makefile          
+AC_CONFIG_FILES([ Makefile
                   source/lib/Makefile
                   source/ipc/client/Makefile
                   source/ipc/daemon/Makefile
@@ -71,7 +71,7 @@ AS_IF([test -n "$PKG_CONFIG"],[ ],[AC_MSG_ERROR(This build requires pkg-config v
 
 # check for GNU only recursive mutexes
 # This is an example so searching for specific functionality
-# The variable P_HAS_GNU_MUTEXES will hold the answer in config.h 
+# The variable P_HAS_GNU_MUTEXES will hold the answer in config.h
 P_HAS_GNU_MUTEXES=0
 AC_MSG_CHECKING(if gnu enhanced recursive mutexes are available)
 AC_TRY_COMPILE(   [#include <pthread.h>],
@@ -83,7 +83,7 @@ AC_TRY_COMPILE(   [#include <pthread.h>],
    else
       AC_MSG_RESULT(no)
       fi
-# The following will place define in config.h   
+# The following will place define in config.h
 #
 #
 #
@@ -103,7 +103,15 @@ AC_ARG_ENABLE([cli-noipc],
                              [AC_MSG_RESULT(no)])
 AM_CONDITIONAL(CLI_NO_IPC,test x$enable_cli_noipc = xyes)
 
-
+AC_MSG_CHECKING(Build with DRMProxy...)
+AC_ARG_ENABLE([use-drmproxy],
+              [AS_HELP_STRING([--enable-use-drmproxy],
+                             [If set to =yes drmproxy will link to cgmi library ]) ],
+                             [AC_MSG_RESULT(yes)
+                             AC_DEFINE([USE_DRMPROXY], [1], [DrmProxy enabled] )
+                             ],
+                             [AC_MSG_RESULT(no)])
+AM_CONDITIONAL(USE_DRMPROXY,test x$enable__use_drmproxy = xyes)
 #
 # Start Checking what packages we have available.
 PKG_CHECK_MODULES([GLIB],    [glib-2.0 >= 2.32.0])
@@ -125,7 +133,7 @@ if test -z "$DOXYGEN";
    then AC_MSG_WARN([Doxygen not found - continuing without Doxygen support])
 fi
 
-AM_CONDITIONAL([HAVE_DOXYGEN], 
+AM_CONDITIONAL([HAVE_DOXYGEN],
                [test -n "$DOXYGEN"])AM_COND_IF([HAVE_DOXYGEN], [AC_CONFIG_FILES([doc/Doxyfile])])
 
 AC_CONFIG_FILES([doc/Makefile])
@@ -135,7 +143,7 @@ AC_SUBST([DOXYGEN])
 #
 AC_PATH_PROG([GDBUS_CODEGEN], [gdbus-codegen], AC_MSG_ERROR([gdbus-codegen is required but was not found]))
 
-# Must have AC_OUTPUT to have 
+# Must have AC_OUTPUT to have
 # makefiles created.
 AC_OUTPUT
 
@@ -147,11 +155,11 @@ echo \
  ${PACKAGE_NAME} Version ${PACKAGE_VERSION}
 
  Prefix: '${prefix}'.
- Compiler: '${CC} 
+ Compiler: '${CC}
 Building for debug: '${debugit}'
  CC      : ${CC}
  CPP     : ${CPP}
- CFLAGS  : ${CFLAGS} ${LIBCURL_CFLAGS}   
+ CFLAGS  : ${CFLAGS} ${LIBCURL_CFLAGS}
  CPPFLAGS  : ${CPPFLAGS} $LIBCURL_CPPFLAGS
 
  LINKER  : $LD $LDFLAGS $LIBS

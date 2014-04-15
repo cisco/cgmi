@@ -12,8 +12,6 @@
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <gst/app/gstappsink.h>
-
-
 #include <drmProxy.h>
 #include "cgmiPlayerApi.h"
 #include "cgmi-priv-player.h"
@@ -22,7 +20,6 @@
 #define MAGIC_COOKIE 0xDEADBEEF
 GST_DEBUG_CATEGORY_STATIC (cgmi);
 #define GST_CAT_DEFAULT cgmi
-uint64_t drmProxyHandle;
 
 #define INVALID_INDEX      -2
 
@@ -628,6 +625,11 @@ static void asyncCB(uint64_t  privateData,
 cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, void **pSession ) {
    tSession *pSess = NULL;
 
+#ifdef USE_DRMPROXY
+   tProxyErr proxy_err = {};
+   uint64_t privateData;
+#endif
+
    pSess = g_malloc0(sizeof(tSession));
    if (pSess == NULL)
    {
@@ -682,17 +684,25 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    }
    GST_INFO("ok the gmainloop for the thread ctx is running\n");
 
-   tProxyErr proxy_err = {};
-   uint64_t privateData;
-
-   DRMPROXY_CreateSession(&drmProxyHandle, &proxy_err, asyncCB, privateData);
-   GST_INFO("DRMPROXY_CreateSession complete \n");
+#ifdef USE_DRMPROXY
+   DRMPROXY_CreateSession(&pSess->drmProxyHandle, &proxy_err, asyncCB, privateData);
+   if (proxy_err->errCode != 0)
+   {
+      GST_ERROR ("DRMPROXY_CreateSession error %lu \n", proxy_err->errCode);
+      GST_ERROR ("%s \n", proxy_err->errString);
+      eventCB(pUserData, (void *)pSess, 0, proxy_err->errCode);
+   }
+#endif
 
    return CGMI_ERROR_SUCCESS;
 }
 
 cgmi_Status cgmi_DestroySession (void *pSession)
 {
+#ifdef USE_DRMPROXY
+   tProxyErr proxy_error = {};
+   uint64_t * privateData = NULL;
+#endif
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    tSession *pSess = (tSession*)pSession;
 
@@ -733,10 +743,17 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
    g_free(pSess);
 
-   tProxyErr proxy_error = {};
-   uint64_t * privateData = NULL;
-   DRMPROXY_DestroySession(drmProxyHandle);
-   GST_INFO("DRMPROXY_DestroySession Complete \n");
+#ifdef USE_DRMPROXY
+   DRMPROXY_DestroySession(pSess->drmProxyHandle);
+   if (proxy_err->errCode != 0)
+   {
+     GST_ERROR ("DRMPROXY_DestroySession error %lu \n", proxy_err->errCode);
+     GST_ERROR ("%s \n", proxy_err->errString);
+     if (pSess != NULL)
+        pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err->errCode);
+   }
+#endif
+
    return stat;
 }
 
@@ -750,6 +767,13 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    GSource *source;
    gchar manualPipeline[1024];
+   tProxyErr proxy_err = {};
+   gchar **array = NULL;
+#ifdef USE_DRMPROXY
+   uint64_t licenseId=0;
+   char buffer[50];
+   tDRM_TYPE drmType=UNKNOWN;
+#endif
 
    tSession *pSess = (tSession*)pSession;
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
@@ -782,10 +806,15 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
 
-   tDRM_TYPE drmType=UNKNOWN;
-   tProxyErr proxy_error = {};
-   DRMPROXY_ParseURL(drmProxyHandle, pSess->playbackURI, &drmType, &proxy_error);
-
+#ifdef USE_DRMPROXY
+   DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
+   if (proxy_err->errCode != 0)
+   {
+     GST_ERROR ("DRMPROXY_ParseURL error %lu \n", proxy_err->errCode);
+     GST_ERROR ("%s \n", proxy_err->errString);
+     pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err->errCode);
+   }
+#endif
    //
    // This section makes DLNA content hardcoded.  Need to optimize.
    //
@@ -808,32 +837,37 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       // video sink.  If it's there we need to set the flags variable so the pipeline knows to do
       // color transformation and scaling in hardware
       g_strlcpy(pPipeline, "playbin2 uri=", 1024);
-      gchar **array = NULL;
       array = g_strsplit(uri, "?",  1024);
       g_strlcat(pPipeline, array[0], 1024 );
 
-      if ( drmType == VERIMATRIX) {
+#ifdef USE_DRMPROXY
+      DRMPROXY_Activate(pSess->drmProxyHandle, uri, sizeof(uri), &licenseId, &proxy_err );
+      if (proxy_err->errCode != 0)
+      {
+         GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err->errCode);
+         GST_ERROR ("%s \n", proxy_err->errString);
+         pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err->errCode);
+      }
+      if ( drmType == VERIMATRIX)
+      {
          g_strlcat(pPipeline,"?drmType=verimatrix", 1024);
-         uint64_t licenseId=0;
-         tProxyErr proxy_err = {};
          g_strlcat(pPipeline, "&LicenseID=",1024);
-         char buffer[50];
+         licenseId = 0; 
        // LicenseID going to verimatrix plugin is 0 so don't bother with what comes back
          sprintf(buffer, "%" PRIu64, licenseId);
          g_strlcat(pPipeline, buffer, 1024);
-         DRMPROXY_Activate(drmProxyHandle, uri, sizeof(uri), &licenseId, &proxy_err );
-      } else if (drmType == VGDRM) {
+      }
+      else if (drmType == VGDRM)
+      {
 
 //  FIXME: missing VGDRM specifics, may need to tweak the uri before sending it downstream
          g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
-         uint64_t licenseId=0;
-         tProxyErr proxy_err = {};
-         DRMPROXY_Activate(drmProxyHandle, uri, sizeof(uri), &licenseId, &proxy_err );
          g_strlcat(pPipeline, "&LicenseID=",1024);
-         char buffer[50];
          sprintf(buffer, "%" PRIu64, licenseId);
          g_strlcat(pPipeline, buffer, 1024);
       }
+#endif
+
       if (gst_registry_find_plugin( gst_registry_get_default() , "brcmvideosink"))
       {
         g_print("Autoplugging on real broadcom hardware\n");
