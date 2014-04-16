@@ -686,11 +686,11 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
 
 #ifdef USE_DRMPROXY
    DRMPROXY_CreateSession(&pSess->drmProxyHandle, &proxy_err, asyncCB, privateData);
-   if (proxy_err->errCode != 0)
+   if (proxy_err.errCode != 0)
    {
-      GST_ERROR ("DRMPROXY_CreateSession error %lu \n", proxy_err->errCode);
-      GST_ERROR ("%s \n", proxy_err->errString);
-      eventCB(pUserData, (void *)pSess, 0, proxy_err->errCode);
+      GST_ERROR ("DRMPROXY_CreateSession error %lu \n", proxy_err.errCode);
+      GST_ERROR ("%s \n", proxy_err.errString);
+      eventCB(pUserData, (void *)pSess, 0, proxy_err.errCode);
    }
 #endif
 
@@ -700,7 +700,7 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
 cgmi_Status cgmi_DestroySession (void *pSession)
 {
 #ifdef USE_DRMPROXY
-   tProxyErr proxy_error = {};
+   tProxyErr proxy_err = {};
    uint64_t * privateData = NULL;
 #endif
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
@@ -745,12 +745,12 @@ cgmi_Status cgmi_DestroySession (void *pSession)
 
 #ifdef USE_DRMPROXY
    DRMPROXY_DestroySession(pSess->drmProxyHandle);
-   if (proxy_err->errCode != 0)
+   if (proxy_err.errCode != 0)
    {
-     GST_ERROR ("DRMPROXY_DestroySession error %lu \n", proxy_err->errCode);
-     GST_ERROR ("%s \n", proxy_err->errString);
+     GST_ERROR ("DRMPROXY_DestroySession error %lu \n", proxy_err.errCode);
+     GST_ERROR ("%s \n", proxy_err.errString);
      if (pSess != NULL)
-        pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err->errCode);
+        pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
    }
 #endif
 
@@ -808,11 +808,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 
 #ifdef USE_DRMPROXY
    DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
-   if (proxy_err->errCode != 0)
+   if (proxy_err.errCode != 0)
    {
-     GST_ERROR ("DRMPROXY_ParseURL error %lu \n", proxy_err->errCode);
-     GST_ERROR ("%s \n", proxy_err->errString);
-     pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err->errCode);
+     GST_ERROR ("DRMPROXY_ParseURL error %lu \n", proxy_err.errCode);
+     GST_ERROR ("%s \n", proxy_err.errString);
+     pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
    }
 #endif
    //
@@ -842,11 +842,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 
 #ifdef USE_DRMPROXY
       DRMPROXY_Activate(pSess->drmProxyHandle, uri, sizeof(uri), &licenseId, &proxy_err );
-      if (proxy_err->errCode != 0)
+      if (proxy_err.errCode != 0)
       {
-         GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err->errCode);
-         GST_ERROR ("%s \n", proxy_err->errString);
-         pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err->errCode);
+         GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err.errCode);
+         GST_ERROR ("%s \n", proxy_err.errString);
+         pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
       }
       if ( drmType == VERIMATRIX)
       {
