@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <gst/gst.h>
 // put in a #define #include "diaglib.h"
 #include "dbusPtrCommon.h"
@@ -25,6 +26,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #define DEFAULT_SECTION_FILTER_BUFFER_SIZE 256
 #define CMGI_FIFO_NAME_MAX 64
+#define LOGGING_BUFFER_SIZE 512
 
 ////////////////////////////////////////////////////////////////////////////////
 // Logging for daemon.  TODO:  Send to syslog when in background
@@ -67,22 +69,41 @@ typedef struct
     pthread_t thread;
 } tcgmi_FifoCallbackSink;
 
+typedef struct
+{
+    const char        *open;
+    int               priority;
+} tcgmi_LogggingLevel;
+
+typedef struct
+{
+    char                  buffer[LOGGING_BUFFER_SIZE];
+    int                   bufferUsed;
+    tcgmi_LogggingLevel   *curLogLevel;
+    pthread_mutex_t       lock;
+} tcgmi_LoggingBuffer;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Globals
 ////////////////////////////////////////////////////////////////////////////////
-static gboolean         gCgmiInited                 = FALSE;
-static gboolean         gInForeground               = FALSE;
-static GHashTable       *gUserDataCallbackHash      = NULL;
+static gboolean              gCgmiInited                 = FALSE;
+static gboolean              gInForeground               = FALSE;
+static GHashTable            *gUserDataCallbackHash      = NULL;
+static tcgmi_LoggingBuffer   gLoggingBuffer;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Logging
 ////////////////////////////////////////////////////////////////////////////////
+
+static void flushLoggingBuffer();
+
 static void cgmiDaemonLog( const char *open, int priority, const char *format, ... )
 {
     gchar *message;
-
     va_list args;
+
+    flushLoggingBuffer();
+
     va_start (args, format);
     message = g_strdup_vprintf (format, args);
     va_end (args);
@@ -99,44 +120,111 @@ static void cgmiDaemonLog( const char *open, int priority, const char *format, .
 
 static void gPrintToSyslog(const gchar *message)
 {
+    flushLoggingBuffer();
     syslog(LOG_INFO, "%-14s - %s", "G_STDOUT", message);
 }
 static void gPrintErrToSyslog(const gchar *message)
 {
+    flushLoggingBuffer();
     syslog(LOG_ERR, "%-14s - %s", "G_STDERR", message);
 }
 
 static int noop(void) { return 0; }
 
-static size_t writerStdout(void *cookie, char const *data, size_t leng)
+static tcgmi_LogggingLevel stdout_log_level = { "STDOUT", LOG_INFO };
+static tcgmi_LogggingLevel stderr_log_level = { "STDERR", LOG_INFO };
+
+/* The broadcom libraries call fflush after each fprintf(stderr,...).  This
+ * breaks the buffering logic the flag _IOLBF would enable, and requires the
+ * verboseness in this function to ensure syslog gets chunks of data separated 
+ * by new lines.  Without this the 5-6 fprinf(stderr,...); fflush(); calls made
+ * for a single line of debug are spread over 5-6 lines in syslog.
+ */
+static size_t handleLogMessage( void *cookie, char const *data, size_t leng )
 {
-    (void)cookie; // suppress compiler warning
-    syslog(LOG_INFO, "%-14s - %.*s", "STDOUT", (int)leng, data);
+    tcgmi_LogggingLevel* logLevel = (tcgmi_LogggingLevel *)cookie;
+    bool hasNewLine = false;
+
+    pthread_mutex_lock(&gLoggingBuffer.lock);
+
+    do
+    {
+        // Flush buffer if log levels don't match...
+        if( gLoggingBuffer.curLogLevel != logLevel && gLoggingBuffer.curLogLevel != NULL )
+        {
+            syslog( gLoggingBuffer.curLogLevel->priority, "%-14s - %.*s", gLoggingBuffer.curLogLevel->open, 
+                gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer);
+
+            gLoggingBuffer.curLogLevel = logLevel;
+        }
+
+        /*
+         * There are 3 ways to exit this do while.
+         *
+         *  1. No new line, and room in buffer for data.  Save data to be printed later.
+         *  2. New line found, or no room in buffer with data in buffer.  Syslog both buffer and data.
+         *  3. New line found, or no room in buffer with empty buffer.  Syslog just data data.
+         */
+        if( leng > 1 && ( data[leng-1] == '\n' || data[leng-2] == '\n' ) )
+        {
+            hasNewLine = true;
+        }
+
+        // Append current buffer if we have room, and data doesn't have a new line
+        if( !hasNewLine && gLoggingBuffer.bufferUsed + leng < LOGGING_BUFFER_SIZE )
+        {
+            memcpy(&gLoggingBuffer.buffer[gLoggingBuffer.bufferUsed], data, leng);
+            gLoggingBuffer.bufferUsed += leng;
+            break;
+        }
+
+        // Syslog buffered data and new data, if we have both
+        if( gLoggingBuffer.bufferUsed > 0 )
+        {
+            syslog(logLevel->priority, "%-14s - %.*s%.*s", logLevel->open, 
+                gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer, 
+                (int)leng, data);
+
+            gLoggingBuffer.bufferUsed = 0;
+        }
+        // Syslog new data data
+        else
+        {
+            syslog(logLevel->priority, "%-14s - %.*s", logLevel->open, 
+                gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer, 
+                (int)leng, data);
+        }        
+
+    }while(0);
+
+    pthread_mutex_unlock(&gLoggingBuffer.lock);
     return leng;
 }
 
-static size_t writerStderr(void *cookie, char const *data, size_t leng)
-{
-    (void)cookie; // suppress compiler warning
-    syslog(LOG_ERR, "%-14s - %.*s", "STDERR", (int)leng, data);
-    return leng;
-}
-
-static cookie_io_functions_t stdout_log_fns = {
-    (void*) noop, (void*) writerStdout, (void*) noop, (void*) noop
-};
-
-static cookie_io_functions_t stderr_log_fns = {
-    (void*) noop, (void*) writerStderr, (void*) noop, (void*) noop
+static cookie_io_functions_t handle_log_fns = {
+    (void*) noop, (void*) handleLogMessage, (void*) noop, (void*) noop
 };
 
 static void redirectStdStreamsToSyslog()
 {
     // Replace stdout and stderr streams with our own
-    setvbuf(stdout = fopencookie(NULL, "w", stdout_log_fns), NULL, _IOLBF, 0);
-    setvbuf(stderr = fopencookie(NULL, "w", stderr_log_fns), NULL, _IOLBF, 0);
+    stdout = fopencookie(&stdout_log_level, "w", handle_log_fns);
+    stderr = fopencookie(&stderr_log_level, "w", handle_log_fns);
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    setvbuf(stderr, NULL, _IOLBF, 0);
 }
 
+static void flushLoggingBuffer()
+{
+    if( gLoggingBuffer.curLogLevel == NULL ) return;
+    pthread_mutex_lock(&gLoggingBuffer.lock);
+    syslog( gLoggingBuffer.curLogLevel->priority, "%-14s - %.*s", gLoggingBuffer.curLogLevel->open, 
+        gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer);
+
+    gLoggingBuffer.curLogLevel = NULL;
+    gLoggingBuffer.bufferUsed = 0;
+    pthread_mutex_unlock(&gLoggingBuffer.lock);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Utility functions
@@ -430,6 +518,8 @@ on_handle_cgmi_init (
     GDBusMethodInvocation *invocation )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+
+    gLoggingBuffer.curLogLevel = NULL;
 
     CGMID_ENTER();
 
