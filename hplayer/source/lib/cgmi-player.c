@@ -23,6 +23,8 @@ GST_DEBUG_CATEGORY_STATIC (cgmi);
 
 #define INVALID_INDEX      -2
 
+#define PTS_FLUSH_THRESHOLD     (10 * 45000) //10 secs
+
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
 
 static gchar gDefaultAudioLanguage[4];
@@ -64,6 +66,22 @@ static void cisco_gst_setState( tSession *pSess, GstState state )
 
    return;
 }
+
+static GstState cisco_gst_getState( tSession *pSess )
+{
+   GstStateChangeReturn sret;
+   GstState state = GST_STATE_NULL;
+
+   if ( NULL != pSess->pipeline )
+   {
+      sret = gst_element_get_state( pSess->pipeline, &state, NULL, GST_SECOND );
+      if ( GST_STATE_CHANGE_SUCCESS != sret )
+         state = GST_STATE_NULL;
+   }
+
+   return state;
+}
+
 void debug_cisco_gst_streamDurPos( tSession *pSess )
 {
 
@@ -77,6 +95,58 @@ void debug_cisco_gst_streamDurPos( tSession *pSess )
    GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND), gstFormat );
    GST_INFO("Duration: %lld (seconds)\n", (curDur/GST_SECOND), gstFormat );
 
+}
+
+gpointer cgmi_monitor( gpointer data )
+{
+   gint64 videoPts, audioPts;
+   tSession *pSess = (tSession*)data;
+   if ( NULL == pSess )
+      return NULL;
+
+   while( pSess->runMonitor )
+   {
+      if ( cisco_gst_getState(pSess) == GST_STATE_PLAYING )
+      {
+         videoPts = 0;
+         audioPts = 0;
+
+         if ( NULL != pSess->videoDecoder )
+         {
+            g_object_get( pSess->videoDecoder, "video_pts", &videoPts, NULL );
+         }
+         if ( NULL != pSess->audioDecoder )
+         {
+            g_object_get( pSess->audioDecoder, "audio_pts", &audioPts, NULL );
+         }
+
+         if ( videoPts > 0 && audioPts > 0 )
+         {
+            if ( videoPts - audioPts > PTS_FLUSH_THRESHOLD || videoPts - audioPts < -PTS_FLUSH_THRESHOLD )
+            {
+               gboolean ret = FALSE; 
+               GstEvent *flushStart, *flushStop; 
+
+               g_print("Flushing buffers due to large audio-video PTS difference...\n");
+               g_print("videoPts = %lld, audioPts = %lld, diff = %lld\n", videoPts, audioPts, videoPts - audioPts);
+
+               if ( NULL != pSess->demux )
+               {
+                  flushStart = gst_event_new_flush_start(); 
+                  flushStop = gst_event_new_flush_stop(); 
+
+                  ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStart); 
+                  if ( FALSE == ret) 
+                     GST_WARNING("Failed to send flush start event!\n"); 
+                  ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStop); 
+                  if ( FALSE == ret) 
+                     GST_WARNING("Failed to send flush stop event\n"); 
+               }
+            }
+         }
+      }
+      g_usleep(1000000);
+   }
 }
 
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data )
@@ -660,8 +730,15 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
 
    pSess->thread_ctx = g_main_context_new();
 
-	pSess->autoPlayMutex = g_mutex_new ();
-	pSess->autoPlayCond = g_cond_new ();
+   pSess->autoPlayMutex = g_mutex_new ();
+   pSess->autoPlayCond = g_cond_new ();
+
+   pSess->runMonitor = TRUE;
+   pSess->monitor = g_thread_new("monitoring_thread", cgmi_monitor, pSess);
+   if (!pSess->thread)
+   {
+      GST_WARNING("Error launching thread for monitoring timestamp errors\n");
+   }
 
    pSess->loop = g_main_loop_new (pSess->thread_ctx, FALSE);
    if (pSess->loop == NULL)
@@ -673,7 +750,7 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->thread = g_thread_new("signal_thread", g_main_loop_run, (void*)pSess->loop);
    if (!pSess->thread)
    {
-      GST_INFO("Error launching thread for gmainloop\n");
+      GST_WARNING("Error launching thread for gmainloop\n");
    }
    //need a blocking semaphore here
    // but instead I will spin until the
@@ -725,6 +802,18 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    //TODO fix
    g_print("There is race condtion in the glib library, having to sleep to let glib clean up\n");
    sleep(3);
+
+   pSess->runMonitor = FALSE;
+   if (pSess->monitor)
+   {
+      GST_INFO("about to join monitoring thread\n");
+      g_thread_join (pSess->monitor);
+   }
+   else
+   {
+      g_print("No monitoring thread to join\n");
+   }
+
    if (pSess->thread)
    {
       GST_INFO("about to join threads\n");

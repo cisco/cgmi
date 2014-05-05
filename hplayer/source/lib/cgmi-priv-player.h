@@ -42,6 +42,7 @@ typedef struct
    void*              cookie;
    GMainContext       *thread_ctx; 
    GThread            *thread;
+   GThread            *monitor;
    gchar              *playbackURI; /* URI to playback */
    gchar              *manualPipeline; /* URI to playback */
    GMainLoop          *loop;
@@ -74,6 +75,7 @@ typedef struct
    gint               autoPlay;
    gboolean           waitingOnPids;
    gboolean           isAudioMuted;
+   gboolean           runMonitor;
    GMutex             *autoPlayMutex;
    GCond              *autoPlayCond; 
    gint               videoStreamIndex;
