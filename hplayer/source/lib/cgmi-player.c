@@ -895,6 +895,8 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
 
+   g_strlcpy(pPipeline, "playbin2 uri=", 1024);
+
 #ifdef USE_DRMPROXY
    DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
    if (proxy_err.errCode != 0)
@@ -903,66 +905,54 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
      GST_ERROR ("%s \n", proxy_err.errString);
      pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
    }
-#endif
-   //
-   // This section makes DLNA content hardcoded.  Need to optimize.
-   //
-   if (g_strrstr(pSess->playbackURI, ".mpeg") != NULL)
+
+   if (drmType == CLEAR || drmType == UNKNOWN)
    {
-      // This url is pointing to DLNA content, build a manual pipeline.
-      memset(manualPipeline, 0, 1024);
-      g_print("DLNA content, using Manual Pipeline");
-      /* FIXME: Broadcom decodebin2 bug. gst-launch rovidmp location=http://6.4.92.100:8200/MediaItems/21.mpg  ! decodebin2 name=dec ! brcmvideosink dec. ! brcmaudiosink,
-       * it appears that decodebin2 is linking its own sinks and is ignoring brcmvideosink dec. ! brcmaudiosink. Because of this bug the app does goes not get the EOS event.
-       * Temporary fix - remove the sinks after decodebin2.
-       */
-      g_sprintf(manualPipeline, "rovidmp location=%s %s", pSess->playbackURI,"! decodebin2 name=dec");
-      g_strlcpy(pPipeline, manualPipeline,1024);
-      pSess->manualPipeline = g_strdup(manualPipeline);
+   	g_strlcat(pPipeline,uri,1024);
    }
    else
    {
-      // let's see if we are running on broadcom hardware if we are let's see if we can find there
-      // video sink.  If it's there we need to set the flags variable so the pipeline knows to do
-      // color transformation and scaling in hardware
-      g_strlcpy(pPipeline, "playbin2 uri=", 1024);
-      array = g_strsplit(uri, "?",  1024);
-      g_strlcat(pPipeline, array[0], 1024 );
+		array = g_strsplit(uri, "?",  1024);
+		g_strlcat(pPipeline, array[0], 1024 );
 
-#ifdef USE_DRMPROXY
-      DRMPROXY_Activate(pSess->drmProxyHandle, uri, sizeof(uri), &licenseId, &proxy_err );
-      if (proxy_err.errCode != 0)
-      {
-         GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err.errCode);
-         GST_ERROR ("%s \n", proxy_err.errString);
-         pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
-      }
-      if ( drmType == VERIMATRIX)
-      {
-         g_strlcat(pPipeline,"?drmType=verimatrix", 1024);
-         g_strlcat(pPipeline, "&LicenseID=",1024);
-         licenseId = 0; 
-       // LicenseID going to verimatrix plugin is 0 so don't bother with what comes back
-         sprintf(buffer, "%" PRIu64, licenseId);
-         g_strlcat(pPipeline, buffer, 1024);
-      }
-      else if (drmType == VGDRM)
-      {
+		DRMPROXY_Activate(pSess->drmProxyHandle, uri, sizeof(uri), &licenseId, &proxy_err );
+		if (proxy_err.errCode != 0)
+		{
+			GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err.errCode);
+			GST_ERROR ("%s \n", proxy_err.errString);
+			pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
+		}
+		if ( drmType == VERIMATRIX)
+		{
+			g_strlcat(pPipeline,"?drmType=verimatrix", 1024);
+			g_strlcat(pPipeline, "&LicenseID=",1024);
+			licenseId = 0;
+		 // LicenseID going to verimatrix plugin is 0 so don't bother with what comes back
+			sprintf(buffer, "%" PRIu64, licenseId);
+			g_strlcat(pPipeline, buffer, 1024);
+		}
+		else if (drmType == VGDRM)
+		{
 
-//  FIXME: missing VGDRM specifics, may need to tweak the uri before sending it downstream
-         g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
-         g_strlcat(pPipeline, "&LicenseID=",1024);
-         sprintf(buffer, "%" PRIu64, licenseId);
-         g_strlcat(pPipeline, buffer, 1024);
-      }
+	//  FIXME: missing VGDRM specifics, may need to tweak the uri before sending it downstream
+			g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
+			g_strlcat(pPipeline, "&LicenseID=",1024);
+			sprintf(buffer, "%" PRIu64, licenseId);
+			g_strlcat(pPipeline, buffer, 1024);
+		}
+   }
+#else
+   g_strlcat(pPipeline,uri,1024);
 #endif
 
-      if (gst_registry_find_plugin( gst_registry_get_default() , "brcmvideosink"))
-      {
-        g_print("Autoplugging on real broadcom hardware\n");
-        g_strlcat(pPipeline," flags= 0x63", 1024);
-      }
-   }
+	// let's see if we are running on broadcom hardware if we are let's see if we can find there
+	// video sink.  If it's there we need to set the flags variable so the pipeline knows to do
+	// color transformation and scaling in hardware
+	if (gst_registry_find_plugin( gst_registry_get_default() , "brcmvideosink"))
+	{
+		g_print("Autoplugging on real broadcom hardware\n");
+		g_strlcat(pPipeline," flags= 0x63", 1024);
+	}
 
    do
    {
