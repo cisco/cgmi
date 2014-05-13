@@ -1009,7 +1009,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 			g_strlcat(pPipeline, "&LicenseID=",1024);
 			licenseId = 0;
 		 // LicenseID going to verimatrix plugin is 0 so don't bother with what comes back
-			sprintf(buffer, "%" PRIu64, licenseId);
+			sprintf(buffer, "%04" PRIu64, licenseId);
 			g_strlcat(pPipeline, buffer, 1024);
 		}
 		else if (drmType == VGDRM)
