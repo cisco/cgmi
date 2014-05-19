@@ -111,7 +111,7 @@ AC_ARG_ENABLE([use-drmproxy],
                              AC_DEFINE([USE_DRMPROXY], [1], [DrmProxy enabled] )
                              ],
                              [AC_MSG_RESULT(no)])
-AM_CONDITIONAL(USE_DRMPROXY,test x$enable__use_drmproxy = xyes)
+AM_CONDITIONAL(USE_DRMPROXY,test x$enable_use_drmproxy = xyes)
 #
 # Start Checking what packages we have available.
 PKG_CHECK_MODULES([GLIB],    [glib-2.0 >= 2.32.0])
@@ -121,9 +121,12 @@ PKG_CHECK_MODULES([GTHREAD], [gthread-2.0 >= 2.32.0])
 PKG_CHECK_MODULES([GIO],     [gio-unix-2.0 >= 2.32.0])
 PKG_CHECK_MODULES([GST],     [gstreamer-0.10 >= 0.10.30])
 
+#LIBCURL_CHECK_CONFIG(,,curl=1, curl=0 )
+PKG_CHECK_MODULES([CURL], [libcurl])
+
 # Add the CFLAGS and LDFLAGS for each package to the environment
-CFLAGS="$CFLAGS $GLIB_CFLAGS $GOBJECT_CFLAGS $GMODULE_CFLAGS $GTHREAD_CFLAGS $GIO_CFLAGS $GST_CFLAGS"
-LDFLAGS="$LDFLAG $GLIB_LIBS $GOBJECT_LIBS $GMODULE_LIBS $GTHREAD_LIBS $GIO_LIBS $GST_LIBS"
+CFLAGS="$CFLAGS $GLIB_CFLAGS $GOBJECT_CFLAGS $GMODULE_CFLAGS $GTHREAD_CFLAGS $GIO_CFLAGS $GST_CFLAGS $CURL_CFLAGS"
+LDFLAGS="$LDFLAG $GLIB_LIBS $GOBJECT_LIBS $GMODULE_LIBS $GTHREAD_LIBS $GIO_LIBS $GST_LIBS $CURL_LIBS"
 
 #
 # Check for Doxygen for the documentation generation
@@ -159,13 +162,13 @@ echo \
 Building for debug: '${debugit}'
  CC      : ${CC}
  CPP     : ${CPP}
- CFLAGS  : ${CFLAGS} ${LIBCURL_CFLAGS}
- CPPFLAGS  : ${CPPFLAGS} $LIBCURL_CPPFLAGS
+ CFLAGS  : ${CFLAGS} 
+ CPPFLAGS  : ${CPPFLAGS} 
 
  LINKER  : $LD $LDFLAGS $LIBS
 
  LD      : $LD
- LDFLAGS : $LDFLAGS ${LIBCURL}
+ LDFLAGS : $LDFLAGS 
  LIBS    : $LIBS
  PTHREAD : $PTHREAD_LIBS
 

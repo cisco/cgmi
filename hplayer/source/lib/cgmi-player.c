@@ -12,7 +12,9 @@
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <gst/app/gstappsink.h>
-#include <drmProxy.h>
+#ifdef USE_DRMPROXY
+   #include <drmProxy.h>
+#endif
 #include "cgmiPlayerApi.h"
 #include "cgmi-priv-player.h"
 #include "cgmi-section-filter-priv.h"
@@ -664,6 +666,8 @@ cgmi_Status cgmi_Init(void)
          stat = CGMI_ERROR_NOT_SUPPORTED;
          break;
       }
+      stat = cgmi_utils_init();
+
       GST_DEBUG_CATEGORY_INIT (cgmi, "cgmi", 0, "Cisco Gstreamer Media Interface -core");
       /* print out the version */
       strVersion = gst_version_string();
@@ -678,9 +682,12 @@ cgmi_Status cgmi_Init(void)
 cgmi_Status cgmi_Term (void)
 {
    gst_deinit();
+   cgmi_utils_finalize();
    return CGMI_ERROR_SUCCESS;
 }
 
+
+#ifdef USE_DRMPROXY
 static void asyncCB(uint64_t  privateData,
                     uint64_t  licenseID,
                     void      *data,
@@ -691,6 +698,7 @@ static void asyncCB(uint64_t  privateData,
          "\n", __FUNCTION__, privateData, licenseID);
 
 }
+#endif
 
 cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, void **pSession ) {
    tSession *pSess = NULL;
@@ -855,10 +863,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    gchar *pPipeline;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    GSource *source;
+   uint32_t  bisDLNAContent = FALSE;
    gchar manualPipeline[1024];
-   tProxyErr proxy_err = {};
-   gchar **array = NULL;
 #ifdef USE_DRMPROXY
+   gchar **array = NULL;
+   tProxyErr proxy_err = {};
    uint64_t licenseId=0;
    char buffer[50];
    tDRM_TYPE drmType=UNKNOWN;
@@ -885,12 +894,22 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    pSess->audioLanguageIndex = INVALID_INDEX;
    pSess->isAudioMuted = FALSE;
 
-   pSess->playbackURI = g_strdup(uri);
-   if (pSess->playbackURI == NULL)
+   // 
+   // check to see if this is a DLNA url.
+   //
+   if (0 ==strncmp(uri,"http",4))
    {
-      g_free(pPipeline);
-      printf("Not able to allocate memory\n");
-      return CGMI_ERROR_OUT_OF_MEMORY;
+     stat = cgmi_utils_is_content_dlna(uri, &bisDLNAContent);
+     if (bisDLNAContent == TRUE)
+     {
+        //for the gstreamer pipeline to autoplug we have to add
+        //dlna+ to the protocol.
+        pSess->playbackURI = g_strdup_printf("%s%s","dlna+", uri);
+     }
+     else
+     {
+        pSess->playbackURI = g_strdup_printf("%s", uri);
+     }
    }
    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
@@ -908,14 +927,14 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 
    if (drmType == CLEAR || drmType == UNKNOWN)
    {
-   	g_strlcat(pPipeline,uri,1024);
+   	g_strlcat(pPipeline,pSess->playbackURI,1024);
    }
    else
    {
-		array = g_strsplit(uri, "?",  1024);
+		array = g_strsplit(pSess->playbackURI, "?",  1024);
 		g_strlcat(pPipeline, array[0], 1024 );
 
-		DRMPROXY_Activate(pSess->drmProxyHandle, uri, sizeof(uri), &licenseId, &proxy_err );
+		DRMPROXY_Activate(pSess->drmProxyHandle, pSess->playbackURI, sizeof(pSess->playbackURI), &licenseId, &proxy_err );
 		if (proxy_err.errCode != 0)
 		{
 			GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err.errCode);
@@ -942,7 +961,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 		}
    }
 #else
-   g_strlcat(pPipeline,uri,1024);
+   g_strlcat(pPipeline,pSess->playbackURI,1024);
 #endif
 
 	// let's see if we are running on broadcom hardware if we are let's see if we can find there

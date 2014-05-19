@@ -94,6 +94,9 @@ gint cisco_gst_play(tSession *pSession  );
 gint cisco_gst_pause(tSession *pSession  );
 
  void debug_cisco_gst_streamDurPos( tSession *pSession );
+cgmi_Status cgmi_utils_init(void);
+cgmi_Status cgmi_utils_finalize(void);
+cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, uint32_t *bisDLNAContent);
 #ifdef __cplusplus
 }
 #endif

@@ -34,4 +34,5 @@ Doxyfile
 /source/ipc/client/cgmi_cli
 /source/ipc/client/cgmi-client-test
 /source/ipc/daemon/cgmi-daemon
-
+cscope.out
+tags
