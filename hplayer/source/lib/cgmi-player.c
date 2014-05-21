@@ -84,6 +84,44 @@ static GstState cisco_gst_getState( tSession *pSess )
    return state;
 }
 
+static void cgmi_flush_pipeline(tSession *pSess)
+{
+   gboolean ret = FALSE;
+   GstEvent *flushStart = NULL;
+   GstEvent *flushStop = NULL;
+
+   GST_INFO("%s()\n", __FUNCTION__);
+
+   do 
+   {
+      if(NULL == pSess)
+      {
+         GST_ERROR("Session param is NULL\n");
+         break;
+      }
+
+      if(NULL != pSess->demux)
+      {
+         flushStart = gst_event_new_flush_start();
+         flushStop = gst_event_new_flush_stop();
+
+         ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStart);
+         if(FALSE == ret)
+         {
+            GST_ERROR("Failed to send flush start event!\n");
+         }
+
+         ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStop);
+         if(FALSE == ret)
+         {
+            GST_ERROR("Failed to send flush stop event\n"); 
+         }
+      }
+   }while(0);
+   
+   return;
+}
+
 void debug_cisco_gst_streamDurPos( tSession *pSess )
 {
 
@@ -195,6 +233,12 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
          {    
             pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_VIDEO_RESOLUTION_CHANGED, 0);
             gst_message_unref (msg);
+         }
+         else if (0 == strcmp(ntype, "BOF"))
+         {    
+            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_START_OF_STREAM, 0);
+            gst_message_unref (msg);
+            cgmi_SetRate(pSess, 0.0); 
          }
          else
          {
@@ -1091,6 +1135,7 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       pSess->videoSink = NULL;
       pSess->videoDecoder = NULL;
       pSess->audioDecoder = NULL;
+      pSess->rate = 0.0;
 
    }while (0);
    g_print("Exiting %s pipeline is now null\n",__FUNCTION__);
@@ -1111,6 +1156,9 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
    pSess->autoPlay = autoPlay;
 
    cisco_gst_setState( pSess, GST_STATE_PLAYING);
+      
+   pSess->rate = 1.0;
+   
    return stat;
 }
 
@@ -1126,7 +1174,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      GST_ERROR("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
@@ -1136,11 +1184,23 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    if (rate == 0.0)
    {
       cisco_gst_setState( pSess, GST_STATE_PAUSED );
+      
+      if((pSess->rate > 1.0) || (pSess->rate < -1.0))
+      {
+         cgmi_flush_pipeline(pSess);
+
+         GST_WARNING("%s - Un Set Low Delay Mode\n",__FUNCTION__);
+         g_object_set(G_OBJECT(pSess->videoDecoder),"low_delay",FALSE,NULL);
+         g_object_set(G_OBJECT(pSess->videoDecoder),"video_mask","all",NULL);
+      }
+      
+      pSess->rate = rate;
       return stat;
    }
    else if (( rate == 1.0) && (curState == GST_STATE_PAUSED))
    {
       cisco_gst_setState( pSess, GST_STATE_PLAYING );
+      pSess->rate = rate;
       return stat;
    }
 
@@ -1151,7 +1211,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
       return CGMI_ERROR_FAILED;
    }
 
-   if (rate >=1.0)
+   if (rate >= 1.0)
    {
       seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
             GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, 0);
@@ -1171,8 +1231,43 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    /* Send the event */
    if (seek_event)
    {
+      if(((0.0 == pSess->rate) || (1.0 == pSess->rate)) && ((rate > 1.0) || (rate < -1.0)) ||
+         ((0.0 == rate) || (1.0 == rate)) && ((pSess->rate > 1.0) || (pSess->rate < -1.0)))
+      {
+         if ( NULL == pSess->videoDecoder )
+         {
+            GST_ERROR("videoDecoder handle is NULL\n");
+            return CGMI_ERROR_FAILED;
+         }
+
+         if (rate > 1.0 || rate < -1.0)
+         {
+            cgmi_flush_pipeline(pSess);
+
+            GST_WARNING("%s - Set Low Delay Mode\n", __FUNCTION__);
+            g_object_set(G_OBJECT(pSess->videoDecoder),"low_delay",TRUE,NULL);
+            g_object_set(G_OBJECT(pSess->videoDecoder),"video_mask","i_only",NULL);
+
+            if(curState == GST_STATE_PAUSED)
+            {
+               cisco_gst_setState( pSess, GST_STATE_PLAYING );
+            }
+         }
+         else
+         {
+            cgmi_flush_pipeline(pSess);
+
+            GST_WARNING("%s - Un Set Low Delay Mode\n", __FUNCTION__);
+            g_object_set(G_OBJECT(pSess->videoDecoder),"low_delay",FALSE,NULL);
+            g_object_set(G_OBJECT(pSess->videoDecoder),"video_mask","all",NULL);
+         }
+      }
+
       gst_element_send_event (pSess->pipeline, seek_event);
    }
+   
+   pSess->rate = rate;
+   
    return stat;
 }
 
@@ -1192,7 +1287,7 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
    {
       g_print("Setting position to %f (ns)  \n", (position* GST_SECOND));
       if( !gst_element_seek( pSess->pipeline,
-               1.0,
+               pSess->rate,
                GST_FORMAT_TIME,
                GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
                GST_SEEK_TYPE_SET,
@@ -1201,6 +1296,7 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
                GST_CLOCK_TIME_NONE ))
       {
          GST_ERROR("Seek Failed\n");
+         stat = CGMI_ERROR_FAILED; 
       }
 
    } while (0);
@@ -1356,8 +1452,8 @@ cgmi_Status cgmi_GetRates (void *pSession, float pRates[], unsigned int *pNumRat
             while((token != NULL) && (*pNumRates < inNumRates))
             {
                sscanf(token, "%f", &pRates[(*pNumRates)++]);
-               g_print("%s: %s(%d): pRates[%d] = %f\n", __FILE__, __FUNCTION__, __LINE__,
-                       *pNumRates - 1, pRates[*pNumRates - 1]);
+               /*g_print("%s: %s(%d): pRates[%d] = %f\n", __FILE__, __FUNCTION__, __LINE__,
+                       *pNumRates - 1, pRates[*pNumRates - 1]);*/
                token = strtok(NULL, seps);
             }
          }

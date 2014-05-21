@@ -81,6 +81,7 @@ typedef struct
    gint               videoStreamIndex;
    gint               audioStreamIndex;
    uint64_t           drmProxyHandle;
+   float              rate;
 
 }tSession;
 

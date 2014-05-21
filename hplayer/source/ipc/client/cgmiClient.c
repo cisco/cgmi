@@ -1317,7 +1317,7 @@ cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumR
        return CGMI_ERROR_BAD_PARAM;
     }
     inNumRates = *pNumRates;
-    g_print("CGMI_CLIENT: inNumRates = %u\n", inNumRates); 
+    //g_print("CGMI_CLIENT: inNumRates = %u\n", inNumRates); 
 
     enforce_session_preconditions(pSession);
 
@@ -1365,10 +1365,10 @@ cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumR
        while((*pNumRates < inNumRates) && (g_variant_iter_loop(iter, "d", &rate)))
        {
           pRates[(*pNumRates)++] = rate;
-          g_print("CGMI_CLIENT: pRates[%u] = %f\n", *pNumRates - 1, pRates[*pNumRates - 1]); 
+          //g_print("CGMI_CLIENT: pRates[%u] = %f\n", *pNumRates - 1, pRates[*pNumRates - 1]); 
        }
        g_variant_iter_free(iter);
-       g_print("CGMI_CLIENT: Number of rates = %u\n", *pNumRates); 
+       //g_print("CGMI_CLIENT: Number of rates = %u\n", *pNumRates); 
     }
     else
     {

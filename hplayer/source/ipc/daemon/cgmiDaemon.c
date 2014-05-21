@@ -968,7 +968,7 @@ on_handle_cgmi_get_rates (
        }
 
        retStat = cgmi_GetRates( (void *)pSession, pRates, &numRates );
-       CGMID_INFO("numRates = %u\n", numRates);
+       //CGMID_INFO("numRates = %u\n", numRates);
 
        ratesBuilder = g_variant_builder_new( G_VARIANT_TYPE("ad") );
        if(NULL == ratesBuilder)
@@ -980,7 +980,7 @@ on_handle_cgmi_get_rates (
        
        for( ii = 0; ii < numRates; ii++ )
        {
-          CGMID_INFO("pRates[%d] = %f\n", ii, pRates[ii]);
+          //CGMID_INFO("pRates[%d] = %f\n", ii, pRates[ii]);
           rate = pRates[ii];
           g_variant_builder_add( ratesBuilder, "d", rate );
        }
