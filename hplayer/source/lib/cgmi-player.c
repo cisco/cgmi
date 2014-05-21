@@ -317,6 +317,9 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
       return;
    }
 
+   g_print("Enabling server side trick mode...\n");
+   g_object_set( obj, "server-side-trick-mode", TRUE, NULL );
+
    /* Get PAT Info */
    g_object_get( obj, "pat-info", &patInfo, NULL );
 
@@ -338,7 +341,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
          program number 12, program needs to be set to 2 (i.e., second program from the beginning) */
 
       /* We select the first program by default */
-      g_object_set( G_OBJECT(pSess->demux), "program-number", 1, NULL );
+      g_object_set( obj, "program-number", 1, NULL );
 
       g_object_get( obj, "pmt-info", &pmtInfo, NULL );
 
@@ -418,7 +421,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
    if ( pSess->audioLanguageIndex != INVALID_INDEX )
    {
       g_print("Selecting audio language index %d...\n");
-      g_object_set( G_OBJECT(pSess->demux), "audio-stream", pSess->audioLanguageIndex, NULL );
+      g_object_set( obj, "audio-stream", pSess->audioLanguageIndex, NULL );
    }
 
    if ( NULL != pSess->eventCB )
@@ -532,7 +535,7 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
    // If we haven't found the demux investigate this bin
    if ( NULL == pSess->demux )
    {
-      demux = cgmi_gst_find_element( bin, "demux" );
+      demux = cgmi_gst_find_element( bin, "tsdemux" );
 
       if( NULL != demux )
       {
