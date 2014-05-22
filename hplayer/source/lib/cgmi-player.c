@@ -946,18 +946,33 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    //
    if (0 ==strncmp(uri,"http",4))
    {
-     stat = cgmi_utils_is_content_dlna(uri, &bisDLNAContent);
-     if (bisDLNAContent == TRUE)
-     {
-        //for the gstreamer pipeline to autoplug we have to add
-        //dlna+ to the protocol.
-        pSess->playbackURI = g_strdup_printf("%s%s","dlna+", uri);
-     }
-     else
-     {
-        pSess->playbackURI = g_strdup_printf("%s", uri);
-     }
+      stat = cgmi_utils_is_content_dlna(uri, &bisDLNAContent);
+      if(CGMI_ERROR_SUCCESS != stat)
+      {
+         g_free(pPipeline);
+         printf("Not able to determine whether the content is DLNA\n");
+         return stat;
+      }
    }
+   
+   if (bisDLNAContent == TRUE)
+   {
+      //for the gstreamer pipeline to autoplug we have to add
+      //dlna+ to the protocol.
+      pSess->playbackURI = g_strdup_printf("%s%s","dlna+", uri);
+   }
+   else 
+   {
+      pSess->playbackURI = g_strdup_printf("%s", uri);
+   }
+
+   if(NULL == pSess->playbackURI)
+   {
+      g_free(pPipeline);
+      printf("Not able to allocate memory\n");
+      return CGMI_ERROR_OUT_OF_MEMORY;
+   }
+   
    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
 
