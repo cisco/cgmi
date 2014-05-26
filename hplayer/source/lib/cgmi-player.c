@@ -1018,7 +1018,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 	//  FIXME: missing VGDRM specifics, may need to tweak the uri before sending it downstream
 			g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
 			g_strlcat(pPipeline, "&LicenseID=",1024);
-			sprintf(buffer, "%04" PRIu64, licenseId);
+			sprintf(buffer,"%08llX" , licenseId);
 			g_strlcat(pPipeline, buffer, 1024);
 		}
    }
