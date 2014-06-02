@@ -458,6 +458,9 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     tcgmi_FifoCallbackSink *callbackData;
     GstBuffer *pGstbuffer;
+#if GST_CHECK_VERSION(1,0,0)
+    GstMapInfo map;
+#endif
     int bytesWritten, bytesRemaining;
     guint8 *bufferData;
     guint bufferSize;
@@ -481,13 +484,27 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
         return CGMI_ERROR_WRONG_STATE;
     }
 
+#if GST_CHECK_VERSION(1,0,0)
+    if ( gst_buffer_map(pGstbuffer, &map, GST_MAP_READ) == FALSE )
+    {
+        g_print("Failed in mapping buffer for reading userdata!\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    bufferData = map.data;
+    bufferSize = map.size;
+#else
     bufferData = GST_BUFFER_DATA( pGstbuffer );
     bufferSize = GST_BUFFER_SIZE( pGstbuffer );
+#endif
     bytesRemaining = bufferSize;
 
     if( bufferSize < 0 )
     {
         CGMID_ERROR("Empty buffer?.\n");
+#if GST_CHECK_VERSION(1,0,0)
+        gst_buffer_unmap( pGstbuffer, &map );
+#endif
         return CGMI_ERROR_BAD_PARAM;  
     }
 
@@ -505,6 +522,9 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
         retStat = CGMI_ERROR_FAILED;
         callbackData->state = CGMI_FIFO_STATE_FAILED;
     }
+#if GST_CHECK_VERSION(1,0,0)
+    gst_buffer_unmap( pGstbuffer, &map );
+#endif
 
     return retStat;
 }

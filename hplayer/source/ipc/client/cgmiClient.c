@@ -349,6 +349,14 @@ static void *cgmi_UserDataCbThread(void *data)
         if( targetBytesRead == USER_DATA_CALLBACK_BUFFER_SIZE ) targetBytesRead = bytesRead;
 
         // Wrap data with GstBuffer
+#if GST_CHECK_VERSION(1,0,0)
+        pGstBuff = gst_buffer_new_wrapped (dataBuf, bytesRead);
+        if( NULL == pGstBuff )
+        {
+            g_print("Failed to create new gst buffer.\n");
+            continue; 
+        }        
+#else
         pGstBuff = gst_buffer_new( );
         if( NULL == pGstBuff )
         {
@@ -356,7 +364,7 @@ static void *cgmi_UserDataCbThread(void *data)
             continue; 
         }
         gst_buffer_set_data( pGstBuff, dataBuf, bytesRead );
-
+#endif
         // Notify callback
         cbData->userDataCallback(cbData->userDataPrivate, (void *)pGstBuff);
 

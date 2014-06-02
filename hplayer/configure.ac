@@ -2,6 +2,30 @@
 AC_PREREQ([2.61])
 #Here we show that the name of the project "example_template", the version "1.0" and the string used for bug reports "example_template_support@cisco.com"
 AC_INIT([cgmiPlayer], [0.00.11.0],[snobym@cisco.com])
+
+
+AC_ARG_WITH([gstreamer-api],
+    AC_HELP_STRING([--with-gstreamer-api=VERSION],
+                   [build against the specified GStreamer API version
+                    @<:@default=0.10@:>@]),
+    [GST_API_VERSION="$with_gstreamer_api"], [GST_API_VERSION=0.10])
+
+case $GST_API_VERSION in
+0.10)
+    AC_MSG_NOTICE(Using Gstreamer API 0.10)
+    ;;
+1.0)
+    AC_MSG_NOTICE(Using Gstreamer API 1.0)
+    ;;
+*)
+    AC_MSG_ERROR([Unsupported GStreamer API, use 0.10 or 1.0])
+    ;;
+esac
+
+
+AC_SUBST(GST_API_VERSION)
+AC_DEFINE_UNQUOTED(GST_API_VERSION, "$GST_API_VERSION",
+  [GStreamer API Version])
 #
 # If the OS is Linux then enable the GNU system extentions
 #
@@ -119,7 +143,11 @@ PKG_CHECK_MODULES([GOBJECT], [gobject-2.0 >= 2.32.0])
 PKG_CHECK_MODULES([GMODULE], [gmodule-2.0 >= 2.32.0])
 PKG_CHECK_MODULES([GTHREAD], [gthread-2.0 >= 2.32.0])
 PKG_CHECK_MODULES([GIO],     [gio-unix-2.0 >= 2.32.0])
-PKG_CHECK_MODULES([GST],     [gstreamer-0.10 >= 0.10.30])
+
+AS_VERSION_COMPARE([$GST_API_VERSION], [0.10], 
+                   [], 
+                   [PKG_CHECK_MODULES([GST],[gstreamer-0.10 >= 0.10.30])], 
+                   [PKG_CHECK_MODULES([GST],[gstreamer-1.0 >= 1.2.0])])
 
 #LIBCURL_CHECK_CONFIG(,,curl=1, curl=0 )
 PKG_CHECK_MODULES([CURL], [libcurl])

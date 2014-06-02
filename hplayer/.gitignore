@@ -31,8 +31,11 @@ Doxyfile
 
 # Project specific
 /source/ipc/*/*generated.*
-/source/ipc/client/cgmi_cli
-/source/ipc/client/cgmi-client-test
-/source/ipc/daemon/cgmi-daemon
+/source/ipc/client/cgmi_cli-1.0
+/source/ipc/client/cgmi-client-test-1.0
+/source/ipc/daemon/cgmi-daemon-1.0
+/source/ipc/client/cgmi_cli-0.10
+/source/ipc/client/cgmi-client-test-0.10
+/source/ipc/daemon/cgmi-daemon-0.10
 cscope.out
 tags

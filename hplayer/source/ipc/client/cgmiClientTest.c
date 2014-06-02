@@ -600,6 +600,9 @@ static cgmi_Status cgmi_SectionBufferCallback_PAT(
 
 static cgmi_Status cgmiTestUserDataBufferCB(void *pUserData, void *pBuffer)
 {
+#if GST_CHECK_VERSION(1,0,0)
+    GstMapInfo map;
+#endif
     GstBuffer *pGstBuff = (GstBuffer *)pBuffer;
     guint8 *bufferData;
     guint bufferSize;
@@ -609,8 +612,19 @@ static cgmi_Status cgmiTestUserDataBufferCB(void *pUserData, void *pBuffer)
         return CGMI_ERROR_BAD_PARAM;
     }
 
+#if GST_CHECK_VERSION(1,0,0)
+    if ( gst_buffer_map(pGstBuff, &map, GST_MAP_READ) == FALSE )
+    {
+        g_print("Failed in mapping buffer for reading userdata!\n");
+        return CGMI_ERROR_FAILED;
+    }
+
+    bufferData = map.data;
+    bufferSize = map.size;
+#else
     bufferData = GST_BUFFER_DATA( pGstBuff );
     bufferSize = GST_BUFFER_SIZE( pGstBuff );
+#endif
 
     // Dump data recieved.
     g_print("cgmiTestUserDataBufferCB called with buffer of size (%d)...\n",
@@ -618,6 +632,9 @@ static cgmi_Status cgmiTestUserDataBufferCB(void *pUserData, void *pBuffer)
     printHex( bufferData, bufferSize );
     g_print("\n");
 
+#if GST_CHECK_VERSION(1,0,0)
+    gst_buffer_unmap( pGstBuff, &map );
+#endif
     // Free buffer
     gst_buffer_unref( pGstBuff );
 

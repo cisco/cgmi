@@ -17,13 +17,13 @@ $(builddir)/cgmi_dbus_server_generated.h: ${EXTRA_DIST}
 	gdbus-codegen --generate-c-code $(builddir)/cgmi_dbus_server_generated $(top_srcdir)/source/ipc/xml/cgmi_dbus_api.xml
 BUILT_SOURCES =  $(builddir)/cgmi_dbus_server_generated.h
 
-bin_PROGRAMS = cgmi-daemon
-cgmi_daemon_SOURCES=cgmiDaemon.c
-nodist_cgmi_daemon_SOURCES=cgmi_dbus_server_generated.c cgmi_dbus_server_generated.h
+bin_PROGRAMS = cgmi-daemon-@GST_API_VERSION@
+cgmi_daemon_@GST_API_VERSION@_SOURCES=cgmiDaemon.c
+nodist_cgmi_daemon_@GST_API_VERSION@_SOURCES=cgmi_dbus_server_generated.c cgmi_dbus_server_generated.h
 
-cgmi_daemon_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include
-cgmi_daemon_LDFLAGS= $(LDFLAGS) 
+cgmi_daemon_@GST_API_VERSION@_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include
+cgmi_daemon_@GST_API_VERSION@_LDFLAGS= $(LDFLAGS) 
 # Add the library for the actual player here.
 #
-cgmi_daemon_LDADD= $(LDFLAGS) $(top_builddir)/source/lib/libcgmiPlayer.la
+cgmi_daemon_@GST_API_VERSION@_LDADD= $(LDFLAGS) $(top_builddir)/source/lib/libcgmiPlayer-@GST_API_VERSION@.la
 

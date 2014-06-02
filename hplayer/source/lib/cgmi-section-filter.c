@@ -104,6 +104,10 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
    guint8 *sinkData;
    guint sinkDataSize;
    GstBuffer *buffer;
+#if GST_CHECK_VERSION(1,0,0)
+   GstSample *sample;
+   GstMapInfo map;
+#endif
 
 
    // Check preconditions
@@ -127,7 +131,17 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
    }
 
    // Pull the buffer
+#if GST_CHECK_VERSION(1,0,0)
+   sample = gst_app_sink_pull_sample( GST_APP_SINK(sink) );
+   if ( NULL == sample )
+   {
+      g_print("Error appsink callback failed to pull sample.\n");
+      return GST_FLOW_OK;
+   }
+   buffer = gst_sample_get_buffer( sample );
+#else
    buffer = gst_app_sink_pull_buffer( GST_APP_SINK(sink) );
+#endif
 
    if ( NULL == buffer )
    {
@@ -140,8 +154,19 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
       // Check this filter for the correct state
       if( secFilter->lastAction != FILTER_START ) { break; }
 
+#if GST_CHECK_VERSION(1,0,0)
+      if ( gst_buffer_map(buffer, &map, GST_MAP_READ) == FALSE )
+      {
+         g_print("Failed in mapping appsink buffer for reading section data!\n");
+         break;
+      }
+
+      sinkData = map.data;
+      sinkDataSize = map.size;
+#else
       sinkData = GST_BUFFER_DATA( buffer );
       sinkDataSize = GST_BUFFER_SIZE( buffer );
+#endif
 
       // Init the buffer size to the size of the current buffer.  The app should
       // provide a buffer of this size or larger.
@@ -156,16 +181,25 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
       {
          g_print("Failed in queryBufferCB with error (%s)\n",
             cgmi_ErrorString(retStat) );
+#if GST_CHECK_VERSION(1,0,0)
+         gst_buffer_unmap( buffer, &map );
+#endif
          break;
       }
       if( retBufferSize < sinkDataSize )
       {
          g_print("Error buffer returned from queryBufferCB is too small.\n");
+#if GST_CHECK_VERSION(1,0,0)
+         gst_buffer_unmap( buffer, &map );
+#endif
          break;
       }
       if( NULL == retBuffer )
       {
          g_print("Error NULL buffer returned from queryBufferCB.\n");
+#if GST_CHECK_VERSION(1,0,0)
+         gst_buffer_unmap( buffer, &map );
+#endif
          break;
       }
 
@@ -181,6 +215,9 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
       // Return filled buffer to the app
       retStat = secFilter->sectionCB( pSess->usrParam, secFilter->filterPrivate, 
          secFilter, CGMI_ERROR_SUCCESS, retBuffer, (int)sinkDataSize );
+#if GST_CHECK_VERSION(1,0,0)
+      gst_buffer_unmap( buffer, &map );
+#endif
 
    }
    while(0);
@@ -217,7 +254,11 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
       return;
    }
 
+#if GST_CHECK_VERSION(1,0,0)
+   caps = gst_pad_query_caps( pad, NULL );
+#else
    caps = gst_pad_get_caps( pad );
+#endif
 
    if ( NULL != caps )
    {

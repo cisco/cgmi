@@ -33,7 +33,7 @@ static gchar gDefaultAudioLanguage[4];
 
 static int  cgmi_CheckSessionHandle(tSession *pSess)
 {
-   if (NULL == pSess || pSess->cookie != MAGIC_COOKIE)
+   if (NULL == pSess || (int)pSess->cookie != MAGIC_COOKIE)
    {
       GST_ERROR("The pointer to the session handle is invalid!!!!\n");
       return FALSE;
@@ -103,7 +103,11 @@ static void cgmi_flush_pipeline(tSession *pSess)
       if(NULL != pSess->demux)
       {
          flushStart = gst_event_new_flush_start();
+#if GST_CHECK_VERSION(1,0,0)
+         flushStop = gst_event_new_flush_stop(FALSE);
+#else
          flushStop = gst_event_new_flush_stop();
+#endif
 
          ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStart);
          if(FALSE == ret)
@@ -128,8 +132,13 @@ void debug_cisco_gst_streamDurPos( tSession *pSess )
    gint64 curPos = 0, curDur = 0;
    GstFormat gstFormat = GST_FORMAT_TIME;
 
+#if GST_CHECK_VERSION(1,0,0)
+   gst_element_query_position( pSess->pipeline, gstFormat, &curPos );
+   gst_element_query_duration( pSess->pipeline, gstFormat, &curDur );
+#else
    gst_element_query_position( pSess->pipeline, &gstFormat, &curPos );
    gst_element_query_duration( pSess->pipeline, &gstFormat, &curDur );
+#endif
 
    GST_INFO("Stream: %s\n", pSess->playbackURI );
    GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND), gstFormat );
@@ -173,7 +182,11 @@ gpointer cgmi_monitor( gpointer data )
                if ( NULL != pSess->demux )
                {
                   flushStart = gst_event_new_flush_start(); 
+#if GST_CHECK_VERSION(1,0,0)
+                  flushStop = gst_event_new_flush_stop(FALSE); 
+#else
                   flushStop = gst_event_new_flush_stop(); 
+#endif
 
                   ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStart); 
                   if ( FALSE == ret) 
@@ -192,6 +205,7 @@ gpointer cgmi_monitor( gpointer data )
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data )
 {
    tSession *pSess = (tSession*)data;
+   GstStructure *structure;
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
@@ -216,13 +230,18 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
       break;
       case GST_MESSAGE_ELEMENT:
       // these are cisco added events.
-      if( gst_structure_has_name(msg->structure, "extended_notification"))
+#if GST_CHECK_VERSION(1,0,0)
+      structure = (GstStructure *)gst_message_get_structure(msg);
+#else
+      structure = msg->structure;
+#endif
+      if( structure && gst_structure_has_name(structure, "extended_notification"))
       {
          //const GValue *ntype;
-         char  *ntype;
+         const gchar *ntype;
          //figure out which extended notification that we have recieved.
          GST_INFO("RECEIVED extended notification message\n");
-         ntype = gst_structure_get_string(msg->structure, "notification");
+         ntype = gst_structure_get_string(structure, "notification");
 
          if (0 == strcmp(ntype, "first_pts_decoded"))
          {    
@@ -278,9 +297,6 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE, 0);
             }
          }
-         else if (error->domain == GST_ERROR_SYSTEM)
-         {
-         }
 
          g_error_free( error );
 
@@ -314,7 +330,8 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                if ( NULL != pSess->videoSink )
                {
                   gchar dim[64];
-                  snprintf( dim, sizeof(dim), "%d,%d,%d,%d",
+                  snprintf( dim, sizeof(dim), "%d,%d,%d,%d,%d,%d,%d,%d",
+                            pSess->vidSrcRect.x, pSess->vidSrcRect.y, pSess->vidSrcRect.w, pSess->vidSrcRect.h,
                             pSess->vidDestRect.x, pSess->vidDestRect.y, pSess->vidDestRect.w, pSess->vidDestRect.h);
                   g_object_set( G_OBJECT(pSess->videoSink), "window_set", dim, NULL );
                }
@@ -488,7 +505,11 @@ static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename )
    GstElement *element = NULL;
    GstElement *handle = NULL;
    GstIterator *iter = NULL;
+#if GST_CHECK_VERSION(1,0,0)
+   GValue item = G_VALUE_INIT;
+#else
    void *item;
+#endif
    gchar *name = NULL;
    gboolean done = FALSE;
 
@@ -498,7 +519,11 @@ static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename )
       switch ( gst_iterator_next(iter, &item) )
       {
          case GST_ITERATOR_OK:
+#if GST_CHECK_VERSION(1,0,0)
+            element = (GstElement *)g_value_get_object(&item);
+#else
             element = (GstElement *)item;
+#endif
             if ( NULL != element )
             {
                name = gst_element_get_name( element );
@@ -512,8 +537,13 @@ static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename )
                   }
                   g_free( name );
                }
+#if !GST_CHECK_VERSION(1,0,0)
                gst_object_unref( item );
+#endif
             }
+#if GST_CHECK_VERSION(1,0,0)
+            g_value_reset( &item );
+#endif
             break;
          case GST_ITERATOR_RESYNC:
             gst_iterator_resync( iter );
@@ -526,6 +556,9 @@ static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename )
             break;
       }
    }
+#if GST_CHECK_VERSION(1,0,0)
+   g_value_unset( &item );
+#endif
    gst_iterator_free( iter );
 
    return handle;
@@ -534,7 +567,7 @@ static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename )
 void cgmi_gst_notify_source( GObject *obj, GParamSpec *param, gpointer data )
 {
    GstElement *source = NULL;
-   gchar *name;
+   const gchar *name;
 
    g_print("notify-source\n");
 
@@ -636,6 +669,9 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
 static GstFlowReturn cgmi_gst_new_user_data_buffer_available (GstAppSink *sink, gpointer data)
 {
    GstBuffer *buffer;
+#if GST_CHECK_VERSION(1,0,0)
+   GstSample *sample;
+#endif
    tSession *pSess = (tSession*)data;
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
@@ -644,7 +680,18 @@ static GstFlowReturn cgmi_gst_new_user_data_buffer_available (GstAppSink *sink, 
    }
 
    // Pull the buffer
+#if GST_CHECK_VERSION(1,0,0)
+   sample = gst_app_sink_pull_sample( GST_APP_SINK(sink) );
+   if ( NULL == sample )
+   {
+      g_print("Error appsink callback failed to pull user data buffer sample.\n");
+      return GST_FLOW_OK;
+   }
+
+   buffer = gst_sample_get_buffer( sample );
+#else
    buffer = gst_app_sink_pull_buffer( GST_APP_SINK(sink) );
+#endif
 
    if ( NULL == buffer )
    {
@@ -976,7 +1023,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
 
+#if GST_CHECK_VERSION(1,0,0)
+   g_strlcpy(pPipeline, "playbin uri=", 1024);
+#else
    g_strlcpy(pPipeline, "playbin2 uri=", 1024);
+#endif
 
 #ifdef USE_DRMPROXY
    DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
@@ -1029,7 +1080,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 	// let's see if we are running on broadcom hardware if we are let's see if we can find there
 	// video sink.  If it's there we need to set the flags variable so the pipeline knows to do
 	// color transformation and scaling in hardware
+#if GST_CHECK_VERSION(1,0,0)
+	if (gst_registry_find_plugin( gst_registry_get() , "brcmvideosink"))
+#else
 	if (gst_registry_find_plugin( gst_registry_get_default() , "brcmvideosink"))
+#endif
 	{
 		g_print("Autoplugging on real broadcom hardware\n");
 		g_strlcat(pPipeline," flags= 0x63", 1024);
@@ -1089,11 +1144,11 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       // Primarily acquires a reference to demux for section filter support.
       if ( NULL != pSess->manualPipeline )
       {
-         GstBin *decodebin2 = cgmi_gst_find_element( (GstBin *)pSess->pipeline, "dec" );
+         GstBin *decodebin = (GstBin *)cgmi_gst_find_element( (GstBin *)pSess->pipeline, "dec" );
 
-         if( NULL != decodebin2 )
+         if( NULL != decodebin )
          {
-            g_signal_connect( decodebin2, "element-added",
+            g_signal_connect( decodebin, "element-added",
                G_CALLBACK(cgmi_gst_element_added), pSess );
          }
       }
@@ -1220,7 +1275,11 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    }
 
    /* Obtain the current position, needed for the seek event */
+#if GST_CHECK_VERSION(1,0,0)
+   if (!gst_element_query_position (pSess->pipeline, format, &position))
+#else
    if (!gst_element_query_position (pSess->pipeline, &format, &position))
+#endif
    {
       GST_ERROR ("Unable to retrieve current position.\n");
       return CGMI_ERROR_FAILED;
@@ -1335,7 +1394,11 @@ cgmi_Status cgmi_GetPosition (void *pSession, float *pPosition)
    // this returns nano seconds, change it to seconds.
    do
    {
+#if GST_CHECK_VERSION(1,0,0)
+      gst_element_query_position( pSess->pipeline, gstFormat, &curPos );
+#else
       gst_element_query_position( pSess->pipeline, &gstFormat, &curPos );
+#endif
 
       GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND) );
       *pPosition = (curPos/GST_SECOND);
@@ -1362,7 +1425,11 @@ cgmi_Status cgmi_GetDuration (void *pSession, float *pDuration, cgmi_SessionType
 
    do
    {
+#if GST_CHECK_VERSION(1,0,0)
+      gst_element_query_duration( pSess->pipeline, gstFormat, &Duration );
+#else
       gst_element_query_duration( pSess->pipeline, &gstFormat, &Duration );
+#endif
 
       GST_INFO("Stream: %s\n", pSess->playbackURI );
       GST_INFO("Position: %lld (seconds)\n", (Duration/GST_SECOND) );
@@ -1426,12 +1493,16 @@ cgmi_Status cgmi_GetRates (void *pSession, float pRates[], unsigned int *pNumRat
                                      "trickSpeedsStr", G_TYPE_STRING, NULL,
                                      NULL);
 
+#if GST_CHECK_VERSION(1,0,0)
+      query = gst_query_new_custom (GST_QUERY_CUSTOM, structure);
+#else
       query = gst_query_new_application (GST_QUERY_CUSTOM, structure);
+#endif
 
       ret = gst_element_query (pSess->pipeline, query);
       if(ret)
       {
-         structure = gst_query_get_structure (query);
+         structure = (GstStructure *)gst_query_get_structure (query);
 
          pTrickSpeedsStr = g_value_dup_string (gst_structure_get_value (structure,
                                                "trickSpeedsStr"));
@@ -1714,7 +1785,7 @@ cgmi_Status cgmi_startUserDataFilter( void *pSession, userDataBufferCB bufferCB,
    gst_caps_unref( caps );
 
    gst_app_sink_set_callbacks( GST_APP_SINK(pSess->userDataAppsink), &appsink_cbs, pSess, NULL);
-   gst_bin_add_many( GST_ELEMENT_PARENT(pSess->videoDecoder), pSess->userDataAppsink, NULL );
+   gst_bin_add_many( GST_BIN(GST_ELEMENT_PARENT(pSess->videoDecoder)), pSess->userDataAppsink, NULL );
 
    pSess->userDataAppsinkPad = gst_element_get_static_pad((GstElement *)pSess->userDataAppsink, "sink");
    if ( NULL == pSess->userDataAppsinkPad )
@@ -1782,7 +1853,7 @@ cgmi_Status cgmi_stopUserDataFilter( void *pSession, userDataBufferCB bufferCB )
    if ( NULL != pSess->userDataAppsink )
    {
       gst_element_set_state( pSess->userDataAppsink, GST_STATE_NULL );
-      gst_bin_remove( GST_ELEMENT_PARENT(pSess->videoDecoder), (GstElement *)pSess->userDataAppsink );
+      gst_bin_remove( GST_BIN(GST_ELEMENT_PARENT(pSess->videoDecoder)), (GstElement *)pSess->userDataAppsink );
       pSess->userDataAppsink = NULL;
    }
 
