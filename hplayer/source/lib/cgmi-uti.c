@@ -170,6 +170,8 @@ cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, uint32_t *bisDLNAConten
       curl_easy_setopt(ctx,CURLOPT_NOBODY ,1 );
       curl_easy_setopt(ctx,CURLOPT_URL, url);
       curl_easy_setopt(ctx,CURLOPT_NOPROGRESS ,1 );
+      curl_easy_setopt(ctx,CURLOPT_CONNECTTIMEOUT, 2); 
+      curl_easy_setopt(ctx,CURLOPT_TIMEOUT, 3);
 
       curl_easy_perform(ctx);
       if(CONTENT_PROTOCOL_DLNA == respHdr.protocol)    
