@@ -52,7 +52,7 @@ AM_PROG_AR
 LT_PREREQ([2.2])
 LT_INIT([dlopen disable-static ])
 
-#This is just used to get some configuration data it's aslo so that the
+#This is just used to get some configuration data it's also so that the
 #configure script knows the directory on which it is being executed
 #on is actually the project directory
 AC_CONFIG_SRCDIR([source/lib/cgmi-player.c])
@@ -62,6 +62,7 @@ AC_CONFIG_FILES([ Makefile
                   source/lib/Makefile
                   source/ipc/client/Makefile
                   source/ipc/daemon/Makefile
+                  source/lib/cgmi.pc
                   ])
 
                   #source/ipc/daemon/Makefile
