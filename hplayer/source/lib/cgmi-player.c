@@ -28,6 +28,7 @@ GST_DEBUG_CATEGORY_STATIC (cgmi);
 #define PTS_FLUSH_THRESHOLD     (10 * 45000) //10 secs
 
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
+static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename );
 
 static gchar gDefaultAudioLanguage[4];
 
@@ -320,10 +321,23 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                if ( NULL == pSess->videoSink )
                {
                   GstElement *videoSink = NULL;
+                  GstElement *innerSink = NULL;
                   g_object_get( pSess->pipeline, "video-sink", &videoSink, NULL );
                   if ( NULL != videoSink )
                   {
-                     pSess->videoSink = videoSink;
+                     g_print("Found element class (%s), handle = %p\n", G_OBJECT_CLASS_NAME(G_OBJECT_GET_CLASS(videoSink)), videoSink); 
+                     if ( GST_IS_BIN(videoSink) )
+                     {
+                        innerSink = cgmi_gst_find_element( videoSink, "videosink" );
+                        if ( NULL != innerSink )
+                        {
+                           pSess->videoSink = innerSink;
+                        }
+                     }
+                     else
+                     {
+                        pSess->videoSink = videoSink;
+                     }
                      gst_object_unref( videoSink );
                   }
                }

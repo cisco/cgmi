@@ -222,7 +222,11 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
    }
    while(0);
 
+#if GST_CHECK_VERSION(1,0,0)
+   gst_sample_unref( sample );
+#else
    gst_buffer_unref( buffer );
+#endif
 
    return GST_FLOW_OK;
 }
@@ -232,6 +236,7 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
    tSectionFilter *secFilter = (tSectionFilter *)data;
    tSession *pSess;
    GstCaps *caps = NULL;
+   GstState state;
 
    g_print("ON_PAD_ADDED\n");
 
@@ -271,18 +276,25 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
             g_print("Adding appsink and linking it to demux for section filtering...\n");
             GstAppSinkCallbacks appsink_cbs = { NULL, NULL, cgmi_filter_gst_appsink_new_buffer, NULL };
             secFilter->appsink = gst_element_factory_make("appsink", NULL);
+            g_print("Obtained new appsink (%p)\n", secFilter->appsink);
             g_object_set( secFilter->appsink, "emit-signals", TRUE, "caps", caps, NULL );
 
             gst_app_sink_set_callbacks( GST_APP_SINK(secFilter->appsink), &appsink_cbs, secFilter, NULL);
-            gst_bin_add_many( GST_BIN(pSess->pipeline), secFilter->appsink, NULL );
+            gst_bin_add_many( GST_BIN(GST_ELEMENT_PARENT(pSess->demux)), secFilter->appsink, NULL );
+            g_print("Linking appsink (%p) to demux (%p)\n", secFilter->appsink, pSess->demux);
             if ( TRUE != gst_element_link(pSess->demux, secFilter->appsink) ) 
             {
-               g_print("Could not link demux to appsink!\n");                    
+               g_print("Could not link demux to appsink!\n");
             }
 
             // This sync state is required when the appsink element is added to 
             // the pipeline after it has started playback.
-            gst_element_sync_state_with_parent( secFilter->appsink );
+            //if ( TRUE != gst_element_sync_state_with_parent(secFilter->appsink) )
+            gst_element_get_state( pSess->demux, &state, NULL, 0 );
+            if ( TRUE != gst_element_set_state(secFilter->appsink, state) );
+            {
+               g_print("Could not sync appsink state with its parent!\n");
+            }
 
             // Once we have connected the appsink this callback can be disconnected
             g_signal_handler_disconnect( pSess->demux, secFilter->padAddedCbId );
@@ -413,22 +425,23 @@ cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId )
       return CGMI_ERROR_FAILED;
    }
 
+   g_print("Destroying section filter (%p), appsink (%p)...\n", secFilter->handle, secFilter->appsink);
+
    secFilter->lastAction = FILTER_CLOSE;
 
    // Unlink and remove app sink from pipeline
+   gst_element_unlink( pSess->demux, secFilter->appsink );
+   
    gst_element_set_state( secFilter->appsink, GST_STATE_NULL );
-   gst_bin_remove_many( GST_BIN(pSess->pipeline), secFilter->appsink, NULL );
+
+   gst_bin_remove_many( GST_BIN(GST_ELEMENT_PARENT(pSess->demux)), secFilter->appsink, NULL );
 
    // Close the section filter
    g_object_set( secFilter->handle, "filter-action", FILTER_CLOSE, NULL );
    g_object_set( G_OBJECT(pSess->demux), "section-filter", secFilter->handle, NULL );
 
    // Clean house
-   if( NULL != secFilter->appsink )
-   {
-      gst_object_unref( secFilter->appsink );
-      secFilter->appsink = NULL;
-   }
+   secFilter->appsink = NULL;
 
    g_free(secFilter);
 
@@ -606,9 +619,12 @@ cgmi_Status cgmi_StopSectionFilter(void *pSession, void* pFilterId )
       return CGMI_ERROR_FAILED;
    }
 
+   g_print("Stopping section filter (%p)...\n", secFilter->handle);
+
    // If the filter is already stopped, ignore the command.
    if( FILTER_STOP == secFilter->lastAction )
    {
+      g_print("Filter already stopped!\n");
       return CGMI_ERROR_SUCCESS;
    }
 
