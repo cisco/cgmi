@@ -729,6 +729,22 @@ cgmi_Status cgmi_GetPidInfo( void *pSession, int index, tcgmi_PidData *pPidData 
  */
 cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, int enable );
 
+
+/**
+ *  \brief \b cgmi_SetLogging
+ *
+ *	 Control the log level for the output debug string for the CGMI process.
+ *
+ *  \param[in]  gstDebugStr  A string that match the format of GST_DEBUG string.
+ *
+ *  \return                  CGMI_ERROR_SUCCESS when call succeeds.
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_SetLogging ( const char *gstDebugStr);
+
+
 /**
  * \section How To section
  *  \attention "How to Initialize and shutdown the subsystem"

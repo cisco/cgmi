@@ -215,6 +215,10 @@
             <arg name="code" type="t" />
         </signal>
 
-        <property name="Verbose" type="b" access="readwrite"/>
+        <method name="setLogging">
+            <arg name="gstDebugStr" direction="in" type="s"/>
+        </method>
+        
+	<property name="Verbose" type="b" access="readwrite"/>
     </interface>
 </node>

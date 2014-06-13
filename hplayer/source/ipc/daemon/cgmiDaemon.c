@@ -1771,6 +1771,22 @@ on_handle_cgmi_set_pid_info (
     return TRUE;
 }
 
+static gboolean
+on_handle_cgmi_set_logging (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    const gchar *arg_gstDebugStr )
+{
+
+	cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+
+	retStat = cgmi_SetLogging( arg_gstDebugStr );
+
+    org_cisco_cgmi_complete_set_logging ( object, invocation) ;
+
+    return TRUE;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS setup callbacks
 ////////////////////////////////////////////////////////////////////////////////
@@ -1951,6 +1967,11 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-set-pid-info",
                       G_CALLBACK (on_handle_cgmi_set_pid_info),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-set-logging",
+                      G_CALLBACK (on_handle_cgmi_set_logging),
                       NULL);
 
     if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (interface),

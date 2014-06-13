@@ -2484,3 +2484,24 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, i
     return retStat;
 }
 
+cgmi_Status cgmi_SetLogging ( const char *gstDebugStr)
+{
+    GError *error = NULL;
+
+    if ( gProxy == NULL )
+    {
+        g_print("Error CGMI not initialized.\n");
+        return CGMI_ERROR_NOT_INITIALIZED;
+    }
+
+    org_cisco_cgmi_call_set_logging_sync( gProxy, gstDebugStr, NULL, &error );
+
+    if(error)
+    {
+        g_print("%s,%d: Failed in the client call: %s\n", __FUNCTION__, __LINE__, error->message);
+        g_error_free (error);
+        return  CGMI_ERROR_FAILED;
+    }
+
+    return CGMI_ERROR_SUCCESS;
+}

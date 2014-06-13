@@ -27,6 +27,8 @@ GST_DEBUG_CATEGORY_STATIC (cgmi);
 
 #define PTS_FLUSH_THRESHOLD     (10 * 45000) //10 secs
 
+#define GST_DEBUG_STR_MAX_SIZE  256
+
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
 static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename );
 
@@ -2001,3 +2003,92 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, i
    return CGMI_ERROR_SUCCESS;
 }
 
+
+static gboolean
+parse_debug_category (gchar * str, const gchar ** category)
+{
+  if (!str)
+    return FALSE;
+
+  /* works in place */
+  g_strstrip (str);
+
+  if (str[0] != '\0')
+  {
+    *category = str;
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+static gboolean
+parse_debug_level (gchar * str, GstDebugLevel * level)
+{
+  unsigned long l;
+  char *endptr;
+
+  if (!str)
+    return FALSE;
+
+  /* works in place */
+  g_strstrip (str);
+
+  if (g_ascii_isdigit (str[0]))
+  {
+    l = strtoul (str, &endptr, 10);
+    if (endptr > str && endptr[0] == 0)
+      *level = (GstDebugLevel) l;
+    else
+      return FALSE;
+  }
+  else
+  {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+cgmi_Status cgmi_SetLogging(const char *gstDebugStr)
+{
+   cgmi_Status   stat = CGMI_ERROR_SUCCESS;
+   gchar **split;
+   gchar **walk;
+   GstDebugLevel level;
+   gchar **values;
+   const gchar *category;
+
+   if (gstDebugStr == NULL  ||  strnlen(gstDebugStr, GST_DEBUG_STR_MAX_SIZE) >= GST_DEBUG_STR_MAX_SIZE)
+   {
+      g_print("Invalid GST debug string!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }   
+
+   split = g_strsplit (gstDebugStr, ",", 0);
+
+   for (walk = split; *walk; walk++)
+   {
+      if (strchr (*walk, ':'))
+      {
+         values = g_strsplit (*walk, ":", 2);
+         if (values[0] && values[1])
+         {
+            if (parse_debug_category (values[0], &category)
+             && parse_debug_level (values[1], &level))
+            gst_debug_set_threshold_for_name (category, level);
+         }
+
+         g_strfreev (values);
+      }
+      else
+      {
+         if (parse_debug_level (*walk, &level))
+         {        
+           gst_debug_set_default_threshold (level);
+         }
+      }
+   }
+
+   g_strfreev (split);
+   return stat;
+}

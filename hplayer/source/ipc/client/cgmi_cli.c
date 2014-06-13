@@ -427,6 +427,8 @@ void help(void)
            "\n"
            "\tsetpid <index> <A/V type (0:audio, 1:video)> <0:disable, 1:enable>\n"
            "\n"
+    	   "\tsetlogging <GST_DEBUG format>\n"
+    	   "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
@@ -1325,6 +1327,25 @@ int main(int argc, char **argv)
             printf( "Played for %d seconds. %d channels.\n",
                     (int) (current.tv_sec - start.tv_sec), i );
         }
+
+        /* set logging  */
+        else if (strncmp(command, "setlogging", 10) == 0)
+        {
+            if ( strlen( command ) <= 11 )
+            {
+                printf( "\tsetlogging <GST_DEBUG format>\n" );
+                continue;
+            }
+            strncpy( arg, command + 11, strlen(command) - 11 );
+            arg[strlen(command) - 11] = '\0';
+
+            retCode = cgmi_SetLogging(arg);
+            if (retCode != CGMI_ERROR_SUCCESS)
+            {
+            	printf("Error in set logging. Returned %d\n", retCode);
+            }
+        }
+
         /* help */
         else if (strncmp(command, "help", 4) == 0)
         {
