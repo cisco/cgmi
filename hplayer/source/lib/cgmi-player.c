@@ -26,6 +26,7 @@ GST_DEBUG_CATEGORY_STATIC (cgmi);
 #define INVALID_INDEX      -2
 
 #define PTS_FLUSH_THRESHOLD     (10 * 45000) //10 secs
+#define DEFAULT_BLOCKSIZE       65536
 
 #define GST_DEBUG_STR_MAX_SIZE  256
 
@@ -579,10 +580,10 @@ static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename )
 
    return handle;
 }
-
 void cgmi_gst_notify_source( GObject *obj, GParamSpec *param, gpointer data )
 {
    GstElement *source = NULL;
+   GstElement *souphttpsrc = NULL;
    const gchar *name;
 
    g_print("notify-source\n");
@@ -608,6 +609,13 @@ void cgmi_gst_notify_source( GObject *obj, GParamSpec *param, gpointer data )
             g_print("Setting UDP chunk size to %d\n", UDP_CHUNK_SIZE);
             g_object_set( source, "chunk-size", UDP_CHUNK_SIZE, NULL );
          }
+      }
+      else if ( NULL != strstr(name, "GstSoupHTTPSrc") )
+      {
+         souphttpsrc = source;
+         // if we have just souphttpsrc let's set the blocksize to something larger than the default 4k
+         g_print("souphttpsrc has been detected, increasing the blocksize to: %u bytes\n",DEFAULT_BLOCKSIZE );
+         g_object_set (souphttpsrc, "blocksize",DEFAULT_BLOCKSIZE , NULL);
       }
    }
 
