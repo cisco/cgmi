@@ -1663,6 +1663,41 @@ cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw
    return CGMI_ERROR_SUCCESS;
 }
 
+cgmi_Status cgmi_GetVideoDecoderIndex(void *pSession, int *idx)
+{
+   tSession *pSess = (tSession*)pSession;
+   int videoDecoderIndex = 0;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == idx )
+   {
+      g_print("%s:Null index pointer passed for video decoder!\n", __FUNCTION__);
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   if ( NULL == pSess->videoDecoder )
+   {
+      g_print("%s:No decoder associated with session!\n", __FUNCTION__);
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   g_object_get( pSess->videoDecoder, "videodecoder_id", &videoDecoderIndex, NULL );
+
+   if (videoDecoderIndex == 0)  // 0 is the uninitialized value.
+   {
+      return CGMI_ERROR_NOT_ACTIVE; 
+   }
+
+   *idx = videoDecoderIndex;
+
+   return CGMI_ERROR_SUCCESS;
+}
+
 cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
 {
    tSession *pSess = (tSession*)pSession;

@@ -429,6 +429,8 @@ void help(void)
            "\n"
     	   "\tsetlogging <GST_DEBUG format>\n"
     	   "\n"
+	   "\tgetvideodecoderindex\n"
+    	   "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
@@ -1102,6 +1104,19 @@ int main(int argc, char **argv)
                 printf("Error returned %d\n", retCode);                
             }
         }
+        /* get video decoder index */
+	else if (strncmp(command, "getvideodecoderindex", 20) == 0)
+	{
+            gint ndx;
+
+            retCode = cgmi_GetVideoDecoderIndex( pSessionId, &ndx );
+            if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);
+                continue;
+            }
+            printf("\nVideo Decoder Index: %d\n", ndx);
+	}
         /* get num pids */
         else if (strncmp(command, "getpidinfo", 10) == 0)
         {

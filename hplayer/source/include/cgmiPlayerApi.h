@@ -424,6 +424,22 @@ cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw
                                     int dstx, int dsty, int dstw, int dsth );
 
 /**
+ *  \brief \b cgmi_GetVideoDecoderIndex
+ *
+ *  This is a request to retrieve the index of the video decoder.
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[out] idx  this int will be populated with the decoder id number retrieved.
+ *
+ *  \pre    The Session must be open, and decoder initialized.
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetVideoDecoderIndex (void *pSession,  int *idx);
+
+/**
  *  \brief \b cgmi_GetNumAudioLanguages
  *
  *  This is a request to find out how many audio languages the currently loaded asset has.

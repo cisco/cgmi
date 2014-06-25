@@ -92,6 +92,12 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
+        <method name="getVideoDecoderIndex">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="idx" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
         <!-- Audio APIs -->
         <method name="getNumAudioLanguages">
             <arg name="sessionId" direction="in" type="v"/>
