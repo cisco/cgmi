@@ -159,7 +159,7 @@ gpointer cgmi_monitor( gpointer data )
 
    while( pSess->runMonitor )
    {
-      if ( cisco_gst_getState(pSess) == GST_STATE_PLAYING )
+      if ( cisco_gst_getState(pSess) == GST_STATE_PLAYING && pSess->rate == 1.0 )
       {
          videoPts = 0;
          audioPts = 0;
