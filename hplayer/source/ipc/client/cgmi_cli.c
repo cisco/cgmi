@@ -416,21 +416,20 @@ void help(void)
            "\tstopfilter\n"
            "\n"
            "\tgetaudiolanginfo\n"
-           "\n"
            "\tsetaudiolang <index>\n"
-           "\n"
            "\tsetdefaudiolang <lang>\n"
+           "\n"
+           "\tgetccinfo\n"
            "\n"
            "\tsetvideorect <srcx,srcy,srcw,srch,dstx,dsty,dstw,dsth>\n"
            "\n"
            "\tgetpidinfo\n"
-           "\n"
            "\tsetpid <index> <A/V type (0:audio, 1:video)> <0:disable, 1:enable>\n"
            "\n"
-    	   "\tsetlogging <GST_DEBUG format>\n"
-    	   "\n"
-	   "\tgetvideodecoderindex\n"
-    	   "\n"
+           "\tsetlogging <GST_DEBUG format>\n"
+           "\n"
+           "\tgetvideodecoderindex\n"
+           "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
@@ -1061,6 +1060,30 @@ int main(int argc, char **argv)
             if ( retCode != CGMI_ERROR_SUCCESS )
             {
                 printf("Error returned %d\n", retCode);                
+            }
+        }
+        /* get closed caption services available */
+        else if (strncmp(command, "getccinfo", 9) == 0)
+        {
+            gint count;
+            gint i;
+            gint serviceNum;
+            gboolean isDigital;
+            gchar lang[4] = { 0 };
+            retCode = cgmi_GetNumClosedCaptionServices( pSessionId, &count );
+            if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);
+                continue;
+            }
+            printf("\nAvailable Closed Caption Services:\n");
+            printf("--------------------------\n");
+            for ( i = 0; i < count; i++ )
+            {
+                retCode = cgmi_GetClosedCaptionServiceInfo( pSessionId, i, lang, sizeof(lang), &serviceNum, &isDigital );
+                if ( retCode != CGMI_ERROR_SUCCESS )
+                    break;
+                printf("%d: %s, serviceNum: %d (%s)\n", i, lang, serviceNum, isDigital?"708":"608");
             }
         }
         /* set video rectangle */

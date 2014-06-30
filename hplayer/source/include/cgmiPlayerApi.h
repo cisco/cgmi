@@ -509,6 +509,47 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index);
  */
 cgmi_Status cgmi_SetDefaultAudioLang (void *pSession,  const char *language);
 
+
+/**
+ *  \brief \b cgmi_GetNumClosedCaptionServices
+ *
+ *  This is a request to find out how many closed caption services the currently loaded asset has.
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[out] count  this int will be populated with the nubmer of closed caption services the current asset has.
+ *
+ *  \pre    The Session must be open the the url must be loaded
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetNumClosedCaptionServices (void *pSession,  int *count);
+
+/**
+ *  \brief \b cgmi_GetClosedCaptionLangInfo
+ *
+ *  This is to find out service details of requested closed caption stream
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[in] index  Index of the closed caption stream in the returned number of available languages
+ *
+ *  \param[out] isoCode    Buffer to write the ISO-639 code in
+ *
+ *  \param[in] isoCodeSize Size of the buffer passed in
+ *
+ *  \param[out] serviceNum Service number to be returned
+ *
+ *  \param[out] isDigital Flag telling whether the selected service is for digital captions or not
+ *
+ *  \pre    The Session must be open the the url must be loaded.
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetClosedCaptionServiceInfo (void *pSession, int index, char* isoCode, int isoCodeSize, int *serviceNum, char *isDigital);
+
 /**
  *  \brief \b cgmi_CreateSectionFilter 
  *

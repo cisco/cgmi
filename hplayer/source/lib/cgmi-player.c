@@ -458,7 +458,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
             {
                len = (guint8)string->str[pos + 1];
                g_print("descriptor # %d tag %02x len %d\n", z, (guint8)string->str[pos], len);
-               switch ( string->str[pos] )
+               switch ( (guint8)string->str[pos] )
                {
                   case 0x0A: /* ISO_639_language_descriptor */
                      g_print("Found audio language descriptor for stream %d\n", j);
@@ -486,6 +486,54 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                                 MAX_AUDIO_LANGUAGE_DESCRIPTORS);
                      }
                      break;
+
+                  case 0x86: /* Closed Caption Service Descriptor */
+                  {
+                     gint i;
+                     gchar *data;
+                     g_print("Found closed caption service descriptor for stream %d\n", j);
+
+                     pSess->numClosedCaptionServices = string->str[pos+2] & 0x1F;
+
+                     if ( pSess->numClosedCaptionServices > MAX_CLOSED_CAPTION_SERVICES )
+                     {
+                        g_print("Maximum number of closed caption descriptors %d has been reached!!!\n",
+                                MAX_CLOSED_CAPTION_SERVICES);
+                        pSess->numClosedCaptionServices = MAX_CLOSED_CAPTION_SERVICES;
+                     }
+
+                     data = &string->str[pos + 3];
+
+                     g_print("Found %d closed caption languages\n", pSess->numClosedCaptionServices);
+
+                     for ( i = 0; i < pSess->numClosedCaptionServices; i++ )
+                     {
+                        memset( pSess->closedCaptionServices[i].isoCode, 0, 4 );
+                        memcpy( pSess->closedCaptionServices[i].isoCode, data, 3 );
+
+                        data += 3;
+
+                        if ( *data & 0x80 )
+                        {
+                           pSess->closedCaptionServices[i].isDigital = TRUE;
+                           pSess->closedCaptionServices[i].serviceNum = *data & 0x3F;
+                        }
+                        else
+                        {
+                           pSess->closedCaptionServices[i].isDigital = FALSE;
+                           //Code field number into service number
+                           pSess->closedCaptionServices[i].serviceNum = *data & 0x01;
+                        }
+
+                        data += 3;
+
+                        g_print("Caption[%d]: lang: %s, Digital: %d, Service num: %d\n", i,
+                           pSess->closedCaptionServices[i].isoCode,
+                           pSess->closedCaptionServices[i].isDigital,
+                           pSess->closedCaptionServices[i].serviceNum);
+                     }
+                  }
+                  break;
                }
 
                pos += len + 2;
@@ -1006,6 +1054,7 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    }
 
    pSess->numAudioLanguages = 0;
+   pSess->numClosedCaptionServices = 0;
    pSess->numStreams = 0;
    pSess->videoStreamIndex = INVALID_INDEX;
    pSess->audioStreamIndex = INVALID_INDEX;
@@ -1801,6 +1850,59 @@ cgmi_Status cgmi_SetDefaultAudioLang ( void *pSession, const char *language )
       strncpy( pSess->defaultAudioLanguage, language, sizeof(pSess->defaultAudioLanguage) );
       pSess->defaultAudioLanguage[sizeof(pSess->defaultAudioLanguage) - 1] = 0;
    }
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_GetNumClosedCaptionServices (void *pSession,  int *count)
+{
+   tSession *pSess = (tSession*)pSession;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == count )
+   {
+      g_print("Null count pointer passed for closed caption language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   *count = pSess->numClosedCaptionServices;
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_GetClosedCaptionServiceInfo (void *pSession, int index, char* isoCode, int isoCodeSize, int *serviceNum, char *isDigital)
+{
+   tSession *pSess = (tSession*)pSession;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == isoCode )
+   {
+      g_print("Null buffer pointer passed for closed caption language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   if ( index > pSess->numClosedCaptionServices - 1 || index < 0 )
+   {
+      g_print("Bad index value passed for closed caption language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   strncpy( isoCode, pSess->closedCaptionServices[index].isoCode, isoCodeSize );
+   isoCode[isoCodeSize - 1] = 0;
+
+   *serviceNum = pSess->closedCaptionServices[index].serviceNum;
+
+   *isDigital = pSess->closedCaptionServices[index].isDigital;
 
    return CGMI_ERROR_SUCCESS;
 }

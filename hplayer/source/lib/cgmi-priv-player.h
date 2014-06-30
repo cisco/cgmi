@@ -9,6 +9,7 @@ extern "C"
 #endif
 
 #define MAX_AUDIO_LANGUAGE_DESCRIPTORS 32
+#define MAX_CLOSED_CAPTION_SERVICES    71
 #define MAX_STREAMS                    32
 #define SOCKET_RECEIVE_BUFFER_SIZE     1000000
 #define UDP_CHUNK_SIZE                 (1316*32)
@@ -22,6 +23,13 @@ typedef struct
    guint streamType;
    gchar isoCode[4];
 }tAudioLang;
+
+typedef struct
+{
+   gboolean isDigital;
+   gint serviceNum;
+   gchar isoCode[4];
+}tCCLang;
 
 typedef struct
 {
@@ -60,9 +68,11 @@ typedef struct
    tCgmiRect          vidSrcRect;
    tCgmiRect          vidDestRect;
    tAudioLang         audioLanguages[MAX_AUDIO_LANGUAGE_DESCRIPTORS];
+   tCCLang            closedCaptionServices[MAX_CLOSED_CAPTION_SERVICES];
    gchar              defaultAudioLanguage[4];
    gint               numAudioLanguages;
    gint               audioLanguageIndex;
+   gint               numClosedCaptionServices;
    gint               numStreams;
    tCgmiStream        streams[MAX_STREAMS];
    /* user registered data */ 

@@ -1724,6 +1724,127 @@ cgmi_Status cgmi_SetDefaultAudioLang( void *pSession, const char *language )
     return retStat;
 }
 
+cgmi_Status cgmi_GetNumClosedCaptionServices( void *pSession, int *count )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( pSession == NULL || count == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_get_num_closed_caption_services_sync( gProxy,
+                dbusVar,
+                count,
+                (gint *)&retStat,
+                NULL,
+                &error );
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_GetClosedCaptionServiceInfo( void *pSession, int index,
+                                   char *isoCode, int isoCodeSize, int *serviceNum, char *isDigital )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    gchar *buffer = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( NULL == pSession || NULL == isoCode )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_get_closed_caption_service_info_sync( gProxy,
+                dbusVar,
+                index,
+                isoCodeSize,
+                (gchar **)&buffer,
+                (gint *)serviceNum,
+                (gboolean *)isDigital,
+                (gint *)&retStat,
+                NULL,
+                &error );
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    if( NULL == buffer )
+    {
+        return CGMI_ERROR_FAILED;
+    }
+
+    strncpy( isoCode, buffer, isoCodeSize );
+    isoCode[isoCodeSize - 1] = 0;
+    g_free( buffer );
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
 cgmi_Status cgmi_CreateSectionFilter( void *pSession, int pid, void *pFilterPriv, void **pFilterId )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;

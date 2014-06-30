@@ -213,6 +213,22 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
+        <method name="getNumClosedCaptionServices">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="count" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getClosedCaptionServiceInfo">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="index" direction="in" type="i"/>
+            <arg name="isoCodeSize" direction="in" type="i"/>
+            <arg name="isoCode" direction="out" type="s"/>
+            <arg name="serviceNum" direction="out" type="i"/>
+            <arg name="isDigital" direction="out" type="b"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
         <!-- Player callback -->
         <signal name="playerNotify">
             <arg name="sessionHandle" type="v"/>

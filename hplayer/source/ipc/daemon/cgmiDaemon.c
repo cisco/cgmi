@@ -1189,7 +1189,7 @@ on_handle_cgmi_get_audio_lang_info (
             retStat);
 
     if ( NULL != buffer )
-        g_free( buffer );   
+        g_free( buffer );
 
     return TRUE;
 }
@@ -1260,6 +1260,100 @@ on_handle_cgmi_set_default_audio_lang (
     org_cisco_cgmi_complete_set_default_audio_lang (object,
             invocation,
             retStat);
+
+    return TRUE;
+}
+
+static gboolean
+on_handle_cgmi_get_num_closed_caption_services (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    gint count = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL )
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetNumClosedCaptionServices( (void *)pSession, &count );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_get_num_closed_caption_services (object,
+            invocation,
+            count,
+            retStat);
+
+    return TRUE;
+}
+
+static gboolean
+on_handle_cgmi_get_closed_caption_service_info (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId,
+    gint index,
+    gint bufSize )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    char *buffer = NULL;
+    char isDigital;
+    int serviceNum;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    CGMID_ENTER();
+
+    do{
+        if ( bufSize <= 0 )
+        {
+            retStat = CGMI_ERROR_BAD_PARAM;
+            break;
+        }
+
+        buffer = g_malloc0(bufSize);
+        if ( NULL == buffer )
+        {
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL )
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetClosedCaptionServiceInfo( (void *)pSession, index, buffer, bufSize, &serviceNum, &isDigital );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_get_closed_caption_service_info (object,
+            invocation,
+            buffer,
+            serviceNum,
+            isDigital,
+            retStat);
+
+    if ( NULL != buffer )
+        g_free( buffer );
 
     return TRUE;
 }
@@ -1963,6 +2057,16 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-create-section-filter",
                       G_CALLBACK (on_handle_cgmi_create_section_filter),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-num-closed-caption-services",
+                      G_CALLBACK (on_handle_cgmi_get_num_closed_caption_services),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-closed-caption-service-info",
+                      G_CALLBACK (on_handle_cgmi_get_closed_caption_service_info),
                       NULL);
 
     g_signal_connect (interface,
