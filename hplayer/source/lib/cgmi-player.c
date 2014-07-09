@@ -1367,7 +1367,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    else if (rate <= -1.0)
    {
       seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
-            GST_SEEK_TYPE_SET,0 , GST_SEEK_TYPE_NONE, position);
+            GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, position);
 
    }
    else if (rate == 1.0)
