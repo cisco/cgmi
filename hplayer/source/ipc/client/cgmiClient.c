@@ -17,7 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Defines
 ////////////////////////////////////////////////////////////////////////////////
-#define USER_DATA_CALLBACK_BUFFER_SIZE 512
+#define USER_DATA_CALLBACK_BUFFER_SIZE 2048
 
 ////////////////////////////////////////////////////////////////////////////////
 // Macros
@@ -259,6 +259,23 @@ static gboolean on_handle_section_buffer_notify (  OrgCiscoCgmi *proxy,
     return TRUE;
 }
 
+/* This function will read exactly count bytes */
+static int cgmi_fifoCompleteRead(int fd, void *buffer, size_t count)
+{
+    int bytesRead = 0;
+    int totalRead = 0;
+    do
+    {
+        bytesRead = read(fd, buffer + totalRead, count - totalRead); 
+        if( 0 >= bytesRead )
+        {
+            return bytesRead;
+        }
+        totalRead += bytesRead;
+    } while (totalRead < count);
+    return totalRead;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Threads for handling streams to app
 ////////////////////////////////////////////////////////////////////////////////
@@ -269,12 +286,11 @@ static void *cgmi_UserDataCbThread(void *data)
     tcgmi_PlayerEventCallbackData *cbData = (tcgmi_PlayerEventCallbackData *)data;
     gchar *dataBuf = NULL;
     int bytesRead = 0;
-    int targetBytesRead = USER_DATA_CALLBACK_BUFFER_SIZE;
     GstBuffer *pGstBuff = NULL;
     struct timeval selectTimeout;
     fd_set selectFdSet;
     int readyFd;
-
+    guint bufferSize = 0;
 
     // Preconditions
     if( NULL == cbData || NULL == cbData->userDataCallback )
@@ -295,17 +311,6 @@ static void *cgmi_UserDataCbThread(void *data)
 
     while( cbData->userDataCbRunning == TRUE )
     {
-
-        if( NULL == dataBuf )
-        {
-            dataBuf = g_malloc0(targetBytesRead);
-        }
-
-        if( NULL == dataBuf )
-        {
-            g_print("Failed to allocate memory.\n");
-            break;
-        }
 
         // Init fd_set for select statement
         FD_ZERO(&selectFdSet);
@@ -329,9 +334,41 @@ static void *cgmi_UserDataCbThread(void *data)
             continue;
         }
 
-        // Read from fifo
-        bytesRead = read( 
-            cbData->userDataFifoDesc, dataBuf, targetBytesRead );
+        // Read size from fifo
+        bytesRead = cgmi_fifoCompleteRead(
+            cbData->userDataFifoDesc, &bufferSize, sizeof(bufferSize) );
+
+        // Did we actually get some data?
+        if( 0 >= bytesRead )
+        {
+            g_print("Failed to read size from UserDataCbThread fifo.\n");
+            continue;
+        }
+
+        // Verify the blocksize
+        if ( USER_DATA_CALLBACK_BUFFER_SIZE < bufferSize )
+        {
+            g_print("Block size %d is too big.\n", bufferSize);
+            continue;
+        }
+
+        // Cannot reuse the previously unused buffer
+        if( NULL != dataBuf )
+        {
+            g_free(dataBuf);
+            dataBuf = NULL;
+        }
+
+        dataBuf = g_malloc0(bufferSize);
+        if( NULL == dataBuf )
+        {
+            g_print("Failed to allocate memory.\n");
+            break;
+        }
+
+        // Read the body
+        bytesRead = cgmi_fifoCompleteRead(
+            cbData->userDataFifoDesc, dataBuf, bufferSize );
 
         // If main thread has asked nicely to stop running, then bail
         if( cbData->userDataCbRunning == FALSE ) break;
@@ -339,14 +376,11 @@ static void *cgmi_UserDataCbThread(void *data)
         // Did we actually get some data?
         if( 0 >= bytesRead )
         {
-            g_print("Failed to read from UserDataCbThread fifo.\n");
+            g_print("Failed to read body from UserDataCbThread fifo.\n");
             continue;
         }
 
         //g_print("Read (%d) bytes.\n", bytesRead );
-
-        // optimize memory allocations to avoid over allocation, the first read usually matches subsequent reads in size
-        if( targetBytesRead == USER_DATA_CALLBACK_BUFFER_SIZE ) targetBytesRead = bytesRead;
 
         // Wrap data with GstBuffer
 #if GST_CHECK_VERSION(1,0,0)

@@ -453,6 +453,24 @@ static cgmi_Status cgmiSectionBufferCallback(
     return retStat;
 }
 
+/* This function will write exactly count bytes */
+static cgmi_fifoCompleteWrite(int fd, void *buffer, size_t count)
+{
+    int bytesWritten = 0;
+    int totalWritten = 0;
+
+    do
+    {
+        bytesWritten = write( fd, buffer + totalWritten, count - totalWritten );
+        if (0 >= bytesWritten)
+        {
+             return bytesWritten; 
+        }
+        totalWritten += bytesWritten;
+    }while( totalWritten < count );
+    return totalWritten;    
+}
+
 static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
@@ -461,7 +479,7 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
 #if GST_CHECK_VERSION(1,0,0)
     GstMapInfo map;
 #endif
-    int bytesWritten, bytesRemaining;
+    int bytesWritten;
     guint8 *bufferData;
     guint bufferSize;
 
@@ -497,7 +515,6 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
     bufferData = GST_BUFFER_DATA( pGstbuffer );
     bufferSize = GST_BUFFER_SIZE( pGstbuffer );
 #endif
-    bytesRemaining = bufferSize;
 
     if( bufferSize < 0 )
     {
@@ -508,20 +525,25 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
         return CGMI_ERROR_BAD_PARAM;  
     }
 
-    // Write to fifo
-    do
-    {
-        //CGMID_INFO("Sending buffer of size (%u)...\n", bufferSize);
-        bytesWritten = write( callbackData->fd, bufferData, bytesRemaining );
-        bytesRemaining -= bytesWritten;
-        bufferData += bytesWritten;
-    }while( bytesRemaining > 0 && bytesWritten > 0 );
-    
-    if( -1 == bytesWritten ) {
+    // Prepend bufferSize to the fifo. This way the client will be able to read
+    // the whole buffer before passing it to the CC callback. 
+    bytesWritten = cgmi_fifoCompleteWrite( callbackData->fd, &bufferSize, sizeof(bufferSize) );
+    if( 0 >= bytesWritten ) {
         CGMID_ERROR("Failed writing to fifo with (%d).\n", errno);
         retStat = CGMI_ERROR_FAILED;
         callbackData->state = CGMI_FIFO_STATE_FAILED;
     }
+    else
+    {
+        // Write the real data to fifo
+        bytesWritten = cgmi_fifoCompleteWrite( callbackData->fd, bufferData, bufferSize );
+        if( 0 >= bytesWritten ) {
+            CGMID_ERROR("Failed writing to fifo with (%d).\n", errno);
+            retStat = CGMI_ERROR_FAILED;
+            callbackData->state = CGMI_FIFO_STATE_FAILED;
+        }
+    }
+    
 #if GST_CHECK_VERSION(1,0,0)
     gst_buffer_unmap( pGstbuffer, &map );
 #endif
