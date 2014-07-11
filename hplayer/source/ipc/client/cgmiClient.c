@@ -571,7 +571,7 @@ static int verify_dbus_env()
     size_t readCount;
     char *newline = NULL;
 
-    dbus_session_bus_address = getenv(DBUS_SESS_BUS_ADDR);
+    dbus_session_bus_address = (char *)getenv(DBUS_SESS_BUS_ADDR);
     if( dbus_session_bus_address != NULL )
     {
         // A dbus session is set... return success.
@@ -1465,6 +1465,60 @@ cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw
                 dsty,
                 dstw,
                 dsth,
+                (gint *)&retStat,
+                NULL,
+                &error );
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_GetVideoResolution( void *pSession, int *srcw, int *srch )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( pSession == NULL || srcw == NULL || srch == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_get_video_resolution_sync( gProxy,
+                dbusVar,
+                srcw,
+                srch,
                 (gint *)&retStat,
                 NULL,
                 &error );

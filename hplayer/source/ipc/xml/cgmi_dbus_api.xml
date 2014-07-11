@@ -92,6 +92,13 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
+        <method name="getVideoResolution">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="srcw" direction="out" type="i"/>
+            <arg name="srch" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
         <method name="getVideoDecoderIndex">
             <arg name="sessionId" direction="in" type="v"/>
             <arg name="idx" direction="out" type="i"/>

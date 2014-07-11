@@ -367,7 +367,7 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
             printf("NOTIFY_VIDEO_ASPECT_RATIO_CHANGED");
             break;
         case NOTIFY_VIDEO_RESOLUTION_CHANGED:
-            printf("NOTIFY_VIDEO_RESOLUTION_CHANGED");
+            printf("NOTIFY_VIDEO_RESOLUTION_CHANGED: %dx%d", (gint)(code >> 32), (gint)(code & 0xFFFFFFFF));
             break;
         case NOTIFY_CHANGED_LANGUAGE_AUDIO:
             printf("NOTIFY_CHANGED_LANGUAGE_AUDIO");
@@ -429,6 +429,8 @@ void help(void)
            "\tsetlogging <GST_DEBUG format>\n"
            "\n"
            "\tgetvideodecoderindex\n"
+           "\n"
+           "\tgetvideores\n"
            "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
@@ -1080,7 +1082,7 @@ int main(int argc, char **argv)
             printf("--------------------------\n");
             for ( i = 0; i < count; i++ )
             {
-                retCode = cgmi_GetClosedCaptionServiceInfo( pSessionId, i, lang, sizeof(lang), &serviceNum, &isDigital );
+                retCode = cgmi_GetClosedCaptionServiceInfo( pSessionId, i, lang, sizeof(lang), &serviceNum, (char *)&isDigital );
                 if ( retCode != CGMI_ERROR_SUCCESS )
                     break;
                 printf("%d: %s, serviceNum: %d (%s)\n", i, lang, serviceNum, isDigital?"708":"608");
@@ -1127,9 +1129,22 @@ int main(int argc, char **argv)
                 printf("Error returned %d\n", retCode);                
             }
         }
+        /* get video source resolution */
+	    else if (strncmp(command, "getvideores", 11) == 0)
+	    {
+            gint srcw, srch;
+
+            retCode = cgmi_GetVideoResolution( pSessionId, &srcw, &srch );
+            if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);
+                continue;
+            }
+            printf("\nVideo Source Resolution: %dx%d\n", srcw, srch);
+	    }
         /* get video decoder index */
-	else if (strncmp(command, "getvideodecoderindex", 20) == 0)
-	{
+	    else if (strncmp(command, "getvideodecoderindex", 20) == 0)
+	    {
             gint ndx;
 
             retCode = cgmi_GetVideoDecoderIndex( pSessionId, &ndx );
@@ -1139,7 +1154,7 @@ int main(int argc, char **argv)
                 continue;
             }
             printf("\nVideo Decoder Index: %d\n", ndx);
-	}
+	    }
         /* get num pids */
         else if (strncmp(command, "getpidinfo", 10) == 0)
         {

@@ -423,6 +423,26 @@ cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumR
 cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw, int srch, 
                                     int dstx, int dsty, int dstw, int dsth );
 
+
+/**
+ *  \brief \b cgmi_GetVideoResolution
+ *
+ *  Obtains video source resolution
+ *
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[in] srcw  Video source width
+ *
+ *  \param[in] srch  Video source height
+ *
+ *  \pre    The Session must be open the url must be loaded.
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetVideoResolution( void *pSession, int *srcw, int *srch );
+
 /**
  *  \brief \b cgmi_GetVideoDecoderIndex
  *

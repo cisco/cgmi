@@ -1090,6 +1090,43 @@ on_handle_cgmi_set_video_rectangle (
 }
 
 static gboolean
+on_handle_cgmi_get_video_resolution (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    gint srcw = 0, srch = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL )
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetVideoResolution( (void *)pSession, &srcw, &srch );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_get_video_resolution (object,
+            invocation,
+            srcw,
+            srch,
+            retStat);
+
+    return TRUE;
+}
+
+static gboolean
 on_handle_cgmi_get_video_decoder_index (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
@@ -2049,6 +2086,11 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-set-video-rectangle",
                       G_CALLBACK (on_handle_cgmi_set_video_rectangle),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-video-resolution",
+                      G_CALLBACK (on_handle_cgmi_get_video_resolution),
                       NULL);
 
     g_signal_connect (interface,

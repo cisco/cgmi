@@ -246,20 +246,36 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
          //figure out which extended notification that we have recieved.
          GST_INFO("RECEIVED extended notification message\n");
          ntype = gst_structure_get_string(structure, "notification");
+         if (NULL == ntype)
+         {
+            GST_ERROR("Null notification!\n");
+            gst_message_unref (msg);
+         }
 
          if (0 == strcmp(ntype, "first_pts_decoded"))
          {    
-            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_FIRST_PTS_DECODED, 0 );
+            pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
             gst_message_unref (msg);
          }
          else if (0 == strcmp(ntype, "stream_attrib_changed"))
          {    
-            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_VIDEO_RESOLUTION_CHANGED, 0);
+            gint width, height;
+            if (gst_structure_get_int(structure, "src_width", &width) == FALSE)
+            {
+               GST_WARNING("Failed to get video source widht, returning 0");
+               width = 0;
+            }
+            if (gst_structure_get_int(structure, "src_height", &height) == FALSE)
+            {
+               GST_WARNING("Failed to get video source height, returning 0");
+               height = 0;
+            }
+            pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_VIDEO_RESOLUTION_CHANGED, (((uint64_t)width) << 32) | (uint64_t)height);
             gst_message_unref (msg);
          }
          else if (0 == strcmp(ntype, "BOF"))
          {    
-            pSess->eventCB(pSess->usrParam, (void*)pSess,NOTIFY_START_OF_STREAM, 0);
+            pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_START_OF_STREAM, 0);
             gst_message_unref (msg);
             cgmi_SetRate(pSess, 0.0); 
          }
@@ -1708,6 +1724,42 @@ cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw
                 pSess->vidDestRect.x, pSess->vidDestRect.y, pSess->vidDestRect.w, pSess->vidDestRect.h);
       g_object_set( G_OBJECT(pSess->videoSink), "window_set", dim, NULL );
    }
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_GetVideoResolution( void *pSession, int *srcw, int *srch )
+{
+   gint64 res;
+   tSession *pSess = (tSession*)pSession;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == srcw || NULL == srch )
+   {
+      g_print("%s: Invalid parameters passed!\n", __FUNCTION__);
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   if ( NULL == pSess->videoDecoder )
+   {
+      g_print("%s:No decoder associated with session!\n", __FUNCTION__);
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   g_object_get( pSess->videoDecoder, "source_res", &res, NULL );
+
+   if (res == 0)
+   {
+      return CGMI_ERROR_NOT_ACTIVE;
+   }
+
+   *srcw = (int)(res >> 32);
+   *srch = (int)(res & 0xFFFFFFFF);
 
    return CGMI_ERROR_SUCCESS;
 }
