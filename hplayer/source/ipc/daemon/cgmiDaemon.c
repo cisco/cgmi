@@ -19,6 +19,7 @@
 #include "dbusPtrCommon.h"
 #include "cgmiPlayerApi.h"
 #include "cgmi_dbus_server_generated.h"
+#include "cgmiDiagsApi.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1976,6 +1977,95 @@ on_handle_cgmi_set_logging (
     return TRUE;
 }
 
+static gboolean 
+on_handle_cgmiDiags_get_timing_metrics_max_count (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation)
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    gint count = 0;
+
+    CGMID_ENTER();
+
+	retStat = cgmiDiags_GetTimingMetricsMaxCount(&count);
+
+    org_cisco_cgmi_complete_get_timing_metrics_max_count(object, invocation, count, retStat);
+
+    return TRUE;
+}
+
+static gboolean 
+on_handle_cgmiDiags_get_timing_metrics(
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    gint arg_bufSizeIn)
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    gint count = arg_bufSizeIn;
+    GVariantBuilder *outBufBuilder = NULL;
+    GVariant *outBuf = NULL;
+    int idx,inBufSize, outBufSize;
+    char *pInBuf = NULL;
+
+    CGMID_ENTER();
+
+    do{
+        inBufSize = sizeof(tCgmiDiags_timingMetric)*count;
+        pInBuf = g_malloc(inBufSize);
+
+        if(NULL == pInBuf) 
+        {
+           g_print("Failed to create input buffer\n");
+           retStat = CGMI_ERROR_OUT_OF_MEMORY;
+           break;
+        }
+
+        retStat = cgmiDiags_GetTimingMetrics((tCgmiDiags_timingMetric *)pInBuf, &count);
+
+        outBufSize = sizeof(tCgmiDiags_timingMetric)*count;
+
+        // Marshal gvariant buffer
+        outBufBuilder = g_variant_builder_new( G_VARIANT_TYPE("ay") );
+        if( outBufBuilder == NULL )
+        {
+            g_print("Failed to create new variant builder\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        for( idx = 0; (idx < inBufSize) && (idx < outBufSize); idx++ )
+        {
+            g_variant_builder_add( outBufBuilder, "y", pInBuf[idx] );
+        }
+        outBuf = g_variant_builder_end( outBufBuilder );
+    }while(0);
+
+    org_cisco_cgmi_complete_get_timing_metrics (object, invocation, count, outBuf, retStat);
+
+    g_print("%s: count = %d; inBufSize = %d; outBufSize = %d; idx = %d\n", __FUNCTION__, count, inBufSize, outBufSize, idx);
+
+    //Clean up
+    if( outBufBuilder != NULL ) { g_variant_builder_unref(outBufBuilder); }
+    if( pInBuf != NULL ) { g_free(pInBuf); }
+
+    return TRUE;
+}
+
+static gboolean 
+on_handle_cgmiDiags_reset_timing_metrics (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation)
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+
+    CGMID_ENTER();
+
+    retStat = cgmiDiags_ResetTimingMetrics();
+
+    org_cisco_cgmi_complete_reset_timing_metrics(object, invocation, retStat);
+
+    return TRUE;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS setup callbacks
 ////////////////////////////////////////////////////////////////////////////////
@@ -2181,6 +2271,21 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-set-logging",
                       G_CALLBACK (on_handle_cgmi_set_logging),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-timing-metrics-max-count",
+                      G_CALLBACK (on_handle_cgmiDiags_get_timing_metrics_max_count),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-timing-metrics",
+                      G_CALLBACK (on_handle_cgmiDiags_get_timing_metrics),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-reset-timing-metrics",
+                      G_CALLBACK (on_handle_cgmiDiags_reset_timing_metrics),
                       NULL);
 
     if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (interface),

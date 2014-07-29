@@ -18,6 +18,8 @@
 #include "cgmiPlayerApi.h"
 #include "cgmi-priv-player.h"
 #include "cgmi-section-filter-priv.h"
+#include "cgmiDiagsApi.h"
+#include "cgmi-diags-priv.h"
 
 #define MAGIC_COOKIE 0xDEADBEEF
 GST_DEBUG_CATEGORY_STATIC (cgmi);
@@ -253,7 +255,9 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
          }
 
          if (0 == strcmp(ntype, "first_pts_decoded"))
-         {    
+         {
+            cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
+
             pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
             gst_message_unref (msg);
          }
@@ -856,6 +860,9 @@ cgmi_Status cgmi_Init(void)
       g_message("GStreamer Initialized with Version: %s\n", strVersion);
       g_free( strVersion );
 
+      //intialize the diag subsytem
+      cgmiDiags_Init();
+
    } while(0);
 
    return stat;
@@ -865,6 +872,7 @@ cgmi_Status cgmi_Term (void)
 {
    gst_deinit();
    cgmi_utils_finalize();
+   cgmiDiags_Term();
    return CGMI_ERROR_SUCCESS;
 }
 
@@ -913,6 +921,7 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->audioStreamIndex = INVALID_INDEX;
    pSess->videoStreamIndex = INVALID_INDEX;
    pSess->isAudioMuted = FALSE;
+   pSess->diagIndex = 0;
 
    strncpy( pSess->defaultAudioLanguage, gDefaultAudioLanguage, sizeof(pSess->defaultAudioLanguage) );
    pSess->defaultAudioLanguage[sizeof(pSess->defaultAudioLanguage) - 1] = 0;
@@ -1020,8 +1029,6 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    if (pSess->autoPlayCond) {g_cond_free(pSess->autoPlayCond);}
    if (pSess->autoPlayMutex) {g_mutex_free(pSess->autoPlayMutex);}
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
-   g_free(pSess);
-
 #ifdef USE_DRMPROXY
    DRMPROXY_DestroySession(pSess->drmProxyHandle);
    if (proxy_err.errCode != 0)
@@ -1032,6 +1039,7 @@ cgmi_Status cgmi_DestroySession (void *pSession)
         pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
    }
 #endif
+   g_free(pSess);
 
    return stat;
 }
@@ -1061,6 +1069,8 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
+
+   cgmiDiags_GetNextSessionIndex(&pSess->diagIndex);
 
    pPipeline = g_strnfill(1024, '\0');
    if (pPipeline == NULL)
@@ -1108,6 +1118,8 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
       printf("Not able to allocate memory\n");
       return CGMI_ERROR_OUT_OF_MEMORY;
    }
+
+   cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_LOAD, pSess->diagIndex, pSess->playbackURI, 0);
    
    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
@@ -1272,6 +1284,8 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
+   cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_UNLOAD, pSess->diagIndex, pSess->playbackURI, 0);
+
    do
    {
       //Signal psi callback on unload in case it is blocked on PID selection
@@ -1311,6 +1325,8 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
       g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
+
+   cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PLAY, pSess->diagIndex, pSess->playbackURI, 0);
 
    pSess->autoPlay = autoPlay;
 

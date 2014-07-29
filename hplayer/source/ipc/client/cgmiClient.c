@@ -13,6 +13,7 @@
 #include "dbusPtrCommon.h"
 #include "cgmiPlayerApi.h"
 #include "cgmi_dbus_client_generated.h"
+#include "cgmiDiagsApi.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Defines
@@ -2766,4 +2767,98 @@ cgmi_Status cgmi_SetLogging ( const char *gstDebugStr)
     }
 
     return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmiDiags_GetTimingMetricsMaxCount ( int *pCount )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+
+    // Preconditions
+    if(pCount == NULL)
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_dbus_preconditions();
+
+    org_cisco_cgmi_call_get_timing_metrics_max_count_sync( gProxy,
+                                                           (gint *)pCount,
+                                                           (gint *)&retStat,
+                                                           NULL,
+                                                           &error );
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmiDiags_GetTimingMetrics ( tCgmiDiags_timingMetric metrics[], int *pCount )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *pOutBuf = NULL;
+    GVariantIter *iter = NULL;
+    unsigned char *pTemMetricsBuf = (unsigned char *)metrics;
+    unsigned int max_metrics_buf_byte;
+
+    // Preconditions
+    if((pCount == NULL) || (NULL == metrics))
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    if(0 == *pCount)
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    max_metrics_buf_byte = sizeof(tCgmiDiags_timingMetric)*(*pCount);
+
+    enforce_dbus_preconditions();
+
+    org_cisco_cgmi_call_get_timing_metrics_sync ( gProxy,
+                                                  (gint)(*pCount),
+                                                  (gint *)pCount,
+                                                  &pOutBuf,
+                                                  (gint *)&retStat,
+                                                  NULL,
+                                                  &error);
+
+    dbus_check_error(error);
+
+    // Unmarshal time metric buffer
+    g_variant_get( pOutBuf, "ay", &iter );
+    if( NULL == iter )
+    {
+        g_print("%s: Error - Failed to get iterator from gvariant\n", __FUNCTION__);
+    }
+    else
+    {
+        unsigned int bufIdx = 0;
+        while( bufIdx < max_metrics_buf_byte && g_variant_iter_loop(iter, "y", &pTemMetricsBuf[bufIdx]) )
+        {
+            bufIdx++;
+        }
+        g_variant_iter_free( iter );
+    }
+
+    return retStat;
+}
+
+cgmi_Status cgmiDiags_ResetTimingMetrics (void)
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+
+    enforce_dbus_preconditions();
+
+    org_cisco_cgmi_call_reset_timing_metrics_sync( gProxy,
+                                                   (gint *)&retStat,
+                                                   NULL,
+                                                   &error );
+
+    dbus_check_error(error);
+
+    return retStat;
 }

@@ -12,6 +12,7 @@
 #include <sys/time.h>
 
 #include "cgmiPlayerApi.h"
+#include "cgmiDiagsApi.h"
 
 /* Defines for section filtering. */
 #define MAX_PMT_COUNT 20
@@ -27,6 +28,7 @@ static int gAutoPlay = true;
 /* Prototypes */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code );
 static cgmi_Status destroyfilter( void *pSessionId );
+static void dumpTimingEntry(void);
 
 /* Signal Handler */
 void sig_handler(int signum)
@@ -34,6 +36,101 @@ void sig_handler(int signum)
     tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
     printf("\n\nNext time you may want to use Ctrl+D to exit correctly. :-)\n");
     exit(1);
+}
+
+/*Dumping timing entry*/
+static void dumpTimingEntry(void)
+{
+    int maxCount, i, numEntry;
+    tCgmiDiags_timingMetric *pMetricsBuf = NULL;
+
+    if(CGMI_ERROR_SUCCESS == cgmiDiags_GetTimingMetricsMaxCount(&maxCount)) 
+    {
+        pMetricsBuf = (tCgmiDiags_timingMetric *)malloc(sizeof(tCgmiDiags_timingMetric)*maxCount);
+    }
+
+    if(NULL != pMetricsBuf) 
+    {
+        numEntry = maxCount; 
+        if(CGMI_ERROR_SUCCESS == cgmiDiags_GetTimingMetrics (pMetricsBuf, &numEntry))
+        {
+            for(i=0;(i < maxCount) && (i < numEntry);i++) 
+            {
+                switch(pMetricsBuf[i].timingEvent) 
+                {
+                    case DIAG_TIMING_METRIC_UNLOAD:
+                    {
+                        printf("event = DIAG_TIMING_METRIC_UNLOAD; index = %d; time = %F; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                    }
+                    break;
+                    case DIAG_TIMING_METRIC_LOAD:
+                    {
+                        printf("event = DIAG_TIMING_METRIC_LOAD; index = %d; time = %F; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                    }
+                    break;
+                    case DIAG_TIMING_METRIC_PLAY:
+                    {
+                        printf("event = DIAG_TIMING_METRIC_PLAY; index = %d; time = %F; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                    }
+                    break;
+                    case DIAG_TIMING_METRIC_PTS_DECODED:
+                    {
+                        printf("event = DIAG_TIMING_METRIC_PTS_DECODED; index = %d; time = %F; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                    }
+                    break;
+                    default:
+                        printf("Unknown entry!\n");
+                    break;
+                }
+            }
+        }
+        free(pMetricsBuf);
+    }
+}
+
+/*Dumping timing entry*/
+static void dumpChannelChangeTime(void)
+{
+    int maxCount, i, numEntry;
+    tCgmiDiags_timingMetric *pMetricsBuf = NULL;
+
+    cgmiDiags_GetTimingMetricsMaxCount(&maxCount);
+
+    if(CGMI_ERROR_SUCCESS == cgmiDiags_GetTimingMetricsMaxCount(&maxCount)) 
+    {
+        pMetricsBuf = (tCgmiDiags_timingMetric *)malloc(sizeof(tCgmiDiags_timingMetric)*maxCount);
+    }
+
+    if(NULL != pMetricsBuf) 
+    {
+        numEntry = maxCount; 
+        if(CGMI_ERROR_SUCCESS == cgmiDiags_GetTimingMetrics (pMetricsBuf, &numEntry))
+        {
+            for(i=0;(i < maxCount) && (i < numEntry);i++) 
+            {
+                switch(pMetricsBuf[i].timingEvent) 
+                {
+                    int j;
+
+                    case DIAG_TIMING_METRIC_LOAD:
+                    {
+                        for(j=i+1;(j < maxCount) && (j < numEntry);j++) 
+                        {
+                            if((DIAG_TIMING_METRIC_PTS_DECODED == pMetricsBuf[j].timingEvent) && (pMetricsBuf[i].sessionIndex == pMetricsBuf[j].sessionIndex)) 
+                            {
+                                printf("Channel change time for index = %d is %F ms with uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[j].markTime - pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                            }
+                        }
+                    }
+                    break;
+                    default:
+                        //nop
+                    break;
+                }
+            }
+        }
+        free(pMetricsBuf);
+    }
 }
 
 /* Play Command */
@@ -432,6 +529,12 @@ void help(void)
            "\n"
            "\tgetvideores\n"
            "\n"
+           "\tdumptimingentry\n"
+            "\n"
+           "\tdumpchannelchangetime\n"
+            "\n"
+           "\tresettimingentry\n"
+           "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
@@ -664,8 +767,9 @@ int main(int argc, char **argv)
 
             if (playing)
             {
-                printf( "Stop playback before starting a new one.\n" );
-                continue;
+                printf( "Stop previous playback before starting a new one.\n" );
+                retCode = stop(pSessionId);
+                playing = 0;
             }
             if ( strlen( command ) <= 5 )
             {
@@ -686,6 +790,7 @@ int main(int argc, char **argv)
             /* Check First */
             printf("Checking if we can play this...");
             retCode = cgmi_canPlayType( arg, &pbCanPlay );
+
             if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
             {
                 printf( "cgmi_canPlayType Not Implemented\n" );
@@ -1397,6 +1502,27 @@ int main(int argc, char **argv)
             {
             	printf("Error in set logging. Returned %d\n", retCode);
             }
+        }
+
+        /* dumptimingentry */
+        else if (strncmp(command, "dumptimingentry", 15) == 0)
+        {
+            dumpTimingEntry();
+            retCode = CGMI_ERROR_SUCCESS;
+        }
+
+        /* dumpchannelchangetime */
+        else if (strncmp(command, "dumpchannelchangetime", 21) == 0)
+        {
+            dumpChannelChangeTime();
+            retCode = CGMI_ERROR_SUCCESS;
+        }
+
+        /* resettimingentry */
+        else if (strncmp(command, "resettimingentry", 16) == 0)
+        {
+            cgmiDiags_ResetTimingMetrics();
+            retCode = CGMI_ERROR_SUCCESS;
         }
 
         /* help */

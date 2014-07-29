@@ -247,7 +247,26 @@
         <method name="setLogging">
             <arg name="gstDebugStr" direction="in" type="s"/>
         </method>
-        
+
+        <!-- DIAG APIs -->
+        <method name="getTimingMetricsMaxCount">
+            <arg name="count" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getTimingMetrics">
+            <arg name="bufSizeIn" direction="in" type="i"/>
+            <arg name="bufSizeOut" direction="out" type="i"/>
+            <arg name="buffer" direction="out" type="ay">
+                <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
+            </arg>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+         <method name="resetTimingMetrics">
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
 	<property name="Verbose" type="b" access="readwrite"/>
     </interface>
 </node>
