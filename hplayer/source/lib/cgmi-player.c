@@ -1131,48 +1131,59 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
 #endif
 
 #ifdef USE_DRMPROXY
-   DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
-   if (proxy_err.errCode != 0)
-   {
-     GST_ERROR ("DRMPROXY_ParseURL error %lu \n", proxy_err.errCode);
-     GST_ERROR ("%s \n", proxy_err.errString);
-     pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
-   }
+/*
+NOTE: This is a temporary solution, as the file extensions cannot be relied upon.
+           The entire area and handling of this will change as we move to new paradigms (URL will not change because it's signed, DRM information will arrive from H/E etc).
+*/
+   if (NULL != strstr(uri,".m3u8"))
+       {
+       DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
+       if (proxy_err.errCode != 0)
+       {
+         GST_ERROR ("DRMPROXY_ParseURL error %lu \n", proxy_err.errCode);
+         GST_ERROR ("%s \n", proxy_err.errString);
+         pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
+       }
 
-   if (drmType == CLEAR || drmType == UNKNOWN)
-   {
-   	g_strlcat(pPipeline,pSess->playbackURI,1024);
+       if (drmType == CLEAR || drmType == UNKNOWN)
+       {
+       	g_strlcat(pPipeline,pSess->playbackURI,1024);
+       }
+       else
+       {
+    		array = g_strsplit(pSess->playbackURI, "?",  1024);
+    		g_strlcat(pPipeline, array[0], 1024 );
+
+    		DRMPROXY_Activate(pSess->drmProxyHandle, pSess->playbackURI, strnlen(pSess->playbackURI,1024), NULL, 0, &licenseId, &proxy_err );
+    		if (proxy_err.errCode != 0)
+    		{
+    			GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err.errCode);
+    			GST_ERROR ("%s \n", proxy_err.errString);
+    			pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
+    		}
+    		if ( drmType == VERIMATRIX)
+    		{
+    			g_strlcat(pPipeline,"?drmType=verimatrix", 1024);
+    			g_strlcat(pPipeline, "&LicenseID=",1024);
+    			licenseId = 0;
+    		 // LicenseID going to verimatrix plugin is 0 so don't bother with what comes back
+    			sprintf(buffer, "%" PRIu64, licenseId);
+    			g_strlcat(pPipeline, buffer, 1024);
+    		}
+    		else if (drmType == VGDRM)
+    		{
+
+    	//  FIXME: missing VGDRM specifics, may need to tweak the uri before sending it downstream
+    			g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
+    			g_strlcat(pPipeline, "&LicenseID=",1024);
+    			sprintf(buffer,"%08llX" , licenseId);
+    			g_strlcat(pPipeline, buffer, 1024);
+    		}
+       }
    }
    else
    {
-		array = g_strsplit(pSess->playbackURI, "?",  1024);
-		g_strlcat(pPipeline, array[0], 1024 );
-
-		DRMPROXY_Activate(pSess->drmProxyHandle, pSess->playbackURI, sizeof(pSess->playbackURI), &licenseId, &proxy_err );
-		if (proxy_err.errCode != 0)
-		{
-			GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err.errCode);
-			GST_ERROR ("%s \n", proxy_err.errString);
-			pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
-		}
-		if ( drmType == VERIMATRIX)
-		{
-			g_strlcat(pPipeline,"?drmType=verimatrix", 1024);
-			g_strlcat(pPipeline, "&LicenseID=",1024);
-			licenseId = 0;
-		 // LicenseID going to verimatrix plugin is 0 so don't bother with what comes back
-			sprintf(buffer, "%" PRIu64, licenseId);
-			g_strlcat(pPipeline, buffer, 1024);
-		}
-		else if (drmType == VGDRM)
-		{
-
-	//  FIXME: missing VGDRM specifics, may need to tweak the uri before sending it downstream
-			g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
-			g_strlcat(pPipeline, "&LicenseID=",1024);
-			sprintf(buffer,"%08llX" , licenseId);
-			g_strlcat(pPipeline, buffer, 1024);
-		}
+        g_strlcat(pPipeline,pSess->playbackURI,1024); 
    }
 #else
    g_strlcat(pPipeline,pSess->playbackURI,1024);
