@@ -101,7 +101,7 @@ cgmi_Status cgmiDiags_Term (void);
  *  \ingroup CGMI-diags-priv
  *
  */
-cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned int index, char *uri, double markTime);
+cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned int index, char *uri, unsigned long long markTime);
 
 /**
  *  \brief \b cgmiDiags_GetNextSessionIndex

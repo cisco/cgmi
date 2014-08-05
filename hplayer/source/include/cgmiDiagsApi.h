@@ -56,7 +56,7 @@ typedef struct
     tCgmiDiag_timingEvent timingEvent;
     char sessionUri[1024];
     unsigned int sessionIndex;
-    double markTime;
+    unsigned long long markTime;
 }tCgmiDiags_timingMetric;
 
 

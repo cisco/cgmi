@@ -235,7 +235,7 @@ cgmi_Status cgmiDiags_GetTimingMetrics ( tCgmiDiags_timingMetric metrics[], int 
  *  \ingroup CGMI-diags-priv
  *
  */
-cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned int index, char *uri, double markTime)
+cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned int index, char *uri, unsigned long long markTime)
 {
     cgmi_Status retStatus = CGMI_ERROR_SUCCESS;
 
@@ -280,7 +280,7 @@ cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned 
 
     pthread_mutex_unlock(&cgmiDiagMutex);
 
-    g_print("%s: Add event = %d; index = %d; time = %F; ret = %d\n", __FUNCTION__, timingEvent, index, markTime, retStatus);
+    g_print("%s: Add event = %d; index = %d; time = %llu; ret = %d\n", __FUNCTION__, timingEvent, index, markTime, retStatus);
 
     return retStatus;
 }

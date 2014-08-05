@@ -60,22 +60,22 @@ static void dumpTimingEntry(void)
                 {
                     case DIAG_TIMING_METRIC_UNLOAD:
                     {
-                        printf("event = DIAG_TIMING_METRIC_UNLOAD; index = %d; time = %F; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                        printf("event = DIAG_TIMING_METRIC_UNLOAD; index = %d; time = %llu; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
                     }
                     break;
                     case DIAG_TIMING_METRIC_LOAD:
                     {
-                        printf("event = DIAG_TIMING_METRIC_LOAD; index = %d; time = %F; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                        printf("event = DIAG_TIMING_METRIC_LOAD; index = %d; time = %llu; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
                     }
                     break;
                     case DIAG_TIMING_METRIC_PLAY:
                     {
-                        printf("event = DIAG_TIMING_METRIC_PLAY; index = %d; time = %F; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                        printf("event = DIAG_TIMING_METRIC_PLAY; index = %d; time = %llu; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
                     }
                     break;
                     case DIAG_TIMING_METRIC_PTS_DECODED:
                     {
-                        printf("event = DIAG_TIMING_METRIC_PTS_DECODED; index = %d; time = %F; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                        printf("event = DIAG_TIMING_METRIC_PTS_DECODED; index = %d; time = %llu; uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
                     }
                     break;
                     default:
@@ -118,7 +118,7 @@ static void dumpChannelChangeTime(void)
                         {
                             if((DIAG_TIMING_METRIC_PTS_DECODED == pMetricsBuf[j].timingEvent) && (pMetricsBuf[i].sessionIndex == pMetricsBuf[j].sessionIndex)) 
                             {
-                                printf("Channel change time for index = %d is %F ms with uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[j].markTime - pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
+                                printf("Channel change time for index = %d is %llu ms with uri = %s\n", pMetricsBuf[i].sessionIndex, pMetricsBuf[j].markTime - pMetricsBuf[i].markTime, pMetricsBuf[i].sessionUri);
                             }
                         }
                     }
