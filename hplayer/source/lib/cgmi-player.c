@@ -255,13 +255,19 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
          }
          if (0 == strcmp(ntype, "first_pts_received"))
          {
+            GST_INFO("RECEIVED first_pts_received\n");
             if (TRUE == pSess->pendingSeek)
             {
                pSess->pendingSeek = FALSE;
                GST_INFO("Executing delayed seek...\n");
                cgmi_SetPosition( pSess, pSess->pendingSeekPosition );
             }
-            else
+            gst_message_unref (msg);
+         }
+         else if (0 == strcmp(ntype, "first_pts_decoded"))
+         {
+            GST_INFO("RECEIVED first_pts_decoded\n");
+            if (FALSE == pSess->pendingSeek)
             {
                if( NULL != pSess->videoDecoder )
                {
@@ -275,10 +281,6 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                   g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", FALSE, NULL );
                }
             }
-            gst_message_unref (msg);
-         }
-         else if (0 == strcmp(ntype, "first_pts_decoded"))
-         {
             cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
             pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
             gst_message_unref (msg);
@@ -1529,6 +1531,8 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
          pSess->pendingSeek = TRUE;
          return stat;
       }
+
+      pSess->pendingSeek = FALSE;
 
       if( !gst_element_seek( pSess->pipeline,
                (pSess->rate == 0.0)?1.0:pSess->rate,
