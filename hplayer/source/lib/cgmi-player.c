@@ -56,19 +56,19 @@ static void cisco_gst_setState( tSession *pSess, GstState state )
    switch ( sret )
    {
       case GST_STATE_CHANGE_FAILURE:
-         GST_WARNING("Set NULL State Failure\n");
+         GST_WARNING("Set %d State Failure\n", state);
          break;
       case GST_STATE_CHANGE_NO_PREROLL:
-         GST_WARNING("Set NULL State No Preroll\n");
+         GST_WARNING("Set %d State No Preroll\n", state);
          break;
       case GST_STATE_CHANGE_ASYNC:
-         GST_WARNING("Set NULL State Async\n");
+         GST_WARNING("Set %d State Async\n", state);
          break;
       case GST_STATE_CHANGE_SUCCESS:
-         GST_WARNING("Set NULL State Succeeded\n");
+         GST_WARNING("Set %d State Succeeded\n", state);
          break;
       default:
-         GST_WARNING("Set NULL State Unknown\n");
+         GST_WARNING("Set %d State Unknown\n", state);
          break;
    }
 
@@ -253,11 +253,33 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
             GST_ERROR("Null notification!\n");
             gst_message_unref (msg);
          }
+         if (0 == strcmp(ntype, "first_pts_received"))
+         {
+            if (TRUE == pSess->pendingSeek)
+            {
+               pSess->pendingSeek = FALSE;
+               GST_INFO("Executing delayed seek...\n");
+               cgmi_SetPosition( pSess, pSess->pendingSeekPosition );
+            }
+            else
+            {
+               if( NULL != pSess->videoDecoder )
+               {
+                  g_print("Unmuting video decoder...\n");
+                  g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", FALSE, NULL );
+               }
 
-         if (0 == strcmp(ntype, "first_pts_decoded"))
+               if( NULL != pSess->audioDecoder )
+               {
+                  g_print("Unmuting audio decoder...\n");
+                  g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", FALSE, NULL );
+               }
+            }
+            gst_message_unref (msg);
+         }
+         else if (0 == strcmp(ntype, "first_pts_decoded"))
          {
             cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
-
             pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
             gst_message_unref (msg);
          }
@@ -573,6 +595,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
    if ( NULL != pSess->eventCB )
       pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_PSI_READY, 0);
 
+   /*
    if ( FALSE == pSess->autoPlay )
    {
 	   g_mutex_lock (pSess->autoPlayMutex);
@@ -583,6 +606,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
       }
 	   g_mutex_unlock (pSess->autoPlayMutex);
    }
+   */
 }
 
 static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename )
@@ -653,12 +677,15 @@ void cgmi_gst_notify_source( GObject *obj, GParamSpec *param, gpointer data )
    GstElement *source = NULL;
    GstElement *souphttpsrc = NULL;
    const gchar *name;
+   tSession *pSess = (tSession*)data;
 
    g_print("notify-source\n");
 
    g_object_get( obj, "source", &source, NULL );
    if ( NULL == source )
       return;
+
+   pSess->source = source;
 
    name = G_OBJECT_CLASS_NAME(G_OBJECT_GET_CLASS(source));
 
@@ -683,7 +710,7 @@ void cgmi_gst_notify_source( GObject *obj, GParamSpec *param, gpointer data )
          souphttpsrc = source;
          // if we have just souphttpsrc let's set the blocksize to something larger than the default 4k
          g_print("souphttpsrc has been detected, increasing the blocksize to: %u bytes\n",DEFAULT_BLOCKSIZE );
-         g_object_set (souphttpsrc, "blocksize",DEFAULT_BLOCKSIZE , NULL);
+         g_object_set (souphttpsrc, "blocksize", DEFAULT_BLOCKSIZE, NULL);
       }
    }
 
@@ -730,6 +757,8 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
       if( NULL != videoDecoder )
       {
          pSess->videoDecoder = videoDecoder;
+         g_print("Muting video decoder...\n");
+         g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", TRUE, NULL );
       }
    }
 
@@ -740,9 +769,10 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
       if( NULL != audioDecoder )
       {
          pSess->audioDecoder = audioDecoder;
+         g_print("Muting audio decoder...\n");
+         g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", TRUE, NULL );
       }
    }
-
 
    // If this element is a bin ensure this callback is called when elements
    // are added.
@@ -1045,7 +1075,7 @@ cgmi_Status cgmi_DestroySession (void *pSession)
 }
 
 
-cgmi_Status cgmi_Load    (void *pSession, const char *uri )
+cgmi_Status cgmi_Load (void *pSession, const char *uri )
 {
    GError *g_error_str =NULL;
    GstParseContext *ctx;
@@ -1086,6 +1116,9 @@ cgmi_Status cgmi_Load    (void *pSession, const char *uri )
    pSess->audioStreamIndex = INVALID_INDEX;
    pSess->audioLanguageIndex = INVALID_INDEX;
    pSess->isAudioMuted = FALSE;
+   pSess->rate = 0.0;
+   pSess->pendingSeek = FALSE;
+   pSess->pendingSeekPosition = 0.0;
 
    // 
    // check to see if this is a DLNA url.
@@ -1273,6 +1306,8 @@ NOTE: This is a temporary solution, as the file extensions cannot be relied upon
             G_CALLBACK(cgmi_gst_notify_source), pSess );
       }
 
+      cisco_gst_setState( pSess, GST_STATE_PAUSED );
+
    }while(0);
 
    // free memory
@@ -1319,7 +1354,6 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       pSess->videoSink = NULL;
       pSess->videoDecoder = NULL;
       pSess->audioDecoder = NULL;
-      pSess->rate = 0.0;
 
    }while (0);
    g_print("Exiting %s pipeline is now null\n",__FUNCTION__);
@@ -1341,7 +1375,15 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
 
    pSess->autoPlay = autoPlay;
 
-   cisco_gst_setState( pSess, GST_STATE_PLAYING);
+   if ( TRUE == autoPlay )
+   {
+      g_mutex_lock( pSess->autoPlayMutex );
+      if ( TRUE == pSess->waitingOnPids )
+	      g_cond_signal( pSess->autoPlayCond );
+	   g_mutex_unlock( pSess->autoPlayMutex );
+   }
+
+   cisco_gst_setState( pSess, GST_STATE_PLAYING );
       
    pSess->rate = 1.0;
    
@@ -1376,8 +1418,8 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
          cgmi_flush_pipeline(pSess);
 
          GST_WARNING("%s - Un Set Low Delay Mode\n",__FUNCTION__);
-         g_object_set(G_OBJECT(pSess->videoDecoder),"low_delay",FALSE,NULL);
-         g_object_set(G_OBJECT(pSess->videoDecoder),"video_mask","all",NULL);
+         g_object_set(G_OBJECT(pSess->videoDecoder), "low_delay", FALSE, NULL);
+         g_object_set(G_OBJECT(pSess->videoDecoder), "video_mask", "all", NULL);
       }
       
       pSess->rate = rate;
@@ -1435,8 +1477,8 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
             cgmi_flush_pipeline(pSess);
 
             GST_WARNING("%s - Set Low Delay Mode\n", __FUNCTION__);
-            g_object_set(G_OBJECT(pSess->videoDecoder),"low_delay",TRUE,NULL);
-            g_object_set(G_OBJECT(pSess->videoDecoder),"video_mask","i_only",NULL);
+            g_object_set(G_OBJECT(pSess->videoDecoder), "low_delay", TRUE, NULL);
+            g_object_set(G_OBJECT(pSess->videoDecoder), "video_mask", "i_only", NULL);
 
             if(curState == GST_STATE_PAUSED)
             {
@@ -1448,8 +1490,8 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
             cgmi_flush_pipeline(pSess);
 
             GST_WARNING("%s - Un Set Low Delay Mode\n", __FUNCTION__);
-            g_object_set(G_OBJECT(pSess->videoDecoder),"low_delay",FALSE,NULL);
-            g_object_set(G_OBJECT(pSess->videoDecoder),"video_mask","all",NULL);
+            g_object_set(G_OBJECT(pSess->videoDecoder), "low_delay", FALSE, NULL);
+            g_object_set(G_OBJECT(pSess->videoDecoder), "video_mask", "all", NULL);
          }
       }
 
@@ -1466,6 +1508,7 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
 
    tSession *pSess = (tSession*)pSession;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
+   GstState state;
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
@@ -1475,13 +1518,24 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
 
    do
    {
-      g_print("Setting position to %f (ns)  \n", (position* GST_SECOND));
+      state = cisco_gst_getState( pSess );
+
+      g_print("Setting position to %f (ns), pipeline state: %d\n", (position* GST_SECOND), state);
+
+      if ( state != GST_STATE_PLAYING )
+      {
+         g_print("Pipeline not playing yet, delaying seek...\n");
+         pSess->pendingSeekPosition = position;
+         pSess->pendingSeek = TRUE;
+         return stat;
+      }
+
       if( !gst_element_seek( pSess->pipeline,
-               pSess->rate,
+               (pSess->rate == 0.0)?1.0:pSess->rate,
                GST_FORMAT_TIME,
                GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
                GST_SEEK_TYPE_SET,
-               (position*GST_SECOND),
+               (gint64)(position * GST_SECOND),
                GST_SEEK_TYPE_NONE,
                GST_CLOCK_TIME_NONE ))
       {

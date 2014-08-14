@@ -93,6 +93,8 @@ typedef struct
    uint64_t           drmProxyHandle;
    float              rate;
    unsigned int       diagIndex;
+   gboolean           pendingSeek;
+   float              pendingSeekPosition;
 
 }tSession;
 

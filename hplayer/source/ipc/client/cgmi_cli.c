@@ -156,6 +156,43 @@ static cgmi_Status play(void *pSessionId, char *src, int autoPlay)
     return retCode;
 }
 
+/* Resume Command */
+static cgmi_Status resume(void *pSessionId, char *src, float resumePosition, int autoPlay)
+{
+    cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+
+    /* First load the URL. */
+    retCode = cgmi_Load( pSessionId, src );
+    if (retCode != CGMI_ERROR_SUCCESS)
+    {
+        printf("CGMI Load failed\n");
+    } else {
+
+        /* Set the position to resume position if it is positive. */
+        if (resumePosition > 0)
+        {
+            retCode = cgmi_SetPosition( pSessionId, resumePosition );
+            if (retCode != CGMI_ERROR_SUCCESS)
+            {
+                printf("CGMI cgmi_SetPosition Failed\n");
+            }
+        }
+
+        if (retCode == CGMI_ERROR_SUCCESS)
+        {
+            /* Play the URL. */
+            gAutoPlay = autoPlay;
+            retCode = cgmi_Play( pSessionId, autoPlay );
+            if (retCode != CGMI_ERROR_SUCCESS)
+            {
+                printf("CGMI Play failed\n");
+            }
+        }
+    }
+
+    return retCode;
+}
+
 /* Stop Command */
 static cgmi_Status stop(void *pSessionId)
 {
@@ -196,7 +233,7 @@ static cgmi_Status setposition(void *pSessionId, float Position)
     retCode = cgmi_SetPosition( pSessionId, Position );
     if (retCode != CGMI_ERROR_SUCCESS)
     {
-        printf("CGMI SetRate Failed\n");
+        printf("CGMI SetPosition Failed\n");
     }
 
     return retCode;
@@ -210,7 +247,7 @@ static cgmi_Status getrates(void *pSessionId, float pRates[], unsigned int *pNum
     retCode = cgmi_GetRates( pSessionId, pRates, pNumRates );
     if (retCode != CGMI_ERROR_SUCCESS)
     {
-        printf("CGMI GetRateRange Failed\n");
+        printf("CGMI GetRates Failed\n");
     }
 
     return retCode;
@@ -494,6 +531,7 @@ void help(void)
     printf( "Supported commands:\n"
             "Single APIs:\n"
            "\tplay <url> [autoplay]\n"
+           "\tresume <url> <position (seconds) (float)> [autoplay]\n"
            "\tstop (or unload)\n"
            "\n"
            "\taudioplay <url>\n"
@@ -805,6 +843,75 @@ int main(int argc, char **argv)
                 printf( "Yes\n" );
                 printf( "Playing \"%s\"...\n", arg );
                 retCode = play(pSessionId, arg, autoPlay);
+                if ( retCode == CGMI_ERROR_SUCCESS )
+                {
+                    playing = 1;
+                }
+            } else {
+                printf( "No\n" );
+            }
+        }
+        /* resume */
+        if (strncmp(command, "resume", 6) == 0)
+        {
+            char *arg2, *arg3;
+            int autoPlay = true;
+            float resumePosition = 0.0;
+
+            if (playing)
+            {
+                printf( "Stop previous playback before starting a new one.\n" );
+                retCode = stop(pSessionId);
+                playing = 0;
+            }
+            if ( strlen( command ) <= 7 )
+            {
+                printf( "\tresume <url> <position (seconds) (float)> [autoplay]\n" );
+                continue;
+            }
+            strncpy( arg, command + 7, strlen(command) - 7 );
+            arg[strlen(command) - 7] = '\0';
+
+            arg2 = strchr( arg, ' ' );
+            if ( arg2 )
+            {
+               *arg2 = 0;
+               arg2++;
+               resumePosition = atof( arg2 );
+            }
+            else
+            {
+                printf( "\tresume <url> <position (seconds) (float)> [autoplay]\n" );
+                continue;
+            }
+
+            arg3 = strchr( arg2, ' ' );
+            if ( arg3 )
+            {
+               *arg3 = 0;
+               arg3++;
+               autoPlay = atoi( arg3 );
+            }
+
+
+            /* Check First */
+            printf("Checking if we can play this...");
+            retCode = cgmi_canPlayType( arg, &pbCanPlay );
+
+            if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
+            {
+                printf( "cgmi_canPlayType Not Implemented\n" );
+                printf( "Resuming \"%s\"...\n", arg );
+                retCode = resume(pSessionId, arg, resumePosition, autoPlay);
+                if ( retCode == CGMI_ERROR_SUCCESS )
+                {
+                    playing = 1;
+                }
+            } else if ( !retCode && pbCanPlay )
+            {
+                printf( "Yes\n" );
+                printf( "Resuming \"%s\"...\n", arg );
+                retCode = resume(pSessionId, arg, resumePosition, autoPlay);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     playing = 1;
