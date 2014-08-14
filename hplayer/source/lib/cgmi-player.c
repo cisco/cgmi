@@ -256,31 +256,11 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
          if (0 == strcmp(ntype, "first_pts_received"))
          {
             GST_INFO("RECEIVED first_pts_received\n");
-            if (TRUE == pSess->pendingSeek)
-            {
-               pSess->pendingSeek = FALSE;
-               GST_INFO("Executing delayed seek...\n");
-               cgmi_SetPosition( pSess, pSess->pendingSeekPosition );
-            }
             gst_message_unref (msg);
          }
          else if (0 == strcmp(ntype, "first_pts_decoded"))
          {
             GST_INFO("RECEIVED first_pts_decoded\n");
-            if (FALSE == pSess->pendingSeek)
-            {
-               if( NULL != pSess->videoDecoder )
-               {
-                  g_print("Unmuting video decoder...\n");
-                  g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", FALSE, NULL );
-               }
-
-               if( NULL != pSess->audioDecoder )
-               {
-                  g_print("Unmuting audio decoder...\n");
-                  g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", FALSE, NULL );
-               }
-            }
             cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
             pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
             gst_message_unref (msg);
@@ -360,10 +340,45 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
             gst_message_parse_state_changed( msg, &old_state, &new_state, &pending_state );
             g_print("Pipeline state change from %s to %s\n", gst_element_state_get_name(old_state), gst_element_state_get_name(new_state));
 
-
             /* Print position and duration when in playing state */
             if( GST_STATE_PLAYING == new_state )
             {
+               if (TRUE == pSess->pendingSeek)
+               {
+                  pSess->pendingSeek = FALSE;
+                  GST_INFO("Executing delayed seek...\n");
+                  if( !gst_element_seek( pSess->pipeline,
+                           1.0,
+                           GST_FORMAT_TIME,
+                           GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
+                           GST_SEEK_TYPE_SET,
+                           (gint64)(pSess->pendingSeekPosition * GST_SECOND),
+                           GST_SEEK_TYPE_NONE,
+                           GST_CLOCK_TIME_NONE ))
+                  {
+                     GST_ERROR("Seek to Resume Position Failed\n");
+                  }
+                  else
+                  {
+                     GstState curState;
+                     //wait for the seek to complete
+                     gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
+                     usleep(1000000);
+                  }
+               }
+
+               if( NULL != pSess->videoDecoder )
+               {
+                  g_print("Unmuting video decoder...\n");
+                  g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", FALSE, NULL );
+               }
+
+               if( NULL != pSess->audioDecoder )
+               {
+                  g_print("Unmuting audio decoder...\n");
+                  g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", FALSE, NULL );
+               }
+
                //debug_cisco_gst_streamDurPos(pSess);
                if ( NULL == pSess->videoSink )
                {
@@ -1308,7 +1323,7 @@ NOTE: This is a temporary solution, as the file extensions cannot be relied upon
             G_CALLBACK(cgmi_gst_notify_source), pSess );
       }
 
-      cisco_gst_setState( pSess, GST_STATE_PAUSED );
+      cisco_gst_setState( pSess, GST_STATE_READY );
 
    }while(0);
 
@@ -1524,18 +1539,19 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
 
       g_print("Setting position to %f (ns), pipeline state: %d\n", (position* GST_SECOND), state);
 
-      if ( state != GST_STATE_PLAYING )
+      if ( state != GST_STATE_PAUSED && state != GST_STATE_PLAYING )
       {
          g_print("Pipeline not playing yet, delaying seek...\n");
          pSess->pendingSeekPosition = position;
          pSess->pendingSeek = TRUE;
+         cisco_gst_setState( pSess, GST_STATE_PAUSED );
          return stat;
       }
 
       pSess->pendingSeek = FALSE;
 
       if( !gst_element_seek( pSess->pipeline,
-               (pSess->rate == 0.0)?1.0:pSess->rate,
+               pSess->rate,
                GST_FORMAT_TIME,
                GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
                GST_SEEK_TYPE_SET,
