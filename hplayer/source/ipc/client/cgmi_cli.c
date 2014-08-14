@@ -852,7 +852,7 @@ int main(int argc, char **argv)
             }
         }
         /* resume */
-        if (strncmp(command, "resume", 6) == 0)
+        else if (strncmp(command, "resume", 6) == 0)
         {
             char *arg2, *arg3;
             int autoPlay = true;
