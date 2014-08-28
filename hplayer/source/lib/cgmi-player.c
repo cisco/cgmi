@@ -132,6 +132,49 @@ static void cgmi_flush_pipeline(tSession *pSess)
    return;
 }
 
+static gboolean isRateSupported(void *pSession, float rate)
+{
+   cgmi_Status stat = CGMI_ERROR_FAILED;
+   float *rates_array = NULL;
+   unsigned int numRates = 32;
+   gint ii = 0;
+   gboolean rateSupported = FALSE;
+
+   do {
+   rates_array = g_malloc0(sizeof(float) * numRates);
+   if(NULL == rates_array)
+   {
+      GST_ERROR("Failed to malloc rates array\n");
+      break;
+   }
+
+   stat = cgmi_GetRates(pSession, rates_array, &numRates);
+   if(stat != CGMI_ERROR_SUCCESS)
+   {
+      GST_ERROR("cgmi_GetRates() failed\n");
+      break;
+   }
+
+   for(ii = 0; ii < numRates; ii++)
+   {
+      if(rate == rates_array[ii])
+      {
+         rateSupported = TRUE;
+         break;
+      }
+   }
+
+   }while(0);
+   
+   if(NULL != rates_array)
+   {
+      g_free(rates_array);
+      rates_array = NULL;
+   }
+  
+   return rateSupported;
+}
+
 void debug_cisco_gst_streamDurPos( tSession *pSess )
 {
 
@@ -281,12 +324,15 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
             pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_VIDEO_RESOLUTION_CHANGED, (((uint64_t)width) << 32) | (uint64_t)height);
             gst_message_unref (msg);
          }
+         /* BOF/BOS/EOF should be treated as EOS since gstreamer treats all these conditions EOS */
+#if 0
          else if (0 == strcmp(ntype, "BOF"))
          {    
             pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_START_OF_STREAM, 0);
             gst_message_unref (msg);
             cgmi_SetRate(pSess, 0.0); 
          }
+#endif
          else
          {
             GST_ERROR("Do not know how to handle %s notification\n",ntype);
@@ -1134,6 +1180,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri )
    pSess->audioLanguageIndex = INVALID_INDEX;
    pSess->isAudioMuted = FALSE;
    pSess->rate = 0.0;
+   pSess->rateBeforePause = 0.0;
    pSess->pendingSeek = FALSE;
    pSess->pendingSeekPosition = 0.0;
 
@@ -1415,7 +1462,6 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    GstEvent *seek_event=NULL;
    gint64 position;
    GstState  curState;
-   GstQuery *streamInfo;
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
@@ -1423,30 +1469,32 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
-   streamInfo = gst_query_new_segment (GST_FORMAT_TIME);
+#if 0
+   if(TRUE != isRateSupported(pSession, rate))
+   {
+      GST_ERROR("rate %f is not supported. Call getRates API to get the list of supported rates\n", rate);
+      return CGMI_ERROR_BAD_PARAM;
+   }
+#endif
+
    gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
 
    if (rate == 0.0)
    {
       cisco_gst_setState( pSess, GST_STATE_PAUSED );
-      
-      if((pSess->rate > 1.0) || (pSess->rate < -1.0))
-      {
-         cgmi_flush_pipeline(pSess);
-
-         GST_WARNING("%s - Un Set Low Delay Mode\n",__FUNCTION__);
-         g_object_set(G_OBJECT(pSess->videoDecoder), "low_delay", FALSE, NULL);
-         g_object_set(G_OBJECT(pSess->videoDecoder), "video_mask", "all", NULL);
-      }
-      
+      pSess->rateBeforePause = pSess->rate;
       pSess->rate = rate;
       return stat;
    }
-   else if (( rate == 1.0) && (curState == GST_STATE_PAUSED))
+   else if (curState == GST_STATE_PAUSED)
    {
       cisco_gst_setState( pSess, GST_STATE_PLAYING );
-      pSess->rate = rate;
-      return stat;
+      /* Example: 1x->0x->1x */ 
+      if(rate == pSess->rateBeforePause)
+      {
+         pSess->rate = rate;
+         return stat;
+      }
    }
 
    /* Obtain the current position, needed for the seek event */
@@ -1460,42 +1508,24 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
       return CGMI_ERROR_FAILED;
    }
 
-   if (rate >= 1.0)
-   {
-      seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
-            GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, 0);
-
-   }
-   else if (rate <= -1.0)
-   {
-      seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
-            GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, position);
-
-   }
-   else if (rate == 1.0)
-   {
-      seek_event = gst_event_new_seek(1.0, GST_FORMAT_TIME, 0, GST_SEEK_TYPE_NONE, -1, GST_SEEK_TYPE_NONE, -1);
-   }
-
-   /* Send the event */
+   seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
+                                    GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
    if (seek_event)
    {
+      /* Send the event */
+      if(TRUE != gst_element_send_event (pSess->pipeline, seek_event))
+      {
+         GST_ERROR("gst_element_send_event() failed");
+         return CGMI_ERROR_FAILED;
+      }
+      
       if(((0.0 == pSess->rate) || (1.0 == pSess->rate)) && ((rate > 1.0) || (rate < -1.0)) ||
          ((0.0 == rate) || (1.0 == rate)) && ((pSess->rate > 1.0) || (pSess->rate < -1.0)))
       {
-         if ( NULL == pSess->videoDecoder )
-         {
-            GST_ERROR("videoDecoder handle is NULL\n");
-            return CGMI_ERROR_FAILED;
-         }
-
          if (rate > 1.0 || rate < -1.0)
          {
-            cgmi_flush_pipeline(pSess);
-
-            GST_WARNING("%s - Set Low Delay Mode\n", __FUNCTION__);
-            g_object_set(G_OBJECT(pSess->videoDecoder), "low_delay", TRUE, NULL);
-            g_object_set(G_OBJECT(pSess->videoDecoder), "video_mask", "i_only", NULL);
+            GST_WARNING("Muting audio decoder...\n");
+            g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", TRUE, NULL );
 
             if(curState == GST_STATE_PAUSED)
             {
@@ -1504,15 +1534,15 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
          }
          else
          {
-            cgmi_flush_pipeline(pSess);
-
-            GST_WARNING("%s - Un Set Low Delay Mode\n", __FUNCTION__);
-            g_object_set(G_OBJECT(pSess->videoDecoder), "low_delay", FALSE, NULL);
-            g_object_set(G_OBJECT(pSess->videoDecoder), "video_mask", "all", NULL);
+            GST_WARNING("Unmuting audio decoder...\n");
+            g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", FALSE, NULL );
          }
       }
-
-      gst_element_send_event (pSess->pipeline, seek_event);
+   }
+   else
+   {
+      GST_ERROR ("gst_event_new_seek() failed\n");
+      return CGMI_ERROR_FAILED;
    }
    
    pSess->rate = rate;
