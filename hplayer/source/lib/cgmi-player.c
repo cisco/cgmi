@@ -961,11 +961,11 @@ cgmi_Status cgmi_Init(void)
       //g_message("major = %u, minor =%u, macro=%u, nano=%u\n", major, minor, micro, nano);
       if(major >= 1)
       {
-         cgmi_SetLogging("dlnasrc:4,ciscdemux:4");
+         cgmi_SetLogging("dlnasrc:2,ciscdemux:4");
       }
       else
       {
-         cgmi_SetLogging("dlnasrc:3,ciscdemux:3");
+         cgmi_SetLogging("dlnasrc:2,ciscdemux:3");
       }
 
       //intialize the diag subsytem
@@ -1042,7 +1042,7 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
 
    pSess->runMonitor = TRUE;
    pSess->monitor = g_thread_new("monitoring_thread", cgmi_monitor, pSess);
-   if (!pSess->thread)
+   if (!pSess->monitor)
    {
       GST_WARNING("Error launching thread for monitoring timestamp errors\n");
    }
@@ -2400,6 +2400,8 @@ cgmi_Status cgmi_SetLogging(const char *gstDebugStr)
    GstDebugLevel level;
    gchar **values;
    const gchar *category;
+
+   gst_debug_set_colored(GST_DEBUG_COLOR_MODE_OFF);
 
    if (gstDebugStr == NULL  ||  strnlen(gstDebugStr, GST_DEBUG_STR_MAX_SIZE) >= GST_DEBUG_STR_MAX_SIZE)
    {
