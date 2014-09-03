@@ -927,6 +927,10 @@ cgmi_Status cgmi_Init(void)
    int argc =0;
    char **argv;
    argv=0;
+   guint major;
+   guint minor;
+   guint micro;
+   guint nano;
 
    do
    {
@@ -952,6 +956,17 @@ cgmi_Status cgmi_Init(void)
       strVersion = gst_version_string();
       g_message("GStreamer Initialized with Version: %s\n", strVersion);
       g_free( strVersion );
+
+      gst_version(&major,&minor,&micro,&nano);
+      //g_message("major = %u, minor =%u, macro=%u, nano=%u\n", major, minor, micro, nano);
+      if(major >= 1)
+      {
+         cgmi_SetLogging("dlnasrc:4,ciscdemux:4");
+      }
+      else
+      {
+         cgmi_SetLogging("dlnasrc:3,ciscdemux:3");
+      }
 
       //intialize the diag subsytem
       cgmiDiags_Init();
