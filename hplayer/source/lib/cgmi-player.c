@@ -1106,10 +1106,6 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    }
 
 
-   //TODO fix
-   g_print("There is race condtion in the glib library, having to sleep to let glib clean up\n");
-   sleep(3);
-
    pSess->runMonitor = FALSE;
    if (pSess->monitor)
    {
