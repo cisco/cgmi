@@ -2388,7 +2388,9 @@ cgmi_Status cgmi_SetLogging(const char *gstDebugStr)
    gchar **values;
    const gchar *category;
 
+#if GST_CHECK_VERSION(1,0,0)
    gst_debug_set_colored(GST_DEBUG_COLOR_MODE_OFF);
+#endif
 
    if (gstDebugStr == NULL  ||  strnlen(gstDebugStr, GST_DEBUG_STR_MAX_SIZE) >= GST_DEBUG_STR_MAX_SIZE)
    {
