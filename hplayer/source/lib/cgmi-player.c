@@ -141,28 +141,28 @@ static gboolean isRateSupported(void *pSession, float rate)
    gboolean rateSupported = FALSE;
 
    do {
-   rates_array = g_malloc0(sizeof(float) * numRates);
-   if(NULL == rates_array)
-   {
-      GST_ERROR("Failed to malloc rates array\n");
-      break;
-   }
-
-   stat = cgmi_GetRates(pSession, rates_array, &numRates);
-   if(stat != CGMI_ERROR_SUCCESS)
-   {
-      GST_ERROR("cgmi_GetRates() failed\n");
-      break;
-   }
-
-   for(ii = 0; ii < numRates; ii++)
-   {
-      if(rate == rates_array[ii])
+      rates_array = g_malloc0(sizeof(float) * numRates);
+      if(NULL == rates_array)
       {
-         rateSupported = TRUE;
+         GST_ERROR("Failed to malloc rates array\n");
          break;
       }
-   }
+
+      stat = cgmi_GetRates(pSession, rates_array, &numRates);
+      if(stat != CGMI_ERROR_SUCCESS)
+      {
+         GST_ERROR("cgmi_GetRates() failed\n");
+         break;
+      }
+
+      for(ii = 0; ii < numRates; ii++)
+      {
+         if(rate == rates_array[ii])
+         {
+            rateSupported = TRUE;
+            break;
+         }
+      }
 
    }while(0);
    
@@ -266,81 +266,72 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
       GST_INFO("Got bus message of type: %s\n", GST_MESSAGE_SRC_NAME(msg));
 
       case GST_MESSAGE_ASYNC_DONE:
-      GST_INFO("Async Done message\n");
-      {
+         GST_INFO("Async Done message\n");
          pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_SEEK_DONE, 0);
-      }
-      break;
+         break;
+
       case GST_MESSAGE_EOS:
-      {
          GST_INFO("End of Stream\n");
          pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_END_OF_STREAM,0);
-      }
-      break;
+         break;
+
       case GST_MESSAGE_ELEMENT:
       // these are cisco added events.
 #if GST_CHECK_VERSION(1,0,0)
-      structure = (GstStructure *)gst_message_get_structure(msg);
+         structure = (GstStructure *)gst_message_get_structure(msg);
 #else
-      structure = msg->structure;
+         structure = msg->structure;
 #endif
-      if( structure && gst_structure_has_name(structure, "extended_notification"))
-      {
-         //const GValue *ntype;
-         const gchar *ntype;
-         //figure out which extended notification that we have recieved.
-         GST_INFO("RECEIVED extended notification message\n");
-         ntype = gst_structure_get_string(structure, "notification");
-         if (NULL == ntype)
+         if( structure && gst_structure_has_name(structure, "extended_notification"))
          {
-            GST_ERROR("Null notification!\n");
-            gst_message_unref (msg);
-         }
-         if (0 == strcmp(ntype, "first_pts_received"))
-         {
-            GST_INFO("RECEIVED first_pts_received\n");
-            gst_message_unref (msg);
-         }
-         else if (0 == strcmp(ntype, "first_pts_decoded"))
-         {
-            GST_INFO("RECEIVED first_pts_decoded\n");
-            cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
-            pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
-            gst_message_unref (msg);
-         }
-         else if (0 == strcmp(ntype, "stream_attrib_changed"))
-         {    
-            gint width, height;
-            if (gst_structure_get_int(structure, "src_width", &width) == FALSE)
+            //const GValue *ntype;
+            const gchar *ntype;
+            //figure out which extended notification that we have recieved.
+            GST_INFO("RECEIVED extended notification message\n");
+            ntype = gst_structure_get_string(structure, "notification");
+            if (NULL == ntype)
             {
-               GST_WARNING("Failed to get video source widht, returning 0");
-               width = 0;
+               GST_ERROR("Null notification!\n");
             }
-            if (gst_structure_get_int(structure, "src_height", &height) == FALSE)
+            if (0 == strcmp(ntype, "first_pts_received"))
             {
-               GST_WARNING("Failed to get video source height, returning 0");
-               height = 0;
+               GST_INFO("RECEIVED first_pts_received\n");
             }
-            pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_VIDEO_RESOLUTION_CHANGED, (((uint64_t)width) << 32) | (uint64_t)height);
-            gst_message_unref (msg);
-         }
-         /* BOF/BOS/EOF should be treated as EOS since gstreamer treats all these conditions EOS */
+            else if (0 == strcmp(ntype, "first_pts_decoded"))
+            {
+               GST_INFO("RECEIVED first_pts_decoded\n");
+               cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
+               pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
+            }
+            else if (0 == strcmp(ntype, "stream_attrib_changed"))
+            {
+               gint width, height;
+               if (gst_structure_get_int(structure, "src_width", &width) == FALSE)
+               {
+                  GST_WARNING("Failed to get video source widht, returning 0");
+                  width = 0;
+               }
+               if (gst_structure_get_int(structure, "src_height", &height) == FALSE)
+               {
+                  GST_WARNING("Failed to get video source height, returning 0");
+                  height = 0;
+               }
+               pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_VIDEO_RESOLUTION_CHANGED, (((uint64_t)width) << 32) | (uint64_t)height);
+            }
+            /* BOF/BOS/EOF should be treated as EOS since gstreamer treats all these conditions EOS */
 #if 0
-         else if (0 == strcmp(ntype, "BOF"))
-         {    
-            pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_START_OF_STREAM, 0);
-            gst_message_unref (msg);
-            cgmi_SetRate(pSess, 0.0); 
-         }
+            else if (0 == strcmp(ntype, "BOF"))
+            {
+               pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_START_OF_STREAM, 0);
+               cgmi_SetRate(pSess, 0.0); 
+            }
 #endif
-         else
-         {
-            GST_ERROR("Do not know how to handle %s notification\n",ntype);
-            gst_message_unref (msg);
+            else
+            {
+               GST_ERROR("Do not know how to handle %s notification\n",ntype);
+            }
          }
-
-      }
-      break;
+         break;
       case GST_MESSAGE_ERROR:
       {
          gchar  *debug;
@@ -1137,10 +1128,10 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    DRMPROXY_DestroySession(pSess->drmProxyHandle);
    if (proxy_err.errCode != 0)
    {
-     GST_ERROR ("DRMPROXY_DestroySession error %lu \n", proxy_err.errCode);
-     GST_ERROR ("%s \n", proxy_err.errString);
-     if (pSess != NULL)
-        pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
+      GST_ERROR ("DRMPROXY_DestroySession error %lu \n", proxy_err.errCode);
+      GST_ERROR ("%s \n", proxy_err.errString);
+      if (pSess != NULL)
+         pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
    }
 #endif
    g_free(pSess);
@@ -1198,7 +1189,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri )
    // 
    // check to see if this is a DLNA url.
    //
-   if (0 ==strncmp(uri,"http",4))
+   if (0 == strncmp(uri, "http", 4))
    {
       stat = cgmi_utils_is_content_dlna(uri, &bisDLNAContent);
       if(CGMI_ERROR_SUCCESS != stat)
@@ -1239,62 +1230,62 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri )
 #endif
 
 #ifdef USE_DRMPROXY
-/*
-NOTE: This is a temporary solution, as the file extensions cannot be relied upon.
-           The entire area and handling of this will change as we move to new paradigms (URL will not change because it's signed, DRM information will arrive from H/E etc).
-*/
+   /*
+   NOTE: This is a temporary solution, as the file extensions cannot be relied upon.
+   The entire area and handling of this will change as we move to new paradigms (URL will not change because it's signed, DRM information will arrive from H/E etc).
+   */
    if (NULL != strstr(uri,".m3u8"))
-       {
-       DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
-       if (proxy_err.errCode != 0)
-       {
+   {
+      DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
+      if (proxy_err.errCode != 0)
+      {
          GST_ERROR ("DRMPROXY_ParseURL error %lu \n", proxy_err.errCode);
          GST_ERROR ("%s \n", proxy_err.errString);
          pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
-       }
+      }
 
-       if (drmType == CLEAR || drmType == UNKNOWN)
-       {
-       	g_strlcat(pPipeline,pSess->playbackURI,1024);
-       }
-       else
-       {
-    		array = g_strsplit(pSess->playbackURI, "?",  1024);
-    		g_strlcat(pPipeline, array[0], 1024 );
+      if (drmType == CLEAR || drmType == UNKNOWN)
+      {
+         g_strlcat(pPipeline,pSess->playbackURI, 1024);
+      }
+      else
+      {
+         array = g_strsplit(pSess->playbackURI, "?",  1024);
+         g_strlcat(pPipeline, array[0], 1024 );
 
-    		DRMPROXY_Activate(pSess->drmProxyHandle, pSess->playbackURI, strnlen(pSess->playbackURI,1024), NULL, 0, &licenseId, &proxy_err );
-    		if (proxy_err.errCode != 0)
-    		{
-    			GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err.errCode);
-    			GST_ERROR ("%s \n", proxy_err.errString);
-    			pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
-    		}
-    		if ( drmType == VERIMATRIX)
-    		{
-    			g_strlcat(pPipeline,"?drmType=verimatrix", 1024);
-    			g_strlcat(pPipeline, "&LicenseID=",1024);
-    			licenseId = 0;
-    		 // LicenseID going to verimatrix plugin is 0 so don't bother with what comes back
-    			sprintf(buffer, "%" PRIu64, licenseId);
-    			g_strlcat(pPipeline, buffer, 1024);
-    		}
-    		else if (drmType == VGDRM)
-    		{
+         DRMPROXY_Activate(pSess->drmProxyHandle, pSess->playbackURI, strnlen(pSess->playbackURI,1024), NULL, 0, &licenseId, &proxy_err );
+         if (proxy_err.errCode != 0)
+         {
+            GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err.errCode);
+            GST_ERROR ("%s \n", proxy_err.errString);
+            pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
+         }
+         if ( drmType == VERIMATRIX)
+         {
+            g_strlcat(pPipeline,"?drmType=verimatrix", 1024);
+            g_strlcat(pPipeline, "&LicenseID=",1024);
+            licenseId = 0;
+            // LicenseID going to verimatrix plugin is 0 so don't bother with what comes back
+            sprintf(buffer, "%" PRIu64, licenseId);
+            g_strlcat(pPipeline, buffer, 1024);
+         }
+         else if (drmType == VGDRM)
+         {
 
-    	//  FIXME: missing VGDRM specifics, may need to tweak the uri before sending it downstream
-    			g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
-    			g_strlcat(pPipeline, "&LicenseID=",1024);
-    			sprintf(buffer,"%08llX" , licenseId);
-    			g_strlcat(pPipeline, buffer, 1024);
-    		}
-       }
+            //  FIXME: missing VGDRM specifics, may need to tweak the uri before sending it downstream
+            g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
+            g_strlcat(pPipeline, "&LicenseID=", 1024);
+            sprintf(buffer,"%08llX" , licenseId);
+            g_strlcat(pPipeline, buffer, 1024);
+         }
+      }
    }
    else
    {
-        g_strlcat(pPipeline,pSess->playbackURI,1024); 
+      g_strlcat(pPipeline,pSess->playbackURI, 1024);
    }
 #else
-   g_strlcat(pPipeline,pSess->playbackURI,1024);
+   g_strlcat(pPipeline,pSess->playbackURI, 1024);
 #endif
 
 	// let's see if we are running on broadcom hardware if we are let's see if we can find there
