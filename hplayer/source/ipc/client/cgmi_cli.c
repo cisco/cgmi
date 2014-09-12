@@ -142,14 +142,14 @@ static cgmi_Status play(void *pSessionId, char *src, int autoPlay)
     retCode = cgmi_Load( pSessionId, src );
     if (retCode != CGMI_ERROR_SUCCESS)
     {
-        printf("CGMI Load failed\n");
+        printf("CGMI Load failed: %s\n", cgmi_ErrorString(retCode) );
     } else {
         /* Play the URL if load succeeds. */
         gAutoPlay = autoPlay;
         retCode = cgmi_Play( pSessionId, autoPlay );
         if (retCode != CGMI_ERROR_SUCCESS)
         {
-            printf("CGMI Play failed\n");
+            printf("CGMI Play failed: %s\n", cgmi_ErrorString(retCode) );
         }
     }
 
@@ -577,6 +577,11 @@ void help(void)
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)>\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
            "\t\t<url#2> at interval <interval> for duration <duration>.\n"
+           "\n"
+           "\tsessiontest <url> <interval (seconds)> <duration(seconds)>\n"
+           "\t\tCreate and destroy session with playback of <url> in between\n"
+           "\t\tat interval <interval> for duration <duration>.\n"
+           "\n"
            "\n"
            "\thelp\n" 
            "\thistory\n"
@@ -1585,6 +1590,81 @@ int main(int argc, char **argv)
                     str = url2;
                 else
                     str = url1;
+
+                gettimeofday( &current, NULL );
+            }
+
+            printf( "Played for %d seconds. %d channels.\n",
+                    (int) (current.tv_sec - start.tv_sec), i );
+        }
+        /* Session Test */
+        else if (strncmp(command, "sessiontest", 11) == 0)
+        {
+            /* command */
+            str = strtok( command, " " );
+            if ( str == NULL ) continue;
+
+            /* url */
+            str = strtok( NULL, " " );
+            if ( str == NULL ) continue;
+            strncpy( url1, str, 128 );
+
+            /* interval */
+            str = strtok( NULL, " " );
+            if ( str == NULL ) continue;
+            interval = atoi( str );
+
+            /* duration */
+            str = strtok( NULL, " " );
+            if ( str == NULL ) continue;
+            duration = atoi( str );
+
+            retCode = cgmi_canPlayType( url1, &pbCanPlay );
+            if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
+            {
+                printf( "cgmi_canPlayType Not Implemented\n" );
+            } else if ( retCode || !pbCanPlay )
+            {
+                printf( "Cannot play %s\n", url1 );
+                continue;
+            }
+
+            /* Run test. */
+            gettimeofday( &start, NULL );
+            gettimeofday( &current, NULL );
+            i = 0;
+            while ( (current.tv_sec - start.tv_sec) < duration )
+            {
+                i++;
+                printf( "(%d) Playing %s...\n", i, url1 );
+                retCode = play(pSessionId, url1, true);
+                sleep( interval );
+                retCode = stop(pSessionId);
+
+                /* Destroy the created session. */
+                if ( NULL != pSessionId )
+                {
+                   retCode = cgmi_DestroySession( pSessionId );
+                   if (retCode != CGMI_ERROR_SUCCESS)
+                   {
+                       printf("CGMI DestroySession Failed: %s\n",
+                               cgmi_ErrorString( retCode ));
+                       break;
+                   } else {
+                       printf("CGMI DestroySession Success!\n");
+                       pSessionId = NULL;
+                   }
+                }
+
+                /* Create a playback session. */
+                retCode = cgmi_CreateSession( cgmiCallback, NULL, &pSessionId );
+                if (retCode != CGMI_ERROR_SUCCESS)
+                {
+                    printf("CGMI CreateSession Failed: %s\n", cgmi_ErrorString( retCode ));
+                    break;;
+                } else {
+                    printf("CGMI CreateSession Success!\n");
+                }
 
                 gettimeofday( &current, NULL );
             }
