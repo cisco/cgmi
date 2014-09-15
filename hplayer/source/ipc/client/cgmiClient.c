@@ -61,6 +61,7 @@ typedef struct
     gboolean            userDataCbRunning;
     pthread_t           userDataCbThread;
     userDataBufferCB    userDataCallback;
+    userDataRawBufferCB userDataRawCallback;
     int                 userDataFifoDesc;
     void                *userDataPrivate;
 
@@ -294,7 +295,7 @@ static void *cgmi_UserDataCbThread(void *data)
     guint bufferSize = 0;
 
     // Preconditions
-    if( NULL == cbData || NULL == cbData->userDataCallback )
+    if( NULL == cbData || ((NULL == cbData->userDataCallback) && (NULL == cbData->userDataRawCallback)) )
     {
         g_print("Bad parameter (NULL) sent to UserDataCbThread.\n");
         return NULL;
@@ -383,25 +384,38 @@ static void *cgmi_UserDataCbThread(void *data)
 
         //g_print("Read (%d) bytes.\n", bytesRead );
 
-        // Wrap data with GstBuffer
+        if( NULL != cbData->userDataCallback )
+        {
+            // Wrap data with GstBuffer
 #if GST_CHECK_VERSION(1,0,0)
-        pGstBuff = gst_buffer_new_wrapped (dataBuf, bytesRead);
-        if( NULL == pGstBuff )
-        {
-            g_print("Failed to create new gst buffer.\n");
-            continue; 
-        }        
+            pGstBuff = gst_buffer_new_wrapped (dataBuf, bytesRead);
+            if( NULL == pGstBuff )
+            {
+                g_print("Failed to create new gst buffer.\n");
+                continue; 
+            }        
 #else
-        pGstBuff = gst_buffer_new( );
-        if( NULL == pGstBuff )
-        {
-            g_print("Failed to create new gst buffer.\n");
-            continue; 
-        }
-        gst_buffer_set_data( pGstBuff, dataBuf, bytesRead );
+            pGstBuff = gst_buffer_new( );
+            if( NULL == pGstBuff )
+            {
+                g_print("Failed to create new gst buffer.\n");
+                continue; 
+            }
+            gst_buffer_set_data( pGstBuff, dataBuf, bytesRead );
 #endif
-        // Notify callback
-        cbData->userDataCallback(cbData->userDataPrivate, (void *)pGstBuff);
+            // Notify callback
+            cbData->userDataCallback(cbData->userDataPrivate, (void *)pGstBuff);
+        }
+        else if( NULL != cbData->userDataRawCallback )
+        {
+            // Notify callback
+            cbData->userDataRawCallback(cbData->userDataPrivate, dataBuf, bytesRead);
+        }
+        else
+        {
+            g_print("Failed to send data back to user!\n");
+            g_free( dataBuf );
+        }
 
         // Set dataBuf to NULL so we know not to reuse/free it.  Ownership has passed to the app.
         dataBuf = NULL;
@@ -413,6 +427,7 @@ static void *cgmi_UserDataCbThread(void *data)
     close(cbData->userDataFifoDesc);
     cbData->userDataCbRunning = FALSE;
     cbData->userDataCallback = NULL;
+    cbData->userDataRawCallback = NULL;
     g_free(cbData->fifoName);
     g_print("Exiting thread.\n");
 
@@ -851,6 +866,7 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
         eventCbData->userParam = pUserData;
         eventCbData->userDataCbRunning = FALSE;
         eventCbData->userDataCallback = NULL;
+        eventCbData->userDataRawCallback = NULL;
         eventCbData->userDataPrivate = NULL;
 
         if ( gPlayerEventCallbacks == NULL )
@@ -2439,7 +2455,7 @@ cgmi_Status cgmi_StopSectionFilter(void *pSession, void *pFilterId )
     return retStat;
 }
 
-cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, void *pUserData)
+cgmi_Status _cgmi_startUserDataFilterHelper(void *pSession, userDataBufferCB bufferCB, void *pUserData, userDataRawBufferCB rawBufferCB)
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -2447,8 +2463,8 @@ cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, 
     gchar *fifoName = NULL;
     tcgmi_PlayerEventCallbackData *cbData;
 
-    // Preconditions
-    if( pSession == NULL || bufferCB == NULL )
+    // Preconditions; only expect user to have 1 callback
+    if( pSession == NULL || ((bufferCB == NULL) && (rawBufferCB == NULL)) || ((bufferCB != NULL) && (rawBufferCB != NULL)))
     {
         return CGMI_ERROR_BAD_PARAM;
     }
@@ -2490,6 +2506,12 @@ cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, 
             break;
         }
 
+        if( CGMI_ERROR_SUCCESS != retStat )
+        {
+            g_print("Failed to start user data filter on daemon (%d).\n", retStat);
+            break;
+        }
+
         cbData = g_hash_table_lookup(gPlayerEventCallbacks, (gpointer)pSession);
         if (cbData == NULL)
         {
@@ -2498,6 +2520,7 @@ cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, 
         }
 
         cbData->userDataCallback = bufferCB;
+        cbData->userDataRawCallback = rawBufferCB;
         cbData->userDataPrivate = pUserData;
         cbData->fifoName = fifoName;
 
@@ -2520,7 +2543,17 @@ cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, 
     return retStat;
 }
 
-cgmi_Status cgmi_stopUserDataFilter(void *pSession, userDataBufferCB bufferCB)
+cgmi_Status cgmi_startUserDataFilter(void *pSession, userDataBufferCB bufferCB, void *pUserData)
+{
+    return _cgmi_startUserDataFilterHelper(pSession, bufferCB, pUserData, NULL);
+}
+
+cgmi_Status cgmi_startRawUserDataFilter (void *pSession, userDataRawBufferCB bufferCB, void *pUserData)
+{
+    return _cgmi_startUserDataFilterHelper(pSession, NULL, pUserData, bufferCB);
+}
+
+cgmi_Status _cgmi_stopUserDataFilterHelper(void *pSession, userDataBufferCB bufferCB, userDataRawBufferCB rawBufferCB)
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -2582,6 +2615,16 @@ cgmi_Status cgmi_stopUserDataFilter(void *pSession, userDataBufferCB bufferCB)
     dbus_check_error(error);
 
     return retStat;
+}
+
+cgmi_Status cgmi_stopUserDataFilter(void *pSession, userDataBufferCB bufferCB)
+{
+    _cgmi_stopUserDataFilterHelper(pSession, bufferCB, NULL);
+}
+
+cgmi_Status cgmi_stopRawUserDataFilter (void *pSession, userDataRawBufferCB bufferCB)
+{
+    _cgmi_stopUserDataFilterHelper(pSession, NULL, bufferCB);
 }
 
 cgmi_Status cgmi_GetNumPids( void *pSession, int *pCount )

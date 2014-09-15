@@ -47,6 +47,7 @@ extern "C"
 #define AUTO_SELECT_STREAM       -1     // Indicates the first stream of specified type in the PMT will be auto selected
 
 #include <stdint.h>
+#include <glib.h>
 /** Function return status values
  */
 typedef enum
@@ -134,6 +135,7 @@ typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event 
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );
 typedef cgmi_Status (*sectionBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, cgmi_Status SectionStatus, char *pSection, int sectionSize);
 typedef cgmi_Status (*userDataBufferCB)(void *pUserData, void *pBuffer);
+typedef cgmi_Status (*userDataRawBufferCB)(void *pUserData, gchar *pBuffer, unsigned int bufferSize);
 
 /**
  *  \brief \b cgmi_ErrorString
@@ -705,10 +707,14 @@ cgmi_Status cgmi_StopSectionFilter (void *pSession, void* pFilterId );
  *  \brief \b cgmi_startUserDataFilter 
  *
  *  Start receiving user data (CC data) via callbacks.
+ *  
+ *  Note: data is passed back as GstBuffer.
  *
  *  \param[in] pSession     This is a handle to the active session.
  *
- *  \param[in] bufferCB     User data callback to be called with a stream of data.
+ *  \param[in] bufferCB     User data callback to be called with
+ *        a stream of data. Note: it is expected that the
+ *        callback it SYNC. 
  *
  *  \param[in] pUserData    Private user data pointer to be passed to subsequent calls to bufferCB.
  *
@@ -742,6 +748,55 @@ cgmi_Status cgmi_startUserDataFilter (void *pSession, userDataBufferCB bufferCB,
  *
  */
 cgmi_Status cgmi_stopUserDataFilter (void *pSession, userDataBufferCB bufferCB);
+
+/**
+ *  \brief \b cgmi_startRawUserDataFilter 
+ *
+ *  Start receiving user data (CC data) via callbacks.
+ *  
+ *  Note: data is passed back as gchar buffer.
+ *  
+ *  This function is also ONLY availble on the client library.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] bufferCB     User data callback to be called with a stream of data.
+ *
+ *  \param[in] pUserData    Private user data pointer to be passed to subsequent calls to bufferCB.
+ *
+ *  \pre     The Session must be open and the url must be loaded.
+ *
+ *  \post    On success the callback will be called continuously with a stream of user data (if present).
+ *
+ *  \return  CGMI_ERROR_SUCCESS when user data filter has started and is awaiting callback.
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_startRawUserDataFilter (void *pSession, userDataRawBufferCB bufferCB, void *pUserData);
+
+/**
+ *  \brief \b cgmi_stopRawUserDataFilter 
+ *
+ *  Stop receiving user data callbacks.
+ *  
+ *  This function is also ONLY availble on the client library.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] bufferCB     User data callback that has been started.
+ *
+ *  \pre     The user data filter must be started (via
+ *           cgmi_startRawUserDataFilter).
+ *
+ *  \post    On success the user data callbacks will stop.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when the callbacks have been successfully disabled.
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_stopRawUserDataFilter (void *pSession, userDataRawBufferCB bufferCB);
 
 /**
  *  \brief \b cgmi_GetNumPids 

@@ -877,8 +877,16 @@ static GstFlowReturn cgmi_gst_new_user_data_buffer_available (GstAppSink *sink, 
 
    if ( NULL != pSess->userDataBufferCB )
    {
+      //expect the callback to by sync, so buffer/sample can be freed below
       pSess->userDataBufferCB( pSess->userDataBufferParam, (void *)buffer );
    }
+
+   //free buffer/sample when done
+#if GST_CHECK_VERSION(1,0,0)
+   gst_sample_unref(sample);
+#else
+   gst_buffer_unref(buffer);
+#endif 
 
    return GST_FLOW_OK;
 }
