@@ -515,6 +515,9 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
         case NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE:
             printf("NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE");
             break;
+        case NOTIFY_CHANGED_RATE:
+            printf("NOTIFY_CHANGED_RATE: %d", (gint) code);
+            break;
         case NOTIFY_MEDIAPLAYER_UNKNOWN:
             printf("NOTIFY_MEDIAPLAYER_UNKNOWN");
             break;

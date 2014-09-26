@@ -318,6 +318,17 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                }
                pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_VIDEO_RESOLUTION_CHANGED, (((uint64_t)width) << 32) | (uint64_t)height);
             }
+            else if (0 == strcmp(ntype, "rate_changed"))
+            {
+                gint rate;
+                GST_INFO("RECEIVED rate_changed\n");
+                if (gst_structure_get_int(structure, "rate", &rate) == FALSE)
+                {
+                    GST_WARNING("Failed to get new rate, returning 0");
+                    rate = 0;
+                }
+                pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_CHANGED_RATE, (uint64_t)rate );
+            }
             /* BOF/BOS/EOF should be treated as EOS since gstreamer treats all these conditions EOS */
 #if 0
             else if (0 == strcmp(ntype, "BOF"))
