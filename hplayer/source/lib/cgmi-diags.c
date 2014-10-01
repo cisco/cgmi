@@ -37,11 +37,18 @@
 #include "cgmiDiagsApi.h"
 #include "cgmi-diags-priv.h"
 
+#ifdef TMET_ENABLED
+#include "http-timing-metrics.h"
+#endif // TMET_ENABLED
+
 static tCgmiDiags_timingMetric *gTimingBuf = NULL;
 static int timingBufIndex = 0;
 static bool timingBufWrapped = false;
 static bool cgmiDiagInitialized = false;
-static pthread_mutex_t cgmiDiagMutex = PTHREAD_MUTEX_INITIALIZER;;
+static pthread_mutex_t cgmiDiagMutex = PTHREAD_MUTEX_INITIALIZER;
+#ifdef TMET_ENABLED
+static char *gDefaultPostUrl = NULL;
+#endif // TMET_ENABLED
 
 /**
  *  \brief \b cgmiDiags_Init
@@ -77,6 +84,10 @@ cgmi_Status cgmiDiags_Init (void)
         else
         {
             cgmiDiagInitialized = true;
+#ifdef TMET_ENABLED
+        tMets_Init();
+        tMets_getDefaultUrl(&gDefaultPostUrl);
+#endif // TMET_ENABLED
         }
     }
 
@@ -112,6 +123,10 @@ cgmi_Status cgmiDiags_Term (void)
         free(gTimingBuf);
         gTimingBuf=NULL;
     }
+
+#ifdef TMET_ENABLED
+    tMets_Term();
+#endif // TMET_ENABLED
 
     pthread_mutex_unlock(&cgmiDiagMutex);
 
@@ -248,7 +263,7 @@ cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned 
             struct timeval  current_tv;
 
             gettimeofday(&current_tv, NULL);
-            markTime = (current_tv.tv_sec) * 1000 + (current_tv.tv_usec) / 1000;
+            markTime = (unsigned long long)(current_tv.tv_sec) * 1000 + (unsigned long long)(current_tv.tv_usec) / 1000;
         }
 
         gTimingBuf[timingBufIndex].timingEvent = timingEvent;
@@ -264,6 +279,71 @@ cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned 
             strncpy(gTimingBuf[timingBufIndex].sessionUri, uri, sizeof(gTimingBuf[timingBufIndex].sessionUri));
             gTimingBuf[timingBufIndex].sessionUri[sizeof(gTimingBuf[timingBufIndex].sessionUri) - 1] = '\0';
         }
+
+#ifdef TMET_ENABLED
+        //post event to TMET server
+        {
+            char *pSessionUriTemp = NULL;
+
+            //remove internal "dlna+" string used by CGMID to mark DLNA content
+            if(0 == strncmp(gTimingBuf[timingBufIndex].sessionUri, "dlna+", 5))
+            {
+                pSessionUriTemp = gTimingBuf[timingBufIndex].sessionUri + 5;
+            }
+            else
+            {
+                pSessionUriTemp = gTimingBuf[timingBufIndex].sessionUri;
+            }
+
+            switch(timingEvent)
+            {
+                /* //don't track this event since unload from is from the previous URI and is not useful in calculating channel change
+                   //should track unload from the higher level and count toward new URI, see cgmi_cli for example
+                case DIAG_TIMING_METRIC_UNLOAD:
+                {
+                    tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                                          pSessionUriTemp, 
+                                          markTime, 
+                                          "CGMID_UNLOAD", 
+                                          NULL);
+                }
+                break; 
+                */ 
+                case DIAG_TIMING_METRIC_LOAD:
+                {
+                    tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                                          pSessionUriTemp, 
+                                          markTime, 
+                                          "CGMID_LOAD", 
+                                          NULL);
+                }
+                break;
+                case DIAG_TIMING_METRIC_PLAY:
+                {
+                    tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                                          pSessionUriTemp, 
+                                          markTime, 
+                                          "CGMID_PLAY", 
+                                          NULL);
+                }
+                break;
+                case DIAG_TIMING_METRIC_PTS_DECODED:
+                {
+                    tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                                          pSessionUriTemp, 
+                                          markTime, 
+                                          "CGMID_PTS_DECODE", 
+                                          NULL);
+    
+                    tMets_postAllCachedMilestone(gDefaultPostUrl);
+                }
+                break;
+                default:
+                    /* unhandled message */
+                break;
+            } //end of switch 
+        }
+#endif // TMET_ENABLED
     
         timingBufIndex++;
     

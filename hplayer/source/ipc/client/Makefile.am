@@ -52,3 +52,7 @@ else
 cgmi_cli_@GST_API_VERSION@_DEPENDENCIES = libcgmi-client-@GST_API_VERSION@.la 
 cgmi_cli_@GST_API_VERSION@_LDADD = $(LDFLAGS) $(top_builddir)/source/ipc/client/libcgmi-client-@GST_API_VERSION@.la
 endif
+
+if TMET_ENABLED
+cgmi_cli_@GST_API_VERSION@_CPPFLAGS += -DTMET_ENABLED
+endif

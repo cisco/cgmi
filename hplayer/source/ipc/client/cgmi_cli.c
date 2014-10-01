@@ -7,12 +7,18 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 // put this in a define. #include "diaglib.h"
 #include <sys/time.h>
 
 #include "cgmiPlayerApi.h"
 #include "cgmiDiagsApi.h"
+
+#ifdef TMET_ENABLED
+#include "http-timing-metrics.h"
+#endif // TMET_ENABLED
+
 
 /* Defines for section filtering. */
 #define MAX_PMT_COUNT 20
@@ -24,11 +30,17 @@ static void *filterid = NULL;
 static bool filterRunning = false;
 static struct termios oldt, newt;
 static int gAutoPlay = true;
+static char *gCurrentPlaySrcUrl = NULL;
+#ifdef TMET_ENABLED
+static char *gDefaultPostUrl = NULL;
+#endif // TMET_ENABLED
+static pthread_mutex_t cgmiCliMutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Prototypes */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code );
 static cgmi_Status destroyfilter( void *pSessionId );
 static void dumpTimingEntry(void);
+static void updateCurrentPlaySrcUrl(char *src);
 
 /* Signal Handler */
 void sig_handler(int signum)
@@ -133,11 +145,48 @@ static void dumpChannelChangeTime(void)
     }
 }
 
+/*update current playing url*/
+static void updateCurrentPlaySrcUrl(char *src)
+{
+    if(NULL != src)
+    {
+        pthread_mutex_lock(&cgmiCliMutex);
+
+        if(gCurrentPlaySrcUrl)
+        {
+            free(gCurrentPlaySrcUrl);
+            gCurrentPlaySrcUrl = NULL;
+        }
+    
+        if(NULL != src)
+        {
+            gCurrentPlaySrcUrl = strdup(src);
+        }
+
+        pthread_mutex_unlock(&cgmiCliMutex);
+    }
+}
+
 /* Play Command */
 static cgmi_Status play(void *pSessionId, char *src, int autoPlay)
 {   
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
+    updateCurrentPlaySrcUrl(src);
+#ifdef TMET_ENABLED
+    {
+        unsigned long long curTime;
+
+        pthread_mutex_lock(&cgmiCliMutex);
+        tMets_getMsSinceEpoch(&curTime);
+        tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                              gCurrentPlaySrcUrl, 
+                              curTime, 
+                              "CGMICLI_LOAD", 
+                              NULL);
+        pthread_mutex_unlock(&cgmiCliMutex);
+    }
+#endif // TMET_ENABLED
     /* First load the URL. */
     retCode = cgmi_Load( pSessionId, src );
     if (retCode != CGMI_ERROR_SUCCESS)
@@ -197,6 +246,20 @@ static cgmi_Status resume(void *pSessionId, char *src, float resumePosition, int
 static cgmi_Status stop(void *pSessionId)
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+#ifdef TMET_ENABLED
+    {
+        unsigned long long curTime;
+
+        pthread_mutex_lock(&cgmiCliMutex);
+        tMets_getMsSinceEpoch(&curTime);
+        tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                              gCurrentPlaySrcUrl, 
+                              curTime, 
+                              "CGMICLI_STOP", 
+                              NULL);
+        pthread_mutex_unlock(&cgmiCliMutex);
+    }
+#endif // TMET_ENABLED
 
     /* Destroy the section filter */
     retCode = destroyfilter(pSessionId);
@@ -441,6 +504,22 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
             break;
         case NOTIFY_FIRST_PTS_DECODED:
             printf("NOTIFY_FIRST_PTS_DECODED");
+#ifdef TMET_ENABLED
+            {
+                unsigned long long curTime;
+
+                pthread_mutex_lock(&cgmiCliMutex);
+                tMets_getMsSinceEpoch(&curTime);
+                tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                                      gCurrentPlaySrcUrl, 
+                                      curTime, 
+                                      "CGMICLI_FIRST_PTS_DECODED", 
+                                      "close");
+                pthread_mutex_unlock(&cgmiCliMutex);
+    
+                tMets_postAllCachedMilestone(gDefaultPostUrl);
+            }
+#endif // TMET_ENABLED             
             break;
         case NOTIFY_STREAMING_NOT_OK:
             printf("NOTIFY_STREAMING_NOT_OK");
@@ -652,6 +731,17 @@ int main(int argc, char **argv)
 
     // need to put this in a define diagInit (DIAGTYPE_DEFAULT, NULL, 0);
 
+#ifdef TMET_ENABLED
+    /* Init timing metrics */
+    if( tMets_Init() != TMET_STATUS_SUCCESS )
+    {
+       printf("tMets_Init() failed\n");
+       return 1;
+    }
+
+    tMets_getDefaultUrl(&gDefaultPostUrl);
+#endif // TMET_ENABLED
+
     /* Init CGMI. */
     retCode = cgmi_Init();
     if(retCode != CGMI_ERROR_SUCCESS)
@@ -811,12 +901,6 @@ int main(int argc, char **argv)
             char *arg2;
             int autoPlay = true;
 
-            if (playing)
-            {
-                printf( "Stop previous playback before starting a new one.\n" );
-                retCode = stop(pSessionId);
-                playing = 0;
-            }
             if ( strlen( command ) <= 5 )
             {
                 printf( "\tplay <url> [autoplay]\n" );
@@ -831,6 +915,17 @@ int main(int argc, char **argv)
                *arg2 = 0;
                arg2++;
                autoPlay = atoi( arg2 );
+            }
+
+            if (playing)
+            {
+                printf( "Stop previous playback before starting a new one.\n" );
+
+                //update current playing url so stop can be count as part current channel change
+                updateCurrentPlaySrcUrl(arg);                
+
+                retCode = stop(pSessionId);
+                playing = 0;
             }
 
             /* Check First */
@@ -1776,6 +1871,10 @@ int main(int argc, char **argv)
     } else {
         printf("CGMI Term Success!\n");
     }
+
+#ifdef TMET_ENABLED
+    tMets_Term();
+#endif // TMET_ENABLED
 
     return 0;
 }

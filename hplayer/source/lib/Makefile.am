@@ -7,6 +7,11 @@ libcgmiPlayer_@GST_API_VERSION@_la_LDFLAGS= $(LDFLAGS) -lgstapp-@GST_API_VERSION
 if USE_DRMPROXY
 libcgmiPlayer_@GST_API_VERSION@_la_LDFLAGS+= -ldrm-proxy
 endif
+
+if TMET_ENABLED
+libcgmiPlayer_@GST_API_VERSION@_la_CPPFLAGS += -DTMET_ENABLED
+endif
+
 apidir = $(includedir)/cgmi-@GST_API_VERSION@
 api_HEADERS = $(top_srcdir)/source/include/cgmiPlayerApi.h
 

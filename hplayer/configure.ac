@@ -137,6 +137,18 @@ AC_ARG_ENABLE([use-drmproxy],
                              ],
                              [AC_MSG_RESULT(no)])
 AM_CONDITIONAL(USE_DRMPROXY,test x$enable_use_drmproxy = xyes)
+
+#
+# The following is to enable or disable timing metrics
+#
+AC_MSG_CHECKING(Build unity platform with timing metrics..)
+AC_ARG_ENABLE([tmet],
+              [AS_HELP_STRING([--enable-tmet],
+                             [If set to =yes  the timing metrics will be included in CGMI ]) ],
+                             [AC_MSG_RESULT(yes) ],
+                             [AC_MSG_RESULT(no)])
+AM_CONDITIONAL(TMET_ENABLED,test x$enable_tmet = xyes)
+
 #
 # Start Checking what packages we have available.
 PKG_CHECK_MODULES([GLIB],    [glib-2.0 >= 2.32.0])
@@ -156,6 +168,13 @@ PKG_CHECK_MODULES([CURL], [libcurl])
 # Add the CFLAGS and LDFLAGS for each package to the environment
 CFLAGS="$CFLAGS $GLIB_CFLAGS $GOBJECT_CFLAGS $GMODULE_CFLAGS $GTHREAD_CFLAGS $GIO_CFLAGS $GST_CFLAGS $CURL_CFLAGS"
 LDFLAGS="$LDFLAG $GLIB_LIBS $GOBJECT_LIBS $GMODULE_LIBS $GTHREAD_LIBS $GIO_LIBS $GST_LIBS $CURL_LIBS"
+
+#check to see if we need to include libdiagtmets
+if test x$enable_tmet = xyes; then
+   PKG_CHECK_MODULES([LIBDIAGTMETS],     [libdiagtmets])
+   CFLAGS+="$LIBDIAGTMETS_CFLAGS"
+   LDFLAGS+="$LIBDIAGTMETS_LIBS"
+fi
 
 #
 # Check for Doxygen for the documentation generation
