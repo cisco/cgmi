@@ -1509,9 +1509,11 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    }
    else if (curState == GST_STATE_PAUSED)
    {
+      //If rate before pause was 1x (i.e., 1x->0x->1x), just unpause
+      //and return. Otherwise, unpause first and continue to set the new
+      //trick rate below
       cisco_gst_setState( pSess, GST_STATE_PLAYING );
-      /* Example: 1x->0x->1x */ 
-      if(rate == pSess->rateBeforePause)
+      if(rate == pSess->rateBeforePause && rate == 1.0)
       {
          pSess->rate = rate;
          return stat;
