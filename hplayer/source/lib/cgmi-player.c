@@ -28,7 +28,9 @@ GST_DEBUG_CATEGORY_STATIC (cgmi);
 #define INVALID_INDEX      -2
 
 #define PTS_FLUSH_THRESHOLD     (10 * 45000) //10 secs
-#define DEFAULT_BLOCKSIZE       65536
+#define DEFAULT_BLOCKSIZE       32768  //Large buffers increase temporary memory pressure since they may
+                                       //get queued up in the demux. It also increases channel change time.
+                                       //Therefore, don't set this to more than needed
 
 #define GST_DEBUG_STR_MAX_SIZE  256
 
@@ -438,7 +440,7 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                      g_print("Found element class (%s), handle = %p\n", G_OBJECT_CLASS_NAME(G_OBJECT_GET_CLASS(videoSink)), videoSink); 
                      if ( GST_IS_BIN(videoSink) )
                      {
-                        innerSink = cgmi_gst_find_element( videoSink, "videosink" );
+                        innerSink = cgmi_gst_find_element( GST_BIN(videoSink), "videosink" );
                         if ( NULL != innerSink )
                         {
                            pSess->videoSink = innerSink;
@@ -1109,8 +1111,14 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    GST_INFO("Entered Destroy\n");
    if (g_main_loop_is_running(pSess->loop))
    {
-      GST_INFO("loop is running, setting it to quit\n");
-      g_source_remove(pSess->tag);
+      if ( NULL != pSess->sourceWatch )
+      {
+         GST_INFO("removing source from main loop context\n");
+         g_source_destroy( pSess->sourceWatch );
+         g_source_unref( pSess->sourceWatch );
+         pSess->sourceWatch = NULL;
+      }
+
       GST_INFO("about to quit the main loop\n");
       g_main_loop_quit (pSess->loop);
    }
@@ -1163,12 +1171,12 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri )
 {
    GError *g_error_str =NULL;
    GstParseContext *ctx;
+   GstPlugin *plugin;
    gchar **arr;
    gchar *pPipeline;
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    GSource *source;
    uint32_t  bisDLNAContent = FALSE;
-   gchar manualPipeline[1024];
 #ifdef USE_DRMPROXY
    gchar **array = NULL;
    tProxyErr proxy_err = {};
@@ -1253,7 +1261,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri )
    NOTE: This is a temporary solution, as the file extensions cannot be relied upon.
    The entire area and handling of this will change as we move to new paradigms (URL will not change because it's signed, DRM information will arrive from H/E etc).
    */
-   if (NULL != strstr(uri,".m3u8"))
+   if (NULL != strstr(uri, ".m3u8"))
    {
       DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
       if (proxy_err.errCode != 0)
@@ -1265,12 +1273,13 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri )
 
       if (drmType == CLEAR || drmType == UNKNOWN)
       {
-         g_strlcat(pPipeline,pSess->playbackURI, 1024);
+         g_strlcat(pPipeline, pSess->playbackURI, 1024);
       }
       else
       {
          array = g_strsplit(pSess->playbackURI, "?",  1024);
          g_strlcat(pPipeline, array[0], 1024 );
+         g_strfreev (array);
 
          DRMPROXY_Activate(pSess->drmProxyHandle, pSess->playbackURI, strnlen(pSess->playbackURI,1024), NULL, 0, &licenseId, &proxy_err );
          if (proxy_err.errCode != 0)
@@ -1301,28 +1310,31 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri )
    }
    else
    {
-      g_strlcat(pPipeline,pSess->playbackURI, 1024);
+      g_strlcat(pPipeline, pSess->playbackURI, 1024);
    }
 #else
-   g_strlcat(pPipeline,pSess->playbackURI, 1024);
+   g_strlcat(pPipeline, pSess->playbackURI, 1024);
 #endif
 
-	// let's see if we are running on broadcom hardware if we are let's see if we can find there
-	// video sink.  If it's there we need to set the flags variable so the pipeline knows to do
-	// color transformation and scaling in hardware
+   // let's see if we are running on broadcom hardware if we are let's see if we can find there
+   // video sink.  If it's there we need to set the flags variable so the pipeline knows to do
+   // color transformation and scaling in hardware
 #if GST_CHECK_VERSION(1,0,0)
-	if (gst_registry_find_plugin( gst_registry_get() , "brcmvideosink"))
+   plugin = gst_registry_find_plugin( gst_registry_get() , "brcmvideosink");
 #else
-	if (gst_registry_find_plugin( gst_registry_get_default() , "brcmvideosink"))
+   plugin = gst_registry_find_plugin( gst_registry_get_default() , "brcmvideosink");
 #endif
-	{
-		g_print("Autoplugging on real broadcom hardware\n");
-		g_strlcat(pPipeline," flags= 0x63", 1024);
-	}
+   if ( NULL != plugin )
+   {
+      g_print("Autoplugging on real broadcom hardware\n");
+      g_strlcat(pPipeline," flags= 0x63", 1024);
+      gst_object_unref(plugin);
+   }
 
    do
    {
-      GST_INFO("Launching the pipeline with :\n%s\n",pPipeline);
+      GST_INFO("Launching the pipeline with :\n%s\n", pPipeline);
+
 
       ctx = gst_parse_context_new ();
       pSess->pipeline = gst_parse_launch_full(pPipeline,
@@ -1359,16 +1371,16 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri )
       }
       /* Add bus watch for events and messages */
       pSess->bus = gst_element_get_bus( pSess->pipeline );
+
       if (pSess->bus == NULL)
       {
          GST_ERROR("The bus is null in the pipeline\n");
       }
 
       // enable the notifications.
-      source = gst_bus_create_watch(pSess->bus);
-      g_source_set_callback(source, (GSourceFunc)cisco_gst_handle_msg, pSess, NULL);
-      pSess->tag = g_source_attach(source, pSess->thread_ctx);
-      g_source_unref(source);
+      pSess->sourceWatch = gst_bus_create_watch(pSess->bus);
+      g_source_set_callback(pSess->sourceWatch, (GSourceFunc)cisco_gst_handle_msg, pSess, NULL);
+      g_source_attach(pSess->sourceWatch, pSess->thread_ctx);
 
       // Track when elements are added to the pipeline.
       // Primarily acquires a reference to demux for section filter support.
@@ -1393,11 +1405,16 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri )
 
       cisco_gst_setState( pSess, GST_STATE_READY );
 
+
    }while(0);
 
    // free memory
    gst_parse_context_free(ctx);
-   if(g_error_str){g_error_free(g_error_str);}
+   if (g_error_str)
+   {
+      g_error_free(g_error_str);
+   }
+
    return stat;
 }
 
@@ -1419,21 +1436,44 @@ cgmi_Status cgmi_Unload  ( void *pSession )
 
    do
    {
+      if ( NULL != pSess->sourceWatch )
+      {
+         GST_INFO("removing source from main loop context\n");
+         g_source_destroy( pSess->sourceWatch );
+         g_source_unref( pSess->sourceWatch );
+         pSess->sourceWatch = NULL;
+      }
+
       //Signal psi callback on unload in case it is blocked on PID selection
       g_mutex_lock( pSess->autoPlayMutex );
       if ( TRUE == pSess->waitingOnPids )
 		   g_cond_signal( pSess->autoPlayCond );
 		g_mutex_unlock( pSess->autoPlayMutex );
 
-      g_print ("Changing state of pipeline to NULL \n");
-      gst_element_set_state (pSess->pipeline, GST_STATE_NULL);
-      // I dont' think that we have to free any memory associated
-      // with the source ( for the bus watch as I already freed it when I set
-      // it up.  Once the reference count goes to 0 it should be freed
+      if (pSess->pipeline)
+      {
+         int refcount;
+         g_print ("Changing state of pipeline to NULL \n");
+         gst_element_set_state (pSess->pipeline, GST_STATE_NULL);
 
-      g_print ("Deleting pipeline\n");
-      gst_object_unref (GST_OBJECT (pSess->pipeline));
-      pSess->pipeline = NULL;
+         g_print ("Deleting pipeline\n");
+         refcount = GST_OBJECT_REFCOUNT(pSess->pipeline);
+         g_print ("Pipeline ref count on tear down is %d (should be 1)\n", refcount);
+         gst_object_unref (GST_OBJECT (pSess->pipeline));
+         pSess->pipeline = NULL;
+      }
+      if (pSess->bus)
+      {
+         gst_object_unref(GST_OBJECT (pSess->bus));
+         pSess->bus = NULL;
+      }
+
+      if (pSess->playbackURI)
+      {
+         g_free(pSess->playbackURI);
+         pSess->playbackURI = NULL;
+      }
+
       pSess->demux = NULL;
       pSess->udpsrc = NULL;
       pSess->videoSink = NULL;

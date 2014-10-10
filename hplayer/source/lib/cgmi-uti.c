@@ -181,6 +181,7 @@ cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, uint32_t *bisDLNAConten
 
    }while (0);
 
+   curl_slist_free_all(headers);
    curl_easy_cleanup(ctx);
 
    return status;

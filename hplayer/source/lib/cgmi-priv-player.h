@@ -50,13 +50,13 @@ typedef struct
    void*              cookie;
    GMainContext       *thread_ctx; 
    GThread            *thread;
+   GSource            *sourceWatch;
    GThread            *monitor;
    gchar              *playbackURI; /* URI to playback */
    gchar              *manualPipeline; /* URI to playback */
    GMainLoop          *loop;
    GstElement         *pipeline;
    GstElement         *source;
-   guint              tag;
    GstElement         *videoSink;
    GstElement         *videoDecoder;
    GstElement         *audioDecoder;
