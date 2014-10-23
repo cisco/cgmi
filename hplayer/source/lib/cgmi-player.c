@@ -308,6 +308,8 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
             else if (0 == strcmp(ntype, "stream_attrib_changed"))
             {
                gint width, height;
+               gint numerator, denominator;
+               uint64_t eventVal;
                if (gst_structure_get_int(structure, "src_width", &width) == FALSE)
                {
                   GST_WARNING("Failed to get video source widht, returning 0");
@@ -318,7 +320,21 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                   GST_WARNING("Failed to get video source height, returning 0");
                   height = 0;
                }
-               pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_VIDEO_RESOLUTION_CHANGED, (((uint64_t)width) << 32) | (uint64_t)height);
+               if (gst_structure_get_int(structure, "numerator", &numerator) == FALSE)
+               {
+                   GST_WARNING("Failed to get numerator, returning 1,1");
+                   numerator = denominator = 1;
+               }
+               else
+               {
+                   if (gst_structure_get_int(structure, "denominator", &denominator) == FALSE)
+                   {
+                       GST_WARNING("Failed to get denominator, returning 1,1");
+                       denominator = numerator = 1;
+                   }
+               }
+               eventVal = (((uint64_t)width) << 48) | (((uint64_t)height) << 32) | (((uint64_t)numerator) << 16) | denominator;
+               pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_VIDEO_RESOLUTION_CHANGED, eventVal);
             }
             else if (0 == strcmp(ntype, "rate_changed"))
             {
@@ -665,13 +681,13 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
    /*
    if ( FALSE == pSess->autoPlay )
    {
-	   g_mutex_lock (pSess->autoPlayMutex);
+       g_mutex_lock (pSess->autoPlayMutex);
       if ( pSess->videoStreamIndex == INVALID_INDEX && pSess->audioStreamIndex == INVALID_INDEX )
       {
          pSess->waitingOnPids = TRUE;
          g_cond_wait (pSess->autoPlayCond, pSess->autoPlayMutex);
       }
-	   g_mutex_unlock (pSess->autoPlayMutex);
+       g_mutex_unlock (pSess->autoPlayMutex);
    }
    */
 }
@@ -1447,8 +1463,8 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       //Signal psi callback on unload in case it is blocked on PID selection
       g_mutex_lock( pSess->autoPlayMutex );
       if ( TRUE == pSess->waitingOnPids )
-		   g_cond_signal( pSess->autoPlayCond );
-		g_mutex_unlock( pSess->autoPlayMutex );
+           g_cond_signal( pSess->autoPlayCond );
+        g_mutex_unlock( pSess->autoPlayMutex );
 
       if (pSess->pipeline)
       {
@@ -1504,8 +1520,8 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
    {
       g_mutex_lock( pSess->autoPlayMutex );
       if ( TRUE == pSess->waitingOnPids )
-	      g_cond_signal( pSess->autoPlayCond );
-	   g_mutex_unlock( pSess->autoPlayMutex );
+          g_cond_signal( pSess->autoPlayCond );
+       g_mutex_unlock( pSess->autoPlayMutex );
    }
 
    cisco_gst_setState( pSess, GST_STATE_PLAYING );
@@ -2350,7 +2366,7 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, i
       if ( AUTO_SELECT_STREAM != index && pSess->videoStreamIndex != index )
       {
          g_object_set( G_OBJECT(pSess->demux), "video-stream", index, NULL );
-	      g_mutex_lock (pSess->autoPlayMutex);
+          g_mutex_lock (pSess->autoPlayMutex);
          pSess->videoStreamIndex = index;
          g_print("Waiting on pids: %s\n", pSess->waitingOnPids?"TRUE":"FALSE");
          if ( TRUE == pSess->waitingOnPids )
@@ -2358,7 +2374,7 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, i
             g_print("Signalling playback start...\n");
             g_cond_signal( pSess->autoPlayCond );
          }
-	      g_mutex_unlock (pSess->autoPlayMutex);
+          g_mutex_unlock (pSess->autoPlayMutex);
       }
    }
    else if ( STREAM_TYPE_AUDIO == type )
@@ -2366,9 +2382,9 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, i
       if ( AUTO_SELECT_STREAM != index && pSess->audioStreamIndex != index )
       {
          g_object_set( G_OBJECT(pSess->demux), "audio-stream", index, NULL );
-	      g_mutex_lock (pSess->autoPlayMutex);
+          g_mutex_lock (pSess->autoPlayMutex);
          pSess->audioStreamIndex = index;
-	      g_mutex_unlock (pSess->autoPlayMutex);
+          g_mutex_unlock (pSess->autoPlayMutex);
       }
 
       if ( pSess->isAudioMuted == enable )

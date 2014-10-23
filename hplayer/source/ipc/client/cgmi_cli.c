@@ -580,7 +580,19 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
             printf("NOTIFY_VIDEO_ASPECT_RATIO_CHANGED");
             break;
         case NOTIFY_VIDEO_RESOLUTION_CHANGED:
-            printf("NOTIFY_VIDEO_RESOLUTION_CHANGED: %dx%d", (gint)(code >> 32), (gint)(code & 0xFFFFFFFF));
+			{
+				int ar_denominator, ar_numerator, pixelHeight, pixelWidth;
+            	ar_denominator = code & 0xFFFF;
+            	code >>= 16;
+            	ar_numerator = code & 0xFFFF;
+            	code >>= 16;
+            	pixelHeight = code & 0xFFFF;
+            	code >>= 16;
+            	pixelWidth = code & 0xFFFF;
+				/* tested in pytest, don't change output without modifying test expectations */
+            	printf("NOTIFY_VIDEO_RESOLUTION_CHANGED: %dx%d\n", pixelWidth, pixelHeight);
+				printf("NOTIFY_ASPECT_RATIO_CHANGED: %d:%d", ar_numerator, ar_denominator);
+			}
             break;
         case NOTIFY_CHANGED_LANGUAGE_AUDIO:
             printf("NOTIFY_CHANGED_LANGUAGE_AUDIO");
@@ -1445,8 +1457,8 @@ int main(int argc, char **argv)
             }
         }
         /* get video source resolution */
-	    else if (strncmp(command, "getvideores", 11) == 0)
-	    {
+        else if (strncmp(command, "getvideores", 11) == 0)
+        {
             gint srcw, srch;
 
             retCode = cgmi_GetVideoResolution( pSessionId, &srcw, &srch );
@@ -1456,10 +1468,10 @@ int main(int argc, char **argv)
                 continue;
             }
             printf("\nVideo Source Resolution: %dx%d\n", srcw, srch);
-	    }
+        }
         /* get video decoder index */
-	    else if (strncmp(command, "getvideodecoderindex", 20) == 0)
-	    {
+        else if (strncmp(command, "getvideodecoderindex", 20) == 0)
+        {
             gint ndx;
 
             retCode = cgmi_GetVideoDecoderIndex( pSessionId, &ndx );
@@ -1469,7 +1481,7 @@ int main(int argc, char **argv)
                 continue;
             }
             printf("\nVideo Decoder Index: %d\n", ndx);
-	    }
+        }
         /* get num pids */
         else if (strncmp(command, "getpidinfo", 10) == 0)
         {
@@ -1785,7 +1797,7 @@ int main(int argc, char **argv)
             retCode = cgmi_SetLogging(arg);
             if (retCode != CGMI_ERROR_SUCCESS)
             {
-            	printf("Error in set logging. Returned %d\n", retCode);
+                printf("Error in set logging. Returned %d\n", retCode);
             }
         }
 
