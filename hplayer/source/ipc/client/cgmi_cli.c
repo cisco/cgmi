@@ -581,17 +581,17 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
             break;
         case NOTIFY_VIDEO_RESOLUTION_CHANGED:
 			{
-				int ar_denominator, ar_numerator, pixelHeight, pixelWidth;
-            	ar_denominator = code & 0xFFFF;
-            	code >>= 16;
-            	ar_numerator = code & 0xFFFF;
-            	code >>= 16;
-            	pixelHeight = code & 0xFFFF;
-            	code >>= 16;
-            	pixelWidth = code & 0xFFFF;
-				/* tested in pytest, don't change output without modifying test expectations */
-            	printf("NOTIFY_VIDEO_RESOLUTION_CHANGED: %dx%d\n", pixelWidth, pixelHeight);
-				printf("NOTIFY_ASPECT_RATIO_CHANGED: %d:%d", ar_numerator, ar_denominator);
+                int ar_denominator, ar_numerator, pixelHeight, pixelWidth;
+                ar_denominator = code & 0xFFFF;
+                code >>= 16;
+                ar_numerator = code & 0xFFFF;
+                code >>= 16;
+                pixelHeight = code & 0xFFFF;
+                code >>= 16;
+                pixelWidth = code & 0xFFFF;
+                /* tested in pytest, don't change output without modifying test expectations */
+                printf("NOTIFY_VIDEO_RESOLUTION_CHANGED: %dx%d\n", pixelWidth, pixelHeight);
+                printf("NOTIFY_ASPECT_RATIO_CHANGED: %d:%d", ar_numerator, ar_denominator);
 			}
             break;
         case NOTIFY_CHANGED_LANGUAGE_AUDIO:

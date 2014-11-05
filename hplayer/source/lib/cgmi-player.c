@@ -681,13 +681,13 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
    /*
    if ( FALSE == pSess->autoPlay )
    {
-       g_mutex_lock (pSess->autoPlayMutex);
+      g_mutex_lock (pSess->autoPlayMutex);
       if ( pSess->videoStreamIndex == INVALID_INDEX && pSess->audioStreamIndex == INVALID_INDEX )
       {
          pSess->waitingOnPids = TRUE;
          g_cond_wait (pSess->autoPlayCond, pSess->autoPlayMutex);
       }
-       g_mutex_unlock (pSess->autoPlayMutex);
+      g_mutex_unlock (pSess->autoPlayMutex);
    }
    */
 }
@@ -1463,8 +1463,8 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       //Signal psi callback on unload in case it is blocked on PID selection
       g_mutex_lock( pSess->autoPlayMutex );
       if ( TRUE == pSess->waitingOnPids )
-           g_cond_signal( pSess->autoPlayCond );
-        g_mutex_unlock( pSess->autoPlayMutex );
+         g_cond_signal( pSess->autoPlayCond );
+      g_mutex_unlock( pSess->autoPlayMutex );
 
       if (pSess->pipeline)
       {
@@ -1520,8 +1520,8 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
    {
       g_mutex_lock( pSess->autoPlayMutex );
       if ( TRUE == pSess->waitingOnPids )
-          g_cond_signal( pSess->autoPlayCond );
-       g_mutex_unlock( pSess->autoPlayMutex );
+         g_cond_signal( pSess->autoPlayCond );
+      g_mutex_unlock( pSess->autoPlayMutex );
    }
 
    cisco_gst_setState( pSess, GST_STATE_PLAYING );
@@ -1649,11 +1649,14 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
       g_print("Setting position to %f (ns), pipeline state: %d\n", (position* GST_SECOND), state);
 
       if ( state != GST_STATE_PAUSED && state != GST_STATE_PLAYING )
-      {
+      {         
          g_print("Pipeline not playing yet, delaying seek...\n");
          pSess->pendingSeekPosition = position;
          pSess->pendingSeek = TRUE;
-         cisco_gst_setState( pSess, GST_STATE_PAUSED );
+         //If the seek request came in when the pipeline was in ready state 
+         //(e.g., resume from an offset), set it to paused to complete the seek         
+         if ( 0.0 == pSess->rate )
+            cisco_gst_setState( pSess, GST_STATE_PAUSED );
          return stat;
       }
 
@@ -2366,7 +2369,7 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, i
       if ( AUTO_SELECT_STREAM != index && pSess->videoStreamIndex != index )
       {
          g_object_set( G_OBJECT(pSess->demux), "video-stream", index, NULL );
-          g_mutex_lock (pSess->autoPlayMutex);
+         g_mutex_lock (pSess->autoPlayMutex);
          pSess->videoStreamIndex = index;
          g_print("Waiting on pids: %s\n", pSess->waitingOnPids?"TRUE":"FALSE");
          if ( TRUE == pSess->waitingOnPids )
@@ -2374,7 +2377,7 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, i
             g_print("Signalling playback start...\n");
             g_cond_signal( pSess->autoPlayCond );
          }
-          g_mutex_unlock (pSess->autoPlayMutex);
+         g_mutex_unlock (pSess->autoPlayMutex);
       }
    }
    else if ( STREAM_TYPE_AUDIO == type )
