@@ -672,7 +672,7 @@ void help(void)
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
            "\t\t<url#2> at interval <interval> for duration <duration>.\n"
            "\n"
-           "\tsessiontest <url> <interval (seconds)> <duration(seconds)>\n"
+           "\tsessiontest <url> <interval (seconds)> <duration(seconds)> [<drmType> <cpBlob>]\n"
            "\t\tCreate and destroy session with playback of <url> in between\n"
            "\t\tat interval <interval> for duration <duration>.\n"
            "\n"
@@ -1809,6 +1809,34 @@ int main(int argc, char **argv)
                 retCode = play(pSessionId, str, true,p_Cp_Blob_Struct_Current);
                 sleep( interval );
                 retCode = stop(pSessionId);
+				if (pSessionId != NULL)
+				{
+				    retCode = cgmi_DestroySession( pSessionId );
+                    if (retCode != CGMI_ERROR_SUCCESS)
+                    {
+                        printf("CGMI DestroySession Failed: %s\n",cgmi_ErrorString( retCode ));
+					    gettimeofday( &current, NULL );
+                        break;
+                    } 
+					else 
+					{
+                        printf("CGMI DestroySession Success!\n");
+                        pSessionId = NULL;
+                    }
+                }
+
+                /* Create a playback session. */
+                retCode = cgmi_CreateSession( cgmiCallback, NULL, &pSessionId );
+                if (retCode != CGMI_ERROR_SUCCESS)
+                {
+                    printf("CGMI CreateSession Failed: %s\n", cgmi_ErrorString( retCode ));
+				    gettimeofday( &current, NULL );
+                    break;;
+                } 
+				else 
+				{
+                    printf("CGMI CreateSession Success!\n");
+                }
 
                 if ( str == url1 )
 				{
@@ -1848,7 +1876,19 @@ int main(int argc, char **argv)
             str = strtok( NULL, " " );
             if ( str == NULL ) continue;
             duration = atoi( str );
-
+            str = strtok( NULL, " " );
+		    if ( str != NULL ) 
+			{
+					
+					
+				cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( str );
+				str = strtok( NULL, " " );
+				if ( str == NULL ) continue;	
+				cp_Blob_Struct.bloblength=strlen(str);
+				memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+				memcpy(cp_Blob_Struct.cpBlob,str,cp_Blob_Struct.bloblength);
+				p_Cp_Blob_Struct=&cp_Blob_Struct;
+			}
             retCode = cgmi_canPlayType( url1, &pbCanPlay );
             if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
             {
