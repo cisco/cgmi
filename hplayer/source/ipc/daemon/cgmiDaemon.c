@@ -729,9 +729,16 @@ on_handle_cgmi_load (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
     GVariant *arg_sessionId,
-    const gchar *uri )
+    const gchar *uri,
+	GVariant *arg_cpBlobStruct,
+    guint64 arg_cpBlobStructSize
+	)
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
+	gchar * cpBlob=NULL;
+	 GVariantIter *iter = NULL;
+	 gchar        byte;
+	 uint32_t     ii = 0;
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSession;
 
@@ -747,9 +754,36 @@ on_handle_cgmi_load (
 
         g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
         g_variant_unref( sessVar );
+		if (arg_cpBlobStructSize>0)
+		{
+			cpBlob = (gchar *)malloc(arg_cpBlobStructSize);
+			if(NULL == cpBlob)
+			{
+				retStat = CGMI_ERROR_FAILED;
+				break;
+			}
 
-        retStat = cgmi_Load( (void *)pSession, uri );
-
+		   g_variant_get(arg_cpBlobStruct, "ay", &iter); 
+		   if(NULL != iter)
+		   {    
+			  while(g_variant_iter_loop(iter, "y", &byte) && (ii < arg_cpBlobStructSize))
+			  {    
+				 cpBlob[ii++] = byte;
+			  }    
+			  g_variant_iter_free(iter);
+		   }
+		  else
+		  {
+			retStat = CGMI_ERROR_FAILED;
+			free(cpBlob);
+            break;
+		  }
+		}	
+        retStat = cgmi_Load( (void *)pSession, uri,(cpBlobStruct *)cpBlob );
+        if (NULL != cpBlob)
+        {
+            free(cpBlob);
+        }
     }while(0);
 
     org_cisco_cgmi_complete_load (object,

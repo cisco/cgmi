@@ -975,9 +975,14 @@ cgmi_Status cgmi_canPlayType( const char *type, int *pbCanPlay )
     return retStat;
 }
 
-cgmi_Status cgmi_Load( void *pSession, const char *uri )
+cgmi_Status cgmi_Load( void *pSession, const char *uri,cpBlobStruct * cpblob)
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+	GVariantBuilder *dataBuilder = NULL;
+    GVariant        *cpBlobStruct_Variant = NULL;
+	uint32_t     ii = 0;
+	gchar        byte;
+	 guint64 cpBlobStruct_Variant_Size=0;
     GError *error = NULL;
     GVariant *sessVar = NULL, *dbusVar = NULL;
 
@@ -1009,10 +1014,36 @@ cgmi_Status cgmi_Load( void *pSession, const char *uri )
             break;
         }
         dbusVar = g_variant_ref_sink(dbusVar);
+		dataBuilder = g_variant_builder_new(G_VARIANT_TYPE("ay"));
+		if(NULL == dataBuilder)
+		{    
+			g_print("Failed to create  Variant builder\n");
+			retStat = CGMI_ERROR_OUT_OF_MEMORY;
+			break;
+		} 
 
+		if (cpblob)
+		{
+			for(ii = 0; ii < sizeof(cpBlobStruct); ii++)
+			{    
+				byte = ((gchar *)cpblob)[ii];
+				g_variant_builder_add(dataBuilder, "y", byte);
+			}
+			cpBlobStruct_Variant_Size=sizeof(cpBlobStruct);
+		}
+	
+
+   cpBlobStruct_Variant = g_variant_builder_end(dataBuilder);
+
+   if(NULL != dataBuilder)
+   {    
+      g_variant_builder_unref(dataBuilder);
+   }    
         org_cisco_cgmi_call_load_sync( gProxy,
                                        dbusVar,
                                        (const gchar *)uri,
+									   cpBlobStruct_Variant,
+									   cpBlobStruct_Variant_Size,
                                        (gint *)&retStat,
                                        NULL,
                                        &error );

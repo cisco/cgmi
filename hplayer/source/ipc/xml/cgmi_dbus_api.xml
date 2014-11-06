@@ -33,6 +33,9 @@
         <method name="load">
             <arg name="sessionId" direction="in" type="v"/>
             <arg name="uri" direction="in" type="s"/>
+			<arg name="cpBlobStruct" direction="in" type="ay">
+               <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/></arg>
+            <arg name="cpBlobStructSize" direction="in" type="t"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 

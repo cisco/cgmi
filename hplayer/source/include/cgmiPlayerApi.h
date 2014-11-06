@@ -45,9 +45,11 @@ extern "C"
 
 #define SECTION_FILTER_EMPTY_PID 0x1FFF // Indicates filter shouldn't match PID
 #define AUTO_SELECT_STREAM       -1     // Indicates the first stream of specified type in the PMT will be auto selected
+#define MAX_CP_BLOB_LENGTH 64000
 
 #include <stdint.h>
 #include <glib.h>
+#include <drmProxy.h>
 /** Function return status values
  */
 typedef enum
@@ -130,6 +132,12 @@ typedef struct
    int pid;
    int streamType;
 }tcgmi_PidData;
+typedef struct 
+{
+    uint8_t  cpBlob[MAX_CP_BLOB_LENGTH]; 
+    uint32_t bloblength; // The actual size of data in the cpblob array (the rest of cpBlob array will be unused).bloblength can be maximum equal to MAX_CP_BLOB_LENGTH which is the size of the cpBlob array. 
+    tDRM_TYPE drmType; 
+}cpBlobStruct;
 
 
 typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event, uint64_t code );
@@ -249,6 +257,8 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
  *
  *  \param[in] uri  String that hold the location of the asset to play
  *
+ *  \param[in]  cpblob - a pointer to a cpBlobStruct. This struct contains  data which  is needed 
+ *  for encrypted HLS streaming.For all other types of sessions(clear HLS/Live/Playback etc') NULL should be passed to the cpblob var.
  *  \post    On success the user can now play the uri pointed to 
  *
  * \return  CGMI_ERROR_SUCCESS when everything is loaded and ready to play the uri 
@@ -260,7 +270,7 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_Load (void *pSession, const char *uri );
+cgmi_Status cgmi_Load (void *pSession, const char *uri,cpBlobStruct * cpblob );
 
 /**
  *  \brief \b cgmi_Unload 
