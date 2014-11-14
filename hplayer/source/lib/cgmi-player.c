@@ -412,7 +412,6 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
             {
                if (TRUE == pSess->pendingSeek)
                {
-                  pSess->pendingSeek = FALSE;
                   GST_INFO("Executing delayed seek...\n");
                   if( !gst_element_seek( pSess->pipeline,
                            1.0,
@@ -432,6 +431,7 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                      gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
                      usleep(1000000);
                   }
+                  pSess->pendingSeek = FALSE;
                }
 
                if( NULL != pSess->videoDecoder )
@@ -1285,7 +1285,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
           pSess->eventCB(pSess->usrParam, (void *)pSess, 0, proxy_err.errCode);
        }
        if (cpblob==NULL)
-   	   {
+       {
           DRMPROXY_ParseURL(pSess->drmProxyHandle, pSess->playbackURI, &drmType, &proxy_err);
           if (proxy_err.errCode != 0)
           {
@@ -1333,28 +1333,28 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
       }
       else
       {
-    	  drmType=cpblob->drmType;
-    	  GST_INFO("OTT drmType %d\n",drmType);
+          drmType=cpblob->drmType;
+          GST_INFO("OTT drmType %d\n",drmType);
           GST_INFO("OTT CPBLOB = %s", cpblob->cpBlob);
-    	  if (drmType==VGDRM)
-    	  {
+          if (drmType==VGDRM)
+          {
             do
             {
-        	  ret = vgdrm_construct_ott_cp_blob_data(pSess->drmProxyHandle, cpblob->cpBlob,&DRMPrivateData, &DRMPrivateDataSize);
+              ret = vgdrm_construct_ott_cp_blob_data(pSess->drmProxyHandle, cpblob->cpBlob,&DRMPrivateData, &DRMPrivateDataSize);
               if(0 != ret)
               {
                  GST_ERROR("vgdrm_construct_OTT_CPBlob_data (and_assign_asset_id()) failed\n");  
                  drmStatus = 0;
                  break;
               }
-        	  ret = DRMPROXY_Activate(pSess->drmProxyHandle, contentURL, sizeof(contentURL), DRMPrivateData, DRMPrivateDataSize, &licenseId, &proxy_err);
+              ret = DRMPROXY_Activate(pSess->drmProxyHandle, contentURL, sizeof(contentURL), DRMPrivateData, DRMPrivateDataSize, &licenseId, &proxy_err);
               if(0 != ret)
               {
                   GST_ERROR("DRMPROXY_Activate() failed\n");
-               	  if (proxy_err.errCode != 0)
-             	  {
-             	     GST_ERROR ("DRMPROXY_Activate error: %lu - %s \n", proxy_err.errCode,proxy_err.errString);
-             	  }
+                  if (proxy_err.errCode != 0)
+                  {
+                     GST_ERROR ("DRMPROXY_Activate error: %lu - %s \n", proxy_err.errCode,proxy_err.errString);
+                  }
                   drmStatus = 0;
                   break;
               }
@@ -1368,12 +1368,12 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
               sprintf(buffer,"%08llX" , licenseId);
               g_strlcat(pPipeline, buffer, 1024);
             } while (0);
-    	  }
-      	  else
-     	  {	
-         	   g_print("drmType is not VGDRM -not supported!" );
-         	   return CGMI_ERROR_NOT_IMPLEMENTED;
-     	  }
+          }
+          else
+          { 
+               g_print("drmType is not VGDRM -not supported!" );
+               return CGMI_ERROR_NOT_IMPLEMENTED;
+          }
        }
 
    }
@@ -1479,7 +1479,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
             G_CALLBACK(cgmi_gst_notify_source), pSess );
       }
 
-      cisco_gst_setState( pSess, GST_STATE_READY );
+      cisco_gst_setState( pSess, GST_STATE_PAUSED );
 
 
    }while(0);
@@ -1646,7 +1646,11 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
       GST_ERROR ("Unable to retrieve current position.\n");
       return CGMI_ERROR_FAILED;
    }
-
+   if (pSess->pendingSeek)
+   {
+       pSess->pendingSeek = FALSE;
+       position = pSess->pendingSeekPosition * GST_SECOND;
+   }
    seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
                                     GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
    if (seek_event)
@@ -1708,7 +1712,7 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
 
       g_print("Setting position to %f (ns), pipeline state: %d\n", (position* GST_SECOND), state);
 
-      if ( state != GST_STATE_PAUSED && state != GST_STATE_PLAYING )
+      if ( state != GST_STATE_PLAYING )
       {         
          g_print("Pipeline not playing yet, delaying seek...\n");
          pSess->pendingSeekPosition = position;
