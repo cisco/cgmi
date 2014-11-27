@@ -793,7 +793,7 @@ void cgmi_gst_notify_source( GObject *obj, GParamSpec *param, gpointer data )
       {
          souphttpsrc = source;
          // if we have just souphttpsrc let's set the blocksize to something larger than the default 4k
-         g_print("souphttpsrc has been detected, increasing the blocksize to: %u bytes\n",DEFAULT_BLOCKSIZE );
+         g_print("souphttpsrc has been detected, increasing the blocksize to: %u bytes\n", DEFAULT_BLOCKSIZE );
          g_object_set (souphttpsrc, "blocksize", DEFAULT_BLOCKSIZE, NULL);
       }
    }
@@ -1039,11 +1039,11 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->cookie = (void*)MAGIC_COOKIE;
    pSess->usrParam = pUserData;
    pSess->playbackURI = NULL;
-   pSess->manualPipeline = NULL;
    pSess->eventCB = eventCB;
    pSess->demux = NULL;
    pSess->udpsrc = NULL;
    pSess->videoSink = NULL;
+   pSess->audioSink = NULL;
    pSess->videoDecoder = NULL;
    pSess->audioDecoder = NULL;
    pSess->vidDestRect.x = 0;
@@ -1149,7 +1149,6 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    }
 
    if (pSess->playbackURI) {g_free(pSess->playbackURI);}
-   if (pSess->manualPipeline) {g_free(pSess->manualPipeline);}
    if (pSess->pipeline) {gst_object_unref (GST_OBJECT (pSess->pipeline));}
    if (pSess->autoPlayCond) {g_cond_free(pSess->autoPlayCond);}
    if (pSess->autoPlayMutex) {g_mutex_free(pSess->autoPlayMutex);}
@@ -1173,6 +1172,58 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    return stat;
 }
 
+static void cgmi_gst_pad_added( GstElement *element, GstPad *pad, gpointer data )
+{
+   tSession *pSess = (tSession*)data;
+   GstCaps *caps = NULL;
+   GstPad *sinkpad;
+
+   g_print("ON_PAD_ADDED\n");
+
+   if ( NULL == pSess )
+      return;
+
+   if ( NULL == pad )
+      return;
+   
+#if GST_CHECK_VERSION(1,0,0)
+   caps = gst_pad_query_caps( pad, NULL );
+#else
+   caps = gst_pad_get_caps( pad );
+#endif
+   
+   if ( NULL != caps )
+   {
+      gchar *caps_string = gst_caps_to_string(caps);      
+      g_print("Caps: %s\n", caps_string);
+      if ( NULL != caps_string )
+      {
+         if ( NULL != strstr(caps_string, "video") )
+         {
+            sinkpad = gst_element_get_static_pad (pSess->videoDecoder, "sink");
+            g_print("Got static pad (%p) of peer\n", sinkpad);
+            if ( GST_PAD_LINK_OK != gst_pad_link (pad, sinkpad) )
+            {
+               g_print("Could not link demux to decoder!\n");
+            }           
+            gst_object_unref (sinkpad);            
+         }
+         else if ( NULL != strstr(caps_string, "audio") )
+         {
+            sinkpad = gst_element_get_static_pad (pSess->audioDecoder, "sink");
+            g_print("Got static pad (%p) of peer\n", sinkpad);
+            if ( GST_PAD_LINK_OK != gst_pad_link (pad, sinkpad) )
+            {
+               g_print("Could not link demux to decoder!\n");
+            }           
+            gst_object_unref (sinkpad);  
+         }
+         g_free( caps_string );
+      }
+
+      gst_caps_unref( caps );
+   }
+}
 
 cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
 {
@@ -1184,6 +1235,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    cgmi_Status          stat = CGMI_ERROR_SUCCESS;
    GSource              *source;
    uint32_t             bisDLNAContent = FALSE;
+   uint32_t             bisBroadcomHw = FALSE;
    int                  drmStatus = 1;
 #ifdef USE_DRMPROXY
    gchar                **array = NULL;
@@ -1372,6 +1424,9 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
           else
           { 
                g_print("drmType is not VGDRM -not supported!" );
+               g_free(pPipeline);
+               g_free(pSess->playbackURI);
+               pSess->playbackURI = NULL;
                return CGMI_ERROR_NOT_IMPLEMENTED;
           }
        }
@@ -1379,7 +1434,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    }
    else
    {
-      g_strlcat(pPipeline,pSess->playbackURI, 1024);
+      g_strlcat(pPipeline, pSess->playbackURI, 1024);
    }
 #else
    g_strlcat(pPipeline, pSess->playbackURI, 1024);
@@ -1395,8 +1450,9 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
 #endif
    if ( NULL != plugin )
    {
+      bisBroadcomHw = TRUE;
       g_print("Autoplugging on real broadcom hardware\n");
-      g_strlcat(pPipeline," flags= 0x63", 1024);
+      g_strlcat(pPipeline, " flags= 0x63", 1024);
       gst_object_unref(plugin);
    }
 
@@ -1407,44 +1463,124 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
 
       if (0 == drmStatus)  // Check whether DRM failed with license creation (if needed)
       {
-          g_print("ERROR: DRM License Creation failed, pipeline will not launch");
-          stat = CGMI_ERROR_FAILED;
-          break;
-      }
-      GST_INFO("Launching the pipeline with :\n%s\n", pPipeline);
-      
-      pSess->pipeline = gst_parse_launch_full(pPipeline,
-                                              ctx,
-                                              GST_PARSE_FLAG_FATAL_ERRORS,
-                                              &g_error_str);
-
-      g_free(pPipeline);
-
-      if (pSess->pipeline == NULL)
-      {
-         GST_WARNING("PipeLine was not able to be created\n");
-         if (g_error_str)
-         {
-            g_print("Error with pipeline:%s \n", g_error_str->message);
-         }
-
-         //now if there are missing elements that are needed in the pipeline, lets' dump
-         //those out.
-         if(g_error_matches(g_error_str, GST_PARSE_ERROR, GST_PARSE_ERROR_NO_SUCH_ELEMENT))
-         {
-            guint i=0;
-            g_print("Missing these plugins:\n");
-            arr = gst_parse_context_get_missing_elements(ctx);
-            while (arr[i] != NULL)
-            {
-               g_print("%s\n",arr[i]);
-               i++;
-            }
-            g_strfreev(arr);
-         }
-         stat = CGMI_ERROR_NOT_IMPLEMENTED;
+         g_print("ERROR: DRM License Creation failed, pipeline will not launch");
+         stat = CGMI_ERROR_FAILED;
          break;
       }
+
+      GST_INFO("Launching the pipeline with :\n%s\n", pPipeline);
+
+      //Using manual pipeline saves at least 10% CPU cycles compared to playbin on Broadcom
+      //Investigate how playbin performance can be improved
+      if ( TRUE == bisDLNAContent )
+      {
+         g_free(pPipeline);
+         pPipeline = NULL;
+
+         pSess->pipeline = gst_pipeline_new("pipeline");
+         pSess->source = gst_element_factory_make("dlnasrc", "dlna-source");
+         pSess->demux  = gst_element_factory_make("brcmtsdemux", "tsdemux");
+         pSess->videoDecoder = gst_element_factory_make("brcmvideodecoder", "videodecoder");
+         pSess->audioDecoder = gst_element_factory_make("brcmaudiodecoder", "audiodecoder");
+         pSess->videoSink = gst_element_factory_make("brcmvideosink", "videosink");
+         pSess->audioSink = gst_element_factory_make("brcmaudiosink", "audiosink");
+
+         if ( NULL == pSess->pipeline ||
+              NULL == pSess->source ||
+              NULL == pSess->demux ||
+              NULL == pSess->videoDecoder ||
+              NULL == pSess->audioDecoder || 
+              NULL == pSess->videoSink ||
+              NULL == pSess->audioSink )
+         {            
+            if ( NULL != pSess->source )
+               gst_object_unref (GST_OBJECT (pSess->source));
+            if ( NULL != pSess->demux )
+               gst_object_unref (GST_OBJECT (pSess->demux));
+            if ( NULL != pSess->videoDecoder )
+               gst_object_unref (GST_OBJECT (pSess->videoDecoder));
+            if ( NULL != pSess->audioDecoder )
+               gst_object_unref (GST_OBJECT (pSess->audioDecoder));
+            if ( NULL != pSess->audioSink )
+               gst_object_unref (GST_OBJECT (pSess->audioSink));
+            stat = CGMI_ERROR_FAILED;
+            break;
+         }
+         g_object_set( G_OBJECT (pSess->source), "uri", pSess->playbackURI, NULL );
+         g_print("Muting video decoder...\n");
+         g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", TRUE, NULL );
+         g_print("Muting audio decoder...\n");
+         g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", TRUE, NULL );
+
+         gst_bin_add_many( GST_BIN (pSess->pipeline), 
+                           pSess->source, 
+                           pSess->demux, 
+                           pSess->videoDecoder, 
+                           pSess->audioDecoder, 
+                           pSess->videoSink, 
+                           pSess->audioSink, 
+                           NULL );
+
+         if ( TRUE != gst_element_link(pSess->source, pSess->demux) )
+         {
+            GST_WARNING("Could not link source to demux\n");
+            stat = CGMI_ERROR_FAILED;
+            break;
+         }
+         if ( TRUE != gst_element_link(pSess->videoDecoder, pSess->videoSink) )
+         {
+            GST_WARNING("Could not link video decoder to video sink\n");
+            stat = CGMI_ERROR_FAILED;
+            break;
+         }
+         if ( TRUE != gst_element_link(pSess->audioDecoder, pSess->audioSink) )
+         {
+            GST_WARNING("Could not link audio decoder to audio sink\n");
+            stat = CGMI_ERROR_FAILED;
+            break;
+         }
+
+         g_signal_connect( pSess->demux, "pad-added", G_CALLBACK (cgmi_gst_pad_added), pSess );
+         g_signal_connect( pSess->demux, "psi-info", G_CALLBACK(cgmi_gst_psi_info), pSess );
+      }
+
+      else
+      {
+         pSess->pipeline = gst_parse_launch_full(pPipeline,
+                                                 ctx,
+                                                 GST_PARSE_FLAG_FATAL_ERRORS,
+                                                 &g_error_str);
+
+         g_free(pPipeline);
+         pPipeline = NULL;
+
+         if (pSess->pipeline == NULL)
+         {
+            GST_WARNING("PipeLine was not able to be created\n");
+            if (g_error_str)
+            {
+               g_print("Error with pipeline:%s \n", g_error_str->message);
+            }
+
+            //now if there are missing elements that are needed in the pipeline, lets' dump
+            //those out.
+            if(g_error_matches(g_error_str, GST_PARSE_ERROR, GST_PARSE_ERROR_NO_SUCH_ELEMENT))
+            {
+               guint i=0;
+               g_print("Missing these plugins:\n");
+               arr = gst_parse_context_get_missing_elements(ctx);
+               while (arr[i] != NULL)
+               {
+                  g_print("%s\n",arr[i]);
+                  i++;
+               }
+               g_strfreev(arr);
+            }
+            stat = CGMI_ERROR_NOT_IMPLEMENTED;
+            break;
+         }
+      }
+
       /* Add bus watch for events and messages */
       pSess->bus = gst_element_get_bus( pSess->pipeline );
 
@@ -1458,19 +1594,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
       g_source_set_callback(pSess->sourceWatch, (GSourceFunc)cisco_gst_handle_msg, pSess, NULL);
       g_source_attach(pSess->sourceWatch, pSess->thread_ctx);
 
-      // Track when elements are added to the pipeline.
-      // Primarily acquires a reference to demux for section filter support.
-      if ( NULL != pSess->manualPipeline )
-      {
-         GstBin *decodebin = (GstBin *)cgmi_gst_find_element( (GstBin *)pSess->pipeline, "dec" );
-
-         if( NULL != decodebin )
-         {
-            g_signal_connect( decodebin, "element-added",
-               G_CALLBACK(cgmi_gst_element_added), pSess );
-         }
-      }
-      else
+      if (bisDLNAContent == FALSE || bisBroadcomHw == FALSE)
       {
          g_signal_connect( pSess->pipeline, "element-added",
             G_CALLBACK(cgmi_gst_element_added), pSess );
@@ -1489,6 +1613,20 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    if (g_error_str)
    {
       g_error_free(g_error_str);
+   }
+
+   if ( CGMI_ERROR_SUCCESS != stat )
+   {
+      if ( NULL != pPipeline )
+      {
+         g_free(pPipeline);
+         pPipeline = NULL;
+      }
+      if ( NULL != pSess->playbackURI )
+      {
+         g_free(pSess->playbackURI);
+         pSess->playbackURI = NULL;   
+      }
    }
 
    return stat;
@@ -1553,6 +1691,7 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       pSess->demux = NULL;
       pSess->udpsrc = NULL;
       pSess->videoSink = NULL;
+      pSess->audioSink = NULL;
       pSess->videoDecoder = NULL;
       pSess->audioDecoder = NULL;
 

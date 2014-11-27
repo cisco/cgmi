@@ -53,11 +53,11 @@ typedef struct
    GSource            *sourceWatch;
    GThread            *monitor;
    gchar              *playbackURI; /* URI to playback */
-   gchar              *manualPipeline; /* URI to playback */
    GMainLoop          *loop;
    GstElement         *pipeline;
    GstElement         *source;
    GstElement         *videoSink;
+   GstElement         *audioSink;
    GstElement         *videoDecoder;
    GstElement         *audioDecoder;
    GstElement         *demux;
