@@ -35,6 +35,8 @@ GST_DEBUG_CATEGORY_STATIC (cgmi);
 
 #define GST_DEBUG_STR_MAX_SIZE  256
 
+#define VGDRM_CAPS   "application/x-vgdrm-live-client"
+
 static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
 static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename );
 
@@ -303,6 +305,46 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
             else if (0 == strcmp(ntype, "first_pts_decoded"))
             {
                GST_INFO("RECEIVED first_pts_decoded\n");
+               if ( TRUE == pSess->pendingSeek )
+               {
+                  GST_INFO("Executing delayed seek...\n");
+                  if( !gst_element_seek( pSess->pipeline,
+                           1.0,
+                           GST_FORMAT_TIME,
+                           GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
+                           GST_SEEK_TYPE_SET,
+                           (gint64)(pSess->pendingSeekPosition * GST_SECOND),
+                           GST_SEEK_TYPE_NONE,
+                           GST_CLOCK_TIME_NONE ))
+                  {
+                     GST_WARNING("Seek to Resume Position Failed\n");
+                  }
+                  else
+                  {
+                     GstState curState;
+                     //wait for the seek to complete
+                     gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
+                     GST_INFO("Seek to Resume Position Succeeded\n");
+                  }
+               }
+
+               if ( FALSE == pSess->pendingSeek )
+               {
+                  if( NULL != pSess->videoDecoder )
+                  {
+                     g_print("Unmuting video decoder...\n");
+                     g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", FALSE, NULL );
+                  }
+
+                  if( NULL != pSess->audioDecoder && pSess->rate == 1.0 )
+                  {
+                     g_print("Unmuting audio decoder...\n");
+                     g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", FALSE, NULL );
+                  }
+               }
+               else
+                  pSess->pendingSeek = FALSE;
+
                cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
                pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
             }
@@ -410,42 +452,6 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
             /* Print position and duration when in playing state */
             if( GST_STATE_PLAYING == new_state )
             {
-               if (TRUE == pSess->pendingSeek)
-               {
-                  GST_INFO("Executing delayed seek...\n");
-                  if( !gst_element_seek( pSess->pipeline,
-                           1.0,
-                           GST_FORMAT_TIME,
-                           GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
-                           GST_SEEK_TYPE_SET,
-                           (gint64)(pSess->pendingSeekPosition * GST_SECOND),
-                           GST_SEEK_TYPE_NONE,
-                           GST_CLOCK_TIME_NONE ))
-                  {
-                     GST_ERROR("Seek to Resume Position Failed\n");
-                  }
-                  else
-                  {
-                     GstState curState;
-                     //wait for the seek to complete
-                     gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
-                     usleep(1000000);
-                  }
-                  pSess->pendingSeek = FALSE;
-               }
-
-               if( NULL != pSess->videoDecoder )
-               {
-                  g_print("Unmuting video decoder...\n");
-                  g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", FALSE, NULL );
-               }
-
-               if( NULL != pSess->audioDecoder )
-               {
-                  g_print("Unmuting audio decoder...\n");
-                  g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", FALSE, NULL );
-               }
-
                //debug_cisco_gst_streamDurPos(pSess);
                if ( NULL == pSess->videoSink )
                {
@@ -1172,6 +1178,61 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    return stat;
 }
 
+static void cgmi_gst_have_type( GstElement *typefind, guint probability, GstCaps *caps, gpointer user_data )
+{
+   tSession *pSess = (tSession*)user_data;
+   gchar *caps_string;
+   GstElement *drmStreamParser = NULL;
+   GstElement *drmMgr = NULL;
+
+   g_print ("FOUND_TYPE\n");
+
+   if ( NULL == pSess )
+      return;
+
+   caps_string = gst_caps_to_string( caps );
+   if ( NULL != caps_string )
+   {
+      g_print("Caps: %s\n", caps_string);
+   }
+
+   if ( NULL != caps_string && NULL != g_strstr_len(caps_string, -1, VGDRM_CAPS) )
+   {
+      drmStreamParser = gst_element_factory_make("ciscvgdrmstreamparser", "drm-stream-parser");
+      if ( NULL == drmStreamParser )
+      {
+         GST_WARNING("Could not obtain a DRM stream parser element!\n");
+         return;
+      }
+      drmMgr = gst_element_factory_make("ciscdrmmgr", "drmmgr");
+      if ( NULL == drmMgr )
+      {
+         GST_WARNING("Could not obtain a DRM Manager element!\n");
+         gst_object_unref( GST_OBJECT(drmStreamParser) );
+         return;
+      }
+
+      gst_bin_add_many( GST_BIN (pSess->pipeline), drmStreamParser, drmMgr, NULL );
+
+      if ( TRUE != gst_element_link_many(typefind, drmStreamParser, drmMgr, pSess->demux, NULL) )
+      {
+         GST_WARNING("Could not link source to DRM streamer parser to DRM manager to demux\n");
+         return;
+      }
+
+      gst_element_set_state(drmStreamParser, GST_STATE_PLAYING);
+      gst_element_set_state(drmMgr, GST_STATE_PLAYING);
+   }
+   else
+   {
+      if ( TRUE != gst_element_link_many(typefind, pSess->demux, NULL) )
+      {
+         GST_WARNING("Could not link source to demux\n");
+         return;
+      }
+   }
+}
+
 static void cgmi_gst_pad_added( GstElement *element, GstPad *pad, gpointer data )
 {
    tSession *pSess = (tSession*)data;
@@ -1206,7 +1267,7 @@ static void cgmi_gst_pad_added( GstElement *element, GstPad *pad, gpointer data 
             {
                g_print("Could not link demux to decoder!\n");
             }           
-            gst_object_unref (sinkpad);            
+            gst_object_unref( sinkpad );
          }
          else if ( NULL != strstr(caps_string, "audio") )
          {
@@ -1216,7 +1277,7 @@ static void cgmi_gst_pad_added( GstElement *element, GstPad *pad, gpointer data 
             {
                g_print("Could not link demux to decoder!\n");
             }           
-            gst_object_unref (sinkpad);  
+            gst_object_unref( sinkpad );
          }
          g_free( caps_string );
       }
@@ -1453,7 +1514,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
       bisBroadcomHw = TRUE;
       g_print("Autoplugging on real broadcom hardware\n");
       g_strlcat(pPipeline, " flags= 0x63", 1024);
-      gst_object_unref(plugin);
+      gst_object_unref( plugin );
    }
 
    do
@@ -1468,12 +1529,13 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
          break;
       }
 
-      GST_INFO("Launching the pipeline with :\n%s\n", pPipeline);
-
       //Using manual pipeline saves at least 10% CPU cycles compared to playbin on Broadcom
       //Investigate how playbin performance can be improved
       if ( TRUE == bisDLNAContent )
       {
+         GST_INFO("Launching manual pipeline\n");
+
+         GstElement *typefind;
          g_free(pPipeline);
          pPipeline = NULL;
 
@@ -1484,6 +1546,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
          pSess->audioDecoder = gst_element_factory_make("brcmaudiodecoder", "audiodecoder");
          pSess->videoSink = gst_element_factory_make("brcmvideosink", "videosink");
          pSess->audioSink = gst_element_factory_make("brcmaudiosink", "audiosink");
+         typefind = gst_element_factory_make ("typefind", "typefind");
 
          if ( NULL == pSess->pipeline ||
               NULL == pSess->source ||
@@ -1491,29 +1554,32 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
               NULL == pSess->videoDecoder ||
               NULL == pSess->audioDecoder || 
               NULL == pSess->videoSink ||
-              NULL == pSess->audioSink )
-         {            
+              NULL == pSess->audioSink ||
+              NULL == typefind)
+         {
             if ( NULL != pSess->source )
-               gst_object_unref (GST_OBJECT (pSess->source));
+               gst_object_unref( GST_OBJECT(pSess->source) );
             if ( NULL != pSess->demux )
-               gst_object_unref (GST_OBJECT (pSess->demux));
+               gst_object_unref( GST_OBJECT(pSess->demux) );
             if ( NULL != pSess->videoDecoder )
-               gst_object_unref (GST_OBJECT (pSess->videoDecoder));
+               gst_object_unref( GST_OBJECT(pSess->videoDecoder) );
             if ( NULL != pSess->audioDecoder )
-               gst_object_unref (GST_OBJECT (pSess->audioDecoder));
+               gst_object_unref(GST_OBJECT(pSess->audioDecoder) );
             if ( NULL != pSess->audioSink )
-               gst_object_unref (GST_OBJECT (pSess->audioSink));
+               gst_object_unref( GST_OBJECT(pSess->audioSink) );
             stat = CGMI_ERROR_FAILED;
             break;
          }
+
          g_object_set( G_OBJECT (pSess->source), "uri", pSess->playbackURI, NULL );
          g_print("Muting video decoder...\n");
          g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", TRUE, NULL );
          g_print("Muting audio decoder...\n");
          g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", TRUE, NULL );
 
-         gst_bin_add_many( GST_BIN (pSess->pipeline), 
-                           pSess->source, 
+         gst_bin_add_many( GST_BIN (pSess->pipeline),
+                           pSess->source,
+                           typefind,
                            pSess->demux, 
                            pSess->videoDecoder, 
                            pSess->audioDecoder, 
@@ -1521,7 +1587,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
                            pSess->audioSink, 
                            NULL );
 
-         if ( TRUE != gst_element_link(pSess->source, pSess->demux) )
+         if ( TRUE != gst_element_link(pSess->source, typefind) )
          {
             GST_WARNING("Could not link source to demux\n");
             stat = CGMI_ERROR_FAILED;
@@ -1540,12 +1606,15 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
             break;
          }
 
+         g_signal_connect (G_OBJECT (typefind), "have_type", G_CALLBACK (cgmi_gst_have_type), pSess);
          g_signal_connect( pSess->demux, "pad-added", G_CALLBACK (cgmi_gst_pad_added), pSess );
          g_signal_connect( pSess->demux, "psi-info", G_CALLBACK(cgmi_gst_psi_info), pSess );
       }
 
       else
       {
+         GST_INFO("Launching the pipeline with :\n%s\n", pPipeline);
+
          pSess->pipeline = gst_parse_launch_full(pPipeline,
                                                  ctx,
                                                  GST_PARSE_FLAG_FATAL_ERRORS,
@@ -1673,12 +1742,12 @@ cgmi_Status cgmi_Unload  ( void *pSession )
          g_print ("Deleting pipeline\n");
          refcount = GST_OBJECT_REFCOUNT(pSess->pipeline);
          g_print ("Pipeline ref count on tear down is %d (should be 1)\n", refcount);
-         gst_object_unref (GST_OBJECT (pSess->pipeline));
+         gst_object_unref( GST_OBJECT(pSess->pipeline) );
          pSess->pipeline = NULL;
       }
       if (pSess->bus)
       {
-         gst_object_unref(GST_OBJECT (pSess->bus));
+         gst_object_unref( GST_OBJECT(pSess->bus) );
          pSess->bus = NULL;
       }
 
@@ -1787,8 +1856,9 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    }
    if (pSess->pendingSeek)
    {
-       pSess->pendingSeek = FALSE;
-       position = pSess->pendingSeekPosition * GST_SECOND;
+      GST_INFO("Executing pending seek in setRate...\n");
+      pSess->pendingSeek = FALSE;
+      position = pSess->pendingSeekPosition * GST_SECOND;
    }
    seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
                                     GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
@@ -1852,7 +1922,7 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
       g_print("Setting position to %f (ns), pipeline state: %d\n", (position* GST_SECOND), state);
 
       if ( state != GST_STATE_PLAYING )
-      {         
+      {
          g_print("Pipeline not playing yet, delaying seek...\n");
          pSess->pendingSeekPosition = position;
          pSess->pendingSeek = TRUE;
@@ -2494,7 +2564,7 @@ cgmi_Status cgmi_stopUserDataFilter( void *pSession, userDataBufferCB bufferCB )
 
    if ( NULL != pSess->userDataAppsinkPad )
    {
-      gst_object_unref ( pSess->userDataAppsinkPad );
+      gst_object_unref( pSess->userDataAppsinkPad );
    }
 
    pSess->userDataBufferCB = NULL;
@@ -2700,7 +2770,7 @@ cgmi_Status cgmi_SetLogging(const char *gstDebugStr)
       else
       {
          if (parse_debug_level (*walk, &level))
-         {        
+         {
            gst_debug_set_default_threshold (level);
          }
       }
