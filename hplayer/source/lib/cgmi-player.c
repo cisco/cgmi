@@ -996,11 +996,11 @@ cgmi_Status cgmi_Init(void)
       //g_message("major = %u, minor =%u, macro=%u, nano=%u\n", major, minor, micro, nano);
       if(major >= 1)
       {
-         cgmi_SetLogging("dlnasrc:2,ciscdemux:4");
+         cgmi_SetLogging("cgmi:2,dlnasrc:2,ciscdemux:4");
       }
       else
       {
-         cgmi_SetLogging("dlnasrc:2,ciscdemux:3");
+         cgmi_SetLogging("cgmi:2,dlnasrc:2,ciscdemux:3");
       }
 
       //intialize the diag subsytem
@@ -1295,7 +1295,6 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    gchar                *pPipeline;
    cgmi_Status          stat = CGMI_ERROR_SUCCESS;
    GSource              *source;
-   uint32_t             bisDLNAContent = FALSE;
    uint32_t             bisBroadcomHw = FALSE;
    int                  drmStatus = 1;
 #ifdef USE_DRMPROXY
@@ -1338,13 +1337,14 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    pSess->rateBeforePause = 0.0;
    pSess->pendingSeek = FALSE;
    pSess->pendingSeekPosition = 0.0;
+   pSess->bisDLNAContent = FALSE;
 
    // 
    // check to see if this is a DLNA url.
    //
    if (0 == strncmp(uri, "http", 4))
    {
-      stat = cgmi_utils_is_content_dlna(uri, &bisDLNAContent);
+      stat = cgmi_utils_is_content_dlna(uri, &pSess->bisDLNAContent);
       if(CGMI_ERROR_SUCCESS != stat)
       {
          g_free(pPipeline);
@@ -1353,7 +1353,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
       }
    }
    
-   if (bisDLNAContent == TRUE)
+   if (pSess->bisDLNAContent == TRUE)
    {
       //for the gstreamer pipeline to autoplug we have to add
       //dlna+ to the protocol.
@@ -1531,7 +1531,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
 
       //Using manual pipeline saves at least 10% CPU cycles compared to playbin on Broadcom
       //Investigate how playbin performance can be improved
-      if ( TRUE == bisDLNAContent )
+      if ( TRUE == pSess->bisDLNAContent )
       {
          GST_INFO("Launching manual pipeline\n");
 
@@ -1663,7 +1663,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
       g_source_set_callback(pSess->sourceWatch, (GSourceFunc)cisco_gst_handle_msg, pSess, NULL);
       g_source_attach(pSess->sourceWatch, pSess->thread_ctx);
 
-      if (bisDLNAContent == FALSE || bisBroadcomHw == FALSE)
+      if (pSess->bisDLNAContent == FALSE || bisBroadcomHw == FALSE)
       {
          g_signal_connect( pSess->pipeline, "element-added",
             G_CALLBACK(cgmi_gst_element_added), pSess );
@@ -1807,6 +1807,8 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    GstEvent *seek_event=NULL;
    gint64 position;
    GstState  curState;
+   gboolean is_live = FALSE;
+   gboolean in_tsb = FALSE;
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
@@ -1823,6 +1825,19 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
 #endif
 
    gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
+   
+   /* Obtain the current position, needed for the seek event before a flush.
+    * Position returned is sometimes incorrect after a flush
+    */
+#if GST_CHECK_VERSION(1,0,0)
+   if (!gst_element_query_position (pSess->pipeline, format, &position))
+#else
+   if (!gst_element_query_position (pSess->pipeline, &format, &position))
+#endif
+   {
+      GST_ERROR ("Unable to retrieve current position.\n");
+      return CGMI_ERROR_FAILED;
+   }
 
    if (rate == 0.0)
    {
@@ -1833,33 +1848,48 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    }
    else if (curState == GST_STATE_PAUSED)
    {
-      //If rate before pause was 1x (i.e., 1x->0x->1x), just unpause
-      //and return. Otherwise, unpause first and continue to set the new
-      //trick rate below
-      cisco_gst_setState( pSess, GST_STATE_PLAYING );
-      if(rate == pSess->rateBeforePause && rate == 1.0)
+      /* if not (nx->0x->nx) then unpause and seek to set the new trick rate.
+       * else if (nx-0x->nx)
+       *   if 1x and live and not playing from TSB then
+       *      flush, unpause and seek to the pause pos to switch to TSB with rate 1x.
+       *   else just unpause and return.
+       */
+      
+      if(rate == pSess->rateBeforePause)
       {
-         pSess->rate = rate;
-         return stat;
+         if(TRUE == pSess->bisDLNAContent)
+         {
+            g_object_get(pSess->source, "is-live", &is_live, NULL);
+            g_object_get(pSess->source, "in-tsb", &in_tsb, NULL);
+         }
+
+         /* The switch to TSB logic is implement here instead of dlnasrc because
+          * dlnasrc cannot differentiate pause/unpause from pipeline state transition 
+          */
+         if((1.0 == rate) && (TRUE == is_live) && (FALSE == in_tsb))
+         {
+            GST_WARNING("Switching to TSB by seeking to the pause pos: %lld at 1x\n", position);
+            /* Flush to avoid displaying few more frames before the seek to pause pos */
+            cgmi_flush_pipeline(pSess);
+         }
+         else
+         {
+            cisco_gst_setState( pSess, GST_STATE_PLAYING );
+            pSess->rate = rate;
+            return stat;
+         }
       }
+      /* Go to playing state for non 0x speed */
+      cisco_gst_setState( pSess, GST_STATE_PLAYING );
    }
 
-   /* Obtain the current position, needed for the seek event */
-#if GST_CHECK_VERSION(1,0,0)
-   if (!gst_element_query_position (pSess->pipeline, format, &position))
-#else
-   if (!gst_element_query_position (pSess->pipeline, &format, &position))
-#endif
-   {
-      GST_ERROR ("Unable to retrieve current position.\n");
-      return CGMI_ERROR_FAILED;
-   }
    if (pSess->pendingSeek)
    {
       GST_INFO("Executing pending seek in setRate...\n");
       pSess->pendingSeek = FALSE;
       position = pSess->pendingSeekPosition * GST_SECOND;
    }
+   
    seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
                                     GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
    if (seek_event)
@@ -1878,11 +1908,6 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
          {
             GST_WARNING("Muting audio decoder...\n");
             g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", TRUE, NULL );
-
-            if(curState == GST_STATE_PAUSED)
-            {
-               cisco_gst_setState( pSess, GST_STATE_PLAYING );
-            }
          }
          else
          {

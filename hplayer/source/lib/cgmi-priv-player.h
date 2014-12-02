@@ -96,6 +96,7 @@ typedef struct
    unsigned int       diagIndex;
    gboolean           pendingSeek;
    float              pendingSeekPosition;
+   gboolean           bisDLNAContent;
 
 }tSession;
 
