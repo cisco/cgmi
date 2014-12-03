@@ -341,12 +341,12 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                      g_print("Unmuting audio decoder...\n");
                      g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", FALSE, NULL );
                   }
+
+                  cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
+                  pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );                  
                }
                else
                   pSess->pendingSeek = FALSE;
-
-               cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
-               pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
             }
             else if (0 == strcmp(ntype, "stream_attrib_changed"))
             {
