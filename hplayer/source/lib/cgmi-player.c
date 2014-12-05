@@ -111,7 +111,7 @@ static void cgmi_flush_pipeline(tSession *pSess)
          break;
       }
 
-      if(NULL != pSess->demux)
+      if(NULL != pSess->pipeline)
       {
          flushStart = gst_event_new_flush_start();
 #if GST_CHECK_VERSION(1,0,0)
@@ -120,13 +120,13 @@ static void cgmi_flush_pipeline(tSession *pSess)
          flushStop = gst_event_new_flush_stop();
 #endif
 
-         ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStart);
+         ret = gst_element_send_event(GST_ELEMENT(pSess->pipeline), flushStart);
          if(FALSE == ret)
          {
             GST_ERROR("Failed to send flush start event!\n");
          }
 
-         ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStop);
+         ret = gst_element_send_event(GST_ELEMENT(pSess->pipeline), flushStop);
          if(FALSE == ret)
          {
             GST_ERROR("Failed to send flush stop event\n"); 
@@ -227,28 +227,10 @@ gpointer cgmi_monitor( gpointer data )
          {
             if ( videoPts - audioPts > PTS_FLUSH_THRESHOLD || videoPts - audioPts < -PTS_FLUSH_THRESHOLD )
             {
-               gboolean ret = FALSE; 
-               GstEvent *flushStart, *flushStop; 
-
                g_print("Flushing buffers due to large audio-video PTS difference...\n");
                g_print("videoPts = %lld, audioPts = %lld, diff = %lld\n", videoPts, audioPts, videoPts - audioPts);
 
-               if ( NULL != pSess->demux )
-               {
-                  flushStart = gst_event_new_flush_start(); 
-#if GST_CHECK_VERSION(1,0,0)
-                  flushStop = gst_event_new_flush_stop(FALSE); 
-#else
-                  flushStop = gst_event_new_flush_stop(); 
-#endif
-
-                  ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStart); 
-                  if ( FALSE == ret) 
-                     GST_WARNING("Failed to send flush start event!\n"); 
-                  ret = gst_element_send_event(GST_ELEMENT(pSess->demux), flushStop); 
-                  if ( FALSE == ret) 
-                     GST_WARNING("Failed to send flush stop event\n"); 
-               }
+               cgmi_flush_pipeline( pSess );
             }
          }
       }
