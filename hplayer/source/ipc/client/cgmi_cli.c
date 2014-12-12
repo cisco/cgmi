@@ -832,12 +832,6 @@ int main(int argc, char **argv)
                     if ( c == 0x42 )    /* Down */
                     {
                         cur_history++;
-#if 0
-                        if ( cur_history >= history_depth )
-                        {
-                            cur_history = history_depth - 1;
-                        }
-#endif
                         if ( cur_history >= MAX_HISTORY )
                         {
                             cur_history = MAX_HISTORY - 1;
@@ -952,22 +946,21 @@ int main(int argc, char **argv)
 					printf( "\tplay <url> <autoplay> <drmType> <cpBlob>\n" );
                     continue;
 				  }
-			   }/*
+			   }
+               /*
 			   arg2++;
 			   if ( *arg2!=0 )
 			   {
-			   //cp blob 
-			   arg2++;
+			        //cp blob 
+			        arg2++;
 			   
-	//cp_Blob_Struct.drmType=VGDRM;
-	cp_Blob_Struct.bloblength=strlen(arg2);
-	memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
-	memcpy(cp_Blob_Struct.cpBlob,arg2,cp_Blob_Struct.bloblength);
-	p_Cp_Blob_Struct=&cp_Blob_Struct;
-			   
-			   
-			   }*/
-				
+	                //cp_Blob_Struct.drmType=VGDRM;
+	                cp_Blob_Struct.bloblength=strlen(arg2);
+	                memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+	                memcpy(cp_Blob_Struct.cpBlob,arg2,cp_Blob_Struct.bloblength);
+	                p_Cp_Blob_Struct=&cp_Blob_Struct;
+			   }
+               */
             }
 
             if (playing)
