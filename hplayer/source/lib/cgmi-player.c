@@ -1852,7 +1852,8 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
          {
             GST_WARNING("Switching to TSB by seeking to the pause pos: %lld at 1x\n", position);
             /* Flush to avoid displaying few more frames before the seek to pause pos */
-            cgmi_flush_pipeline(pSess);
+            /* TODO - Uncomment when we are able to send events to and from the source plugin in paused state */
+            //cgmi_flush_pipeline(pSess);
          }
          else
          {
