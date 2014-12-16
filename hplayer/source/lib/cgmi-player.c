@@ -372,6 +372,11 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                 }
                 pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_CHANGED_RATE, (uint64_t)rate );
             }
+            else if (0 == strcmp(ntype, "tsb_start_near_pause_position"))
+            {
+               GST_INFO("RECEIVED tsb_start_near_pause_position - sending EOS to app");
+               pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_END_OF_STREAM, 0);
+            }
             /* BOF/BOS/EOF should be treated as EOS since gstreamer treats all these conditions EOS */
 #if 0
             else if (0 == strcmp(ntype, "BOF"))
