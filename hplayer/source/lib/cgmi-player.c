@@ -1859,7 +1859,15 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
             /* Flush to avoid displaying few more frames before the seek to pause pos */
             cgmi_flush_pipeline(pSess);
          }
-         else
+         //If the rate before pause was 1.0, we just want to unpause and return
+         //because otherwise we will execute a seek following unpause and it will cause an
+         //unnecessary flush and position skip. Note that we need to execute the seek for any
+         //rate other than 1.0 even if the rate stays the same before and after pause. This is
+         //because some elements in the pipeline may reset their internal rate state going through
+         //pause (such as HLS plugin element which resets its internal rate to 0x on pause) and
+         //we want to restore internal rate state of such elements to the rate we had before pause
+         //by executing the seek below
+         else if (1.0 == rate)
          {
             cisco_gst_setState( pSess, GST_STATE_PLAYING );
             pSess->rate = rate;
