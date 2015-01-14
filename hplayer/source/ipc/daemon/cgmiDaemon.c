@@ -2100,6 +2100,42 @@ on_handle_cgmiDiags_reset_timing_metrics (
     return TRUE;
 }
 
+static gboolean
+on_handle_cgmi_get_tsb_slide (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    unsigned long tsbSlide = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    //CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetTsbSlide( (void *)pSession, &tsbSlide );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_get_tsb_slide ( object,
+                                            invocation,
+                                            tsbSlide,
+                                            retStat );
+
+    return TRUE;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS setup callbacks
 ////////////////////////////////////////////////////////////////////////////////
@@ -2320,6 +2356,11 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-reset-timing-metrics",
                       G_CALLBACK (on_handle_cgmiDiags_reset_timing_metrics),
+                      NULL);
+    
+    g_signal_connect (interface,
+                      "handle-get-tsb-slide",
+                      G_CALLBACK (on_handle_cgmi_get_tsb_slide),
                       NULL);
 
     if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (interface),

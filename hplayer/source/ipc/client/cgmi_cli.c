@@ -667,6 +667,8 @@ void help(void)
             "\n"
            "\tresettimingentry\n"
            "\n"
+           "\tgettsbslide\n"
+           "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)> [<1><drmType for url #1><cpBlob for url #1>] [<2><drmType for url #2><cpBlob for url #2>]\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
@@ -756,6 +758,8 @@ int main(int argc, char **argv)
 
     tMets_getDefaultUrl(&gDefaultPostUrl);
 #endif // TMET_ENABLED
+
+    unsigned long tsbSlide = 0;
 
     /* Init CGMI. */
     retCode = cgmi_Init();
@@ -1176,9 +1180,6 @@ int main(int argc, char **argv)
                 {
                     case LIVE:
                         printf( "LIVE\n" );
-                        break;
-                    case TSB:
-                        printf( "TSB\n" );
                         break;
                     case FIXED:
                         printf( "FIXED\n" );
@@ -1992,6 +1993,18 @@ int main(int argc, char **argv)
         else if (strncmp(command, "quit", 4) == 0)
         {
             quit = 1;
+        }
+        else if (strncmp(command, "gettsbslide", 20) == 0)
+        {
+            retCode = cgmi_GetTsbSlide(pSessionId, &tsbSlide);
+            if (CGMI_ERROR_SUCCESS == retCode)
+            {
+                printf( "TSBSlide: %lu\n", tsbSlide );
+            }
+            else
+            {
+               printf("CGMI GetTsbSlide Failed\n");
+            }
         }
         /* unknown */
         else

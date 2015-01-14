@@ -2936,3 +2936,59 @@ cgmi_Status cgmiDiags_ResetTimingMetrics (void)
 
     return retStat;
 }
+
+cgmi_Status cgmi_GetTsbSlide( void *pSession, unsigned long *pTsbSlide )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    guint32 tsbSlide = 0;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( pSession == NULL || pTsbSlide == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_get_tsb_slide_sync( gProxy,
+                                                dbusVar,
+                                                &tsbSlide,
+                                                (gint *)&retStat,
+                                                NULL,
+                                                &error );
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    *pTsbSlide = tsbSlide;
+
+    return retStat;
+}

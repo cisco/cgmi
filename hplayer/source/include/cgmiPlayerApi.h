@@ -100,7 +100,6 @@ typedef enum
 typedef enum
 {
    LIVE,                                  ///<This is a Live stream 
-   TSB,                                   ///<This is a time shift buffer 
    FIXED,                                 ///<This is a normal stram or file  
    cgmi_Session_Type_UNKNOWN
 
@@ -886,6 +885,22 @@ cgmi_Status cgmi_SetPidInfo( void *pSession, int index, tcgmi_StreamType type, i
  *
  */
 cgmi_Status cgmi_SetLogging ( const char *gstDebugStr);
+
+/**
+ *  \brief \b cgmi_GetTsbSlide
+ *
+ *	 Returns how much the TSB has slided in seconds
+ *
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[out] pTsbSlide  How much the TSB has slided in seconds
+ *
+ *  \return                  CGMI_ERROR_SUCCESS when call succeeds.
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetTsbSlide(void *pSession, unsigned long *pTsbSlide);
 
 
 /**

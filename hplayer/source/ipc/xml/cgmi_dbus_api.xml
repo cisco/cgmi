@@ -269,6 +269,12 @@
          <method name="resetTimingMetrics">
             <arg name="status" direction="out" type="i"/>
         </method>
+        
+        <method name="getTsbSlide">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="position" direction="out" type="u"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
 
 	<property name="Verbose" type="b" access="readwrite"/>
     </interface>

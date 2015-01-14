@@ -2009,14 +2009,13 @@ cgmi_Status cgmi_GetDuration (void *pSession, float *pDuration, cgmi_SessionType
    cgmi_Status stat = CGMI_ERROR_SUCCESS;
    gint64 Duration = 0;
    GstFormat gstFormat = GST_FORMAT_TIME;
+   gboolean is_live = FALSE;
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
       g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
-
-   *type = FIXED;
 
    do
    {
@@ -2029,6 +2028,20 @@ cgmi_Status cgmi_GetDuration (void *pSession, float *pDuration, cgmi_SessionType
       GST_INFO("Stream: %s\n", pSess->playbackURI );
       GST_INFO("Position: %lld (seconds)\n", (Duration/GST_SECOND) );
       *pDuration = (float)(Duration/GST_SECOND);
+      
+      if(TRUE == pSess->bisDLNAContent)
+      {
+         g_object_get(pSess->source, "is-live", &is_live, NULL);
+      }
+
+      if(TRUE == is_live)
+      {
+         *type = LIVE;
+      }
+      else
+      {
+         *type = FIXED;
+      }
 
    } while (0);
    return stat;
@@ -2797,5 +2810,49 @@ cgmi_Status cgmi_SetLogging(const char *gstDebugStr)
    }
 
    g_strfreev (split);
+   return stat;
+}
+
+cgmi_Status cgmi_GetTsbSlide(void *pSession, unsigned long *pTsbSlide)
+{
+   cgmi_Status   stat = CGMI_ERROR_FAILED;
+   gboolean is_live = FALSE;
+   tSession *pSess = (tSession*)pSession;
+
+   do 
+   {
+      if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+      {
+         g_print("%s:Invalid session handle\n", __FUNCTION__);
+         stat = CGMI_ERROR_INVALID_HANDLE;
+         break;
+      }
+
+      if(NULL == pTsbSlide)
+      {
+         g_print("%s: pTsbSlide param is NULL\n", __FUNCTION__);
+         stat = CGMI_ERROR_BAD_PARAM;
+         break;
+      }   
+
+      if(TRUE == pSess->bisDLNAContent)
+      {
+         g_object_get(pSess->source, "is-live", &is_live, NULL);
+         if(FALSE == is_live)
+         {
+            stat = CGMI_ERROR_NOT_SUPPORTED;
+            break;
+         }
+         g_object_get(pSess->source, "tsb-slide", pTsbSlide, NULL);
+      
+         stat = CGMI_ERROR_SUCCESS;
+      }
+      else
+      {
+         stat = CGMI_ERROR_NOT_SUPPORTED;
+         break;
+      }
+   }while(0);
+
    return stat;
 }
