@@ -93,6 +93,7 @@ typedef enum
    NOTIFY_CHANGED_LANGUAGE_TELETEXT,      ///<The teletext language has changed.
    NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE,   ///<The requested URL could not be opened. 
    NOTIFY_CHANGED_RATE,                   ///<The playback rate has changed.
+   NOTIFY_DECODE_ERROR,                   ///<Decoder issued errors.
    NOTIFY_MEDIAPLAYER_UNKNOWN             ///<An unexpected error has occured. 
 
 }tcgmi_Event; 

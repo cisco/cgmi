@@ -609,9 +609,13 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
         case NOTIFY_CHANGED_RATE:
             printf("NOTIFY_CHANGED_RATE: %d", (gint) code);
             break;
+        case NOTIFY_DECODE_ERROR:
+            printf("NOTIFY_DECODE_ERROR");
+            break;
         case NOTIFY_MEDIAPLAYER_UNKNOWN:
             printf("NOTIFY_MEDIAPLAYER_UNKNOWN");
             break;
+        
         default:
             printf("UNKNOWN");
             break;

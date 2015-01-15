@@ -26,14 +26,19 @@
 GST_DEBUG_CATEGORY_STATIC (cgmi);
 #define GST_CAT_DEFAULT cgmi
 
-#define INVALID_INDEX      -2
+#define INVALID_INDEX                  -2
 
-#define PTS_FLUSH_THRESHOLD     (10 * 45000) //10 secs
-#define DEFAULT_BLOCKSIZE       65536  //Large buffers increase temporary memory pressure since they may
-                                       //get queued up in the demux. It also increases channel change time.
-                                       //Therefore, don't set this to more than needed
+#define PTS_FLUSH_THRESHOLD            (10 * 45000) //10 secs
+#define PTS_ERROR_COUNT_THRESHOLD      20
+#define VIDEO_DECODE_DROPS_THRESHOLD   20
+#define VIDEO_DECODE_ERRORS_THRESHOLD  20
+#define ERROR_WINDOW_SIZE              5
 
-#define GST_DEBUG_STR_MAX_SIZE  256
+#define DEFAULT_BLOCKSIZE              65536  //Large buffers increase temporary memory pressure since they may
+                                              //get queued up in the demux. It also increases channel change time.
+                                              //Therefore, don't set this to more than needed
+
+#define GST_DEBUG_STR_MAX_SIZE         256
 
 #define VGDRM_CAPS   "application/x-vgdrm-live-client"
 
@@ -203,6 +208,18 @@ void debug_cisco_gst_streamDurPos( tSession *pSess )
 gpointer cgmi_monitor( gpointer data )
 {
    gint64 videoPts, audioPts;
+   guint videoPtsErrors;
+   guint videoDecodeDrops;
+   guint videoDecodeErrors;
+   guint audioPtsErrors;
+
+   guint videoPtsErrorsPrev = 0;
+   guint videoDecodeDropsPrev = 0;
+   guint videoDecodeErrorsPrev = 0;
+   guint audioPtsErrorsPrev = 0;
+   guint errorWindow = 0;
+
+   gboolean flushDone = FALSE;
    tSession *pSess = (tSession*)data;
    if ( NULL == pSess )
       return NULL;
@@ -216,13 +233,22 @@ gpointer cgmi_monitor( gpointer data )
 
          if ( NULL != pSess->videoDecoder )
          {
-            g_object_get( pSess->videoDecoder, "video_pts", &videoPts, NULL );
+            g_object_get( pSess->videoDecoder, 
+                          "video_pts", &videoPts, 
+                          "video_pts_errors", &videoPtsErrors,
+                          "video_decode_errors", &videoDecodeErrors,
+                          "video_decode_drops", &videoDecodeDrops, 
+                          NULL);
          }
          if ( NULL != pSess->audioDecoder )
          {
-            g_object_get( pSess->audioDecoder, "audio_pts", &audioPts, NULL );
+            g_object_get( pSess->audioDecoder, 
+                          "audio_pts", &audioPts, 
+                          "audio_pts_errors", &audioPtsErrors,
+                          NULL );
          }
 
+         flushDone = FALSE;
          if ( videoPts > 0 && audioPts > 0 )
          {
             if ( videoPts - audioPts > PTS_FLUSH_THRESHOLD || videoPts - audioPts < -PTS_FLUSH_THRESHOLD )
@@ -231,7 +257,50 @@ gpointer cgmi_monitor( gpointer data )
                g_print("videoPts = %lld, audioPts = %lld, diff = %lld\n", videoPts, audioPts, videoPts - audioPts);
 
                cgmi_flush_pipeline( pSess );
+               flushDone = TRUE;
+               //reset error window
+               errorWindow = ERROR_WINDOW_SIZE;
             }
+         }
+         if ( FALSE == flushDone )
+         {
+            if ( (gint)videoPtsErrors - (gint)videoPtsErrorsPrev > PTS_ERROR_COUNT_THRESHOLD ||
+                 (gint)audioPtsErrors - (gint)audioPtsErrorsPrev > PTS_ERROR_COUNT_THRESHOLD ||
+                 (gint)videoDecodeDrops - (gint)videoDecodeDropsPrev > VIDEO_DECODE_DROPS_THRESHOLD ||
+                 (gint)videoDecodeErrors - (gint)videoDecodeErrorsPrev > VIDEO_DECODE_ERRORS_THRESHOLD )
+            {
+               g_print("Decoder error threshold reached within %d ms", errorWindow * 1000);
+
+               g_print("videoPtsErrors = %u (prev = %u, diff = %u)\n", videoPtsErrors, videoPtsErrorsPrev, videoPtsErrors - videoPtsErrorsPrev);               
+               g_print("videoDecodeErrors = %u (prev = %u, diff = %u)\n", videoDecodeErrors, videoDecodeErrorsPrev, videoDecodeErrors - videoDecodeErrorsPrev);
+               g_print("videoDecodeDrops = %u (prev = %u, diff = %u)\n", videoDecodeDrops, videoDecodeDropsPrev, videoDecodeDrops - videoDecodeDropsPrev);
+               g_print("audioPtsErrors = %u (prev = %u, diff = %u)\n", audioPtsErrors, audioPtsErrorsPrev, audioPtsErrors - audioPtsErrorsPrev);
+               
+               g_print("Flushing buffers due to decode errors...\n");
+               pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_DECODE_ERROR, 0);
+               cgmi_flush_pipeline( pSess );
+               flushDone = TRUE;
+               //reset error window
+               errorWindow = ERROR_WINDOW_SIZE;
+            }
+
+            if ( videoPtsErrors > videoPtsErrorsPrev )
+               g_print("videoPtsErrors = %u (prev = %u, diff = %u)\n", videoPtsErrors, videoPtsErrorsPrev, videoPtsErrors - videoPtsErrorsPrev);
+            if ( audioPtsErrors > audioPtsErrorsPrev )
+               g_print("audioPtsErrors = %u (prev = %u, diff = %u)\n", audioPtsErrors, audioPtsErrorsPrev, audioPtsErrors - audioPtsErrorsPrev);
+            if ( videoDecodeDrops > videoDecodeDropsPrev )
+               g_print("videoDecodeDrops = %u (prev = %u, diff = %u)\n", videoDecodeDrops, videoDecodeDropsPrev, videoDecodeDrops - videoDecodeDropsPrev);
+            if ( videoDecodeErrors > videoDecodeErrorsPrev )
+               g_print("videoDecodeErrors = %u (prev = %u, diff = %u)\n", videoDecodeErrors, videoDecodeErrorsPrev, videoDecodeErrors - videoDecodeErrorsPrev);
+         }
+
+         if ( errorWindow++ >= ERROR_WINDOW_SIZE )
+         {
+            videoPtsErrorsPrev = videoPtsErrors;
+            audioPtsErrorsPrev = audioPtsErrors;
+            videoDecodeDropsPrev = videoDecodeDrops;
+            videoDecodeErrorsPrev = videoDecodeErrors;
+            errorWindow = 0;
          }
       }
       g_usleep(1000000);
