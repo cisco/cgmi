@@ -97,6 +97,8 @@ typedef struct
    gboolean           pendingSeek;
    float              pendingSeekPosition;
    gboolean           bisDLNAContent;
+   gboolean           steadyState;
+   guint              steadyStateWindow;
 
 }tSession;
 
