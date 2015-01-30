@@ -93,12 +93,14 @@ typedef struct
    uint64_t           drmProxyHandle;
    float              rate;
    float              rateBeforePause;
+   float              rateAfterPause;
    unsigned int       diagIndex;
    gboolean           pendingSeek;
    float              pendingSeekPosition;
    gboolean           bisDLNAContent;
    gboolean           steadyState;
    guint              steadyStateWindow;
+   gboolean           maskRateChangedEvent;
 
 }tSession;
 

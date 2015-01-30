@@ -492,7 +492,12 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                     GST_WARNING("Failed to get new rate, returning 0");
                     rate = 0;
                 }
-                pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_CHANGED_RATE, (uint64_t)rate );
+                if(!((TRUE == pSess->maskRateChangedEvent) && (rate != pSess->rateAfterPause)))
+                {
+                   pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_CHANGED_RATE, (uint64_t)rate );
+                }
+                pSess->maskRateChangedEvent = FALSE;
+                pSess->rateAfterPause = 0.0;
             }
             else if (0 == strcmp(ntype, "tsb_start_near_pause_position"))
             {
@@ -1449,6 +1454,8 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    pSess->bisDLNAContent = FALSE;
    pSess->steadyState = TRUE;
    pSess->steadyStateWindow = 0;
+   pSess->rateAfterPause = 0.0;
+   pSess->maskRateChangedEvent = FALSE;
 
    // 
    // check to see if this is a DLNA url.
@@ -1997,6 +2004,17 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
             pSess->rate = rate;
             return stat;
          }
+      }
+      else
+      {
+         /* We have to put the pipeline in playing state before sending a seek to transition to the 
+          * new requested play speed. On pause to play transition, a rate changed event with
+          * rateBeforePause is sent by the pipeline followed by an another rate changed event with 
+          * the request rate when it handles the seek event to transition to the new requested play 
+          * speed. So mask the unexpected rate changed event with rateBeforePause.
+          */
+         pSess->maskRateChangedEvent = TRUE;
+         pSess->rateAfterPause = rate;
       }
       /* Go to playing state for non 0x speed */
       cisco_gst_setState( pSess, GST_STATE_PLAYING );
