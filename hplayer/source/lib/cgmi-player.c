@@ -1960,7 +1960,11 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    if (rate == 0.0)
    {
       cisco_gst_setState( pSess, GST_STATE_PAUSED );
-      pSess->rateBeforePause = pSess->rate;
+      /* For example: nx->0x->0x->nx */
+      if(0.0 != pSess->rate)
+      {
+         pSess->rateBeforePause = pSess->rate;
+      }
       pSess->rate = rate;
       return stat;
    }
