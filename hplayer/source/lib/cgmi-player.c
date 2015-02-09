@@ -1816,6 +1816,9 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
       }
    }
 
+   /* Set state to paused to create pipeline. */
+   cisco_gst_setState( pSess, GST_STATE_PAUSED );
+
    return stat;
 }
 

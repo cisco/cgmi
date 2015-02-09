@@ -167,8 +167,8 @@ static void updateCurrentPlaySrcUrl(char *src)
     }
 }
 
-/* Play Command */
-static cgmi_Status play(void *pSessionId, char *src, int autoPlay,cpBlobStruct * cpblob)
+/* Load Command */
+static cgmi_Status load(void *pSessionId, char *src, cpBlobStruct * cpblob)
 {   
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
@@ -192,15 +192,39 @@ static cgmi_Status play(void *pSessionId, char *src, int autoPlay,cpBlobStruct *
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI Load failed: %s\n", cgmi_ErrorString(retCode) );
-    } else {
-        /* Play the URL if load succeeds. */
-        gAutoPlay = autoPlay;
-        retCode = cgmi_Play( pSessionId, autoPlay );
-        if (retCode != CGMI_ERROR_SUCCESS)
-        {
-            printf("CGMI Play failed: %s\n", cgmi_ErrorString(retCode) );
-        }
     }
+
+    return retCode;
+}
+
+
+static cgmi_Status setstate_play(void *pSessionId, int autoPlay)
+{
+    cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+
+    /* Play the URL if load succeeds. */
+    gAutoPlay = autoPlay;
+    retCode = cgmi_Play( pSessionId, autoPlay );
+    if (retCode != CGMI_ERROR_SUCCESS)
+    {
+        printf("CGMI Play failed: %s\n", cgmi_ErrorString(retCode) );
+    }
+
+    return retCode;
+}
+
+/* Play Command */
+static cgmi_Status play(void *pSessionId, char *src, int autoPlay, cpBlobStruct * cpblob)
+{   
+    cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+
+    retCode = load(pSessionId, src, cpblob);
+    if ( retCode != CGMI_ERROR_SUCCESS )
+    {
+        return retCode;
+    }
+
+    retCode = setstate_play(pSessionId, autoPlay);
 
     return retCode;
 }
@@ -211,7 +235,7 @@ static cgmi_Status resume(void *pSessionId, char *src, float resumePosition, int
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
     /* First load the URL. */
-    retCode = cgmi_Load( pSessionId, src,cpblob );
+    retCode = load(pSessionId, src, cpblob);
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI Load failed\n");
@@ -231,7 +255,7 @@ static cgmi_Status resume(void *pSessionId, char *src, float resumePosition, int
         {
             /* Play the URL. */
             gAutoPlay = autoPlay;
-            retCode = cgmi_Play( pSessionId, autoPlay );
+            retCode = setstate_play(pSessionId, autoPlay);
             if (retCode != CGMI_ERROR_SUCCESS)
             {
                 printf("CGMI Play failed\n");
@@ -246,6 +270,7 @@ static cgmi_Status resume(void *pSessionId, char *src, float resumePosition, int
 static cgmi_Status stop(void *pSessionId)
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+
 #ifdef TMET_ENABLED
     {
         unsigned long long curTime;
@@ -628,6 +653,8 @@ void help(void)
 {
     printf( "Supported commands:\n"
             "Single APIs:\n"
+           "\tload <url> Or load <url> <drmType> <cpBlob>\n"
+           "\tsetstate_play [autoplay]\n"
            "\tplay <url> [autoplay]  Or play <url> <autoplay> <drmType> <cpBlob>\n"
            "\tresume <url> <position (seconds) (float)> [autoplay] Or resume  <url> <position (seconds) (float)> <autoplay> <drmType> <cpBlob>\n"
            "\tstop (or unload)\n"
@@ -913,8 +940,87 @@ int main(int argc, char **argv)
             }
         }
 
+        /* load */
+        if (strncmp(command, "load", 4) == 0)
+        {
+			char *arg3;
+			char *arg4;
+
+            if ( strlen( command ) <= 5 )
+            {
+                printf( "\tload <url> Or load <url> <drmType> <cpBlob>\n" );
+                continue;
+            }
+            strncpy( arg, command + 5, strlen(command) - 5 );
+            arg[strlen(command) - 5] = '\0';
+
+ 		    arg3 = strchr( arg, ' ' );
+			if (arg3) //drm_type_for cp blob(next param)
+			{
+			  arg3++;
+			  cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( arg3 );
+			  arg4 = strchr( arg3, ' ' ); 
+              if (arg4) //cp blob				  
+			  {
+				arg4++;
+				cp_Blob_Struct.bloblength=strlen(arg4);
+				memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+				memcpy(cp_Blob_Struct.cpBlob,arg4,cp_Blob_Struct.bloblength);
+				p_Cp_Blob_Struct=&cp_Blob_Struct;
+			  }
+			  else
+			  {
+				printf( "\tload <url> <drmType> <cpBlob>\n" );
+                continue;
+			  }
+			}
+
+            /* Check First */
+            printf("Checking if we can play this...");
+            retCode = cgmi_canPlayType( arg, &pbCanPlay );
+
+            if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
+            {
+                printf( "cgmi_canPlayType Not Implemented\n" );
+                printf( "Playing \"%s\"...\n", arg );
+                retCode = load(pSessionId, arg, p_Cp_Blob_Struct);
+                if ( retCode == CGMI_ERROR_SUCCESS )
+                {
+                    playing = 1;
+                }
+            } else if ( !retCode && pbCanPlay )
+            {
+                printf( "Yes\n" );
+                printf( "Playing \"%s\"...\n", arg );
+                retCode = load(pSessionId, arg, p_Cp_Blob_Struct);
+                if ( retCode == CGMI_ERROR_SUCCESS )
+                {
+                    playing = 1;
+                }
+            } else {
+                printf( "No\n" );
+            }
+        }
+        /* setstate_play */
+        else if (strncmp(command, "setstate_play", 13) == 0)
+        {
+            int autoPlay = true;
+
+            if ( strlen( command ) > 14 )
+            {
+                strncpy( arg, command + 14, strlen(command) - 14 );
+                arg[strlen(command) - 14] = '\0';
+
+                if ( arg )
+                {
+                   autoPlay = atoi( arg );
+                }
+            }
+
+            setstate_play(pSessionId, autoPlay);
+        }
         /* play */
-        if (strncmp(command, "play", 4) == 0)
+        else if (strncmp(command, "play", 4) == 0)
         {
             char *arg2;
 			char *arg3;
