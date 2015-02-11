@@ -101,6 +101,7 @@ typedef struct
    gboolean           steadyState;
    guint              steadyStateWindow;
    gboolean           maskRateChangedEvent;
+   gboolean           noVideo;
 
 }tSession;
 

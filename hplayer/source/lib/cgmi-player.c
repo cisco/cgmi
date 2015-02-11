@@ -43,7 +43,7 @@ GST_DEBUG_CATEGORY_STATIC (cgmi);
 
 #define VGDRM_CAPS   "application/x-vgdrm-live-client"
 
-static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
+static gboolean cgmi_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
 static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename );
 
 static gchar gDefaultAudioLanguage[4];
@@ -356,7 +356,34 @@ gpointer cgmi_monitor( gpointer data )
    }
 }
 
-static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data )
+static void cgmi_gst_delayed_seek( tSession *pSess )
+{
+   GST_INFO("Executing delayed seek...\n");
+
+   pSess->steadyState = FALSE;
+   pSess->steadyStateWindow = 0;
+
+   if( !gst_element_seek( pSess->pipeline,
+            1.0,
+            GST_FORMAT_TIME,
+            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
+            GST_SEEK_TYPE_SET,
+            (gint64)(pSess->pendingSeekPosition * GST_SECOND),
+            GST_SEEK_TYPE_NONE,
+            GST_CLOCK_TIME_NONE ))
+   {
+      GST_WARNING("Seek to Resume Position Failed\n");
+   }
+   else
+   {
+      GstState curState;
+      //wait for the seek to complete
+      gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
+      GST_INFO("Seek to Resume Position Succeeded\n");
+   }
+}
+
+static gboolean cgmi_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data )
 {
    tSession *pSess = (tSession*)data;
    GstStructure *structure;
@@ -407,29 +434,7 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                GST_INFO("RECEIVED first_pts_decoded\n");
                if ( TRUE == pSess->pendingSeek )
                {
-                  GST_INFO("Executing delayed seek...\n");
-
-                  pSess->steadyState = FALSE;
-                  pSess->steadyStateWindow = 0;
-
-                  if( !gst_element_seek( pSess->pipeline,
-                           1.0,
-                           GST_FORMAT_TIME,
-                           GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
-                           GST_SEEK_TYPE_SET,
-                           (gint64)(pSess->pendingSeekPosition * GST_SECOND),
-                           GST_SEEK_TYPE_NONE,
-                           GST_CLOCK_TIME_NONE ))
-                  {
-                     GST_WARNING("Seek to Resume Position Failed\n");
-                  }
-                  else
-                  {
-                     GstState curState;
-                     //wait for the seek to complete
-                     gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
-                     GST_INFO("Seek to Resume Position Succeeded\n");
-                  }
+                  cgmi_gst_delayed_seek( pSess );
                }
 
                if ( FALSE == pSess->pendingSeek )
@@ -447,10 +452,35 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
                   }
 
                   cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
-                  pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );                  
+                  pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
                }
                else
                   pSess->pendingSeek = FALSE;
+            }
+            else if (0 == strcmp(ntype, "first_audio_frame_found"))
+            {
+               GST_INFO("RECEIVED first_audio_frame_found\n");
+               if ( TRUE == pSess->noVideo )
+               {
+                  if ( TRUE == pSess->pendingSeek )
+                  {
+                     cgmi_gst_delayed_seek( pSess );
+                  }
+
+                  if ( FALSE == pSess->pendingSeek )
+                  {
+                     if( NULL != pSess->audioDecoder && pSess->rate == 1.0 )
+                     {
+                        g_print("Unmuting audio decoder...\n");
+                        g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", FALSE, NULL );
+                     }
+
+                     cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PTS_DECODED, pSess->diagIndex, pSess->playbackURI, 0);
+                     pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_FIRST_PTS_DECODED, 0 );
+                  }
+                  else
+                     pSess->pendingSeek = FALSE;
+               }
             }
             else if (0 == strcmp(ntype, "stream_attrib_changed"))
             {
@@ -613,7 +643,7 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
 static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer data )
 {
    tSession *pSess = (tSession*)data;
-   unsigned int videoStream, audioStream, programNumber;
+   unsigned int videoStream;
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
@@ -798,6 +828,17 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
 
    if ( NULL != pSess->eventCB )
       pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_PSI_READY, 0);
+
+   g_object_get( obj, "video-stream", &videoStream, NULL );
+   if ( -1 == videoStream )
+   {
+      g_print("Stream has no video!\n");
+      pSess->noVideo = TRUE;
+   }
+   else
+   {
+      pSess->noVideo = FALSE;
+   }
 
    /*
    if ( FALSE == pSess->autoPlay )
@@ -1473,6 +1514,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    pSess->steadyStateWindow = 0;
    pSess->rateAfterPause = 0.0;
    pSess->maskRateChangedEvent = FALSE;
+   pSess->noVideo = FALSE;
 
    // 
    // check to see if this is a DLNA url.
@@ -1796,7 +1838,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
 
       // enable the notifications.
       pSess->sourceWatch = gst_bus_create_watch(pSess->bus);
-      g_source_set_callback(pSess->sourceWatch, (GSourceFunc)cisco_gst_handle_msg, pSess, NULL);
+      g_source_set_callback(pSess->sourceWatch, (GSourceFunc)cgmi_gst_handle_msg, pSess, NULL);
       g_source_attach(pSess->sourceWatch, pSess->thread_ctx);
 
       if (pSess->bisDLNAContent == FALSE || bisBroadcomHw == FALSE)
@@ -1941,9 +1983,9 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
       g_mutex_unlock( pSess->autoPlayMutex );
    }
 
-   cisco_gst_setState( pSess, GST_STATE_PLAYING );
-      
    pSess->rate = 1.0;
+
+   cisco_gst_setState( pSess, GST_STATE_PLAYING );
    
    return stat;
 }
