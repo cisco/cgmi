@@ -59,7 +59,7 @@ static int  cgmi_CheckSessionHandle(tSession *pSess)
 
 }
 
-static void cisco_gst_setState( tSession *pSess, GstState state )
+static GstStateChangeReturn cisco_gst_setState( tSession *pSess, GstState state )
 {
    GstStateChangeReturn sret;
 
@@ -83,7 +83,7 @@ static void cisco_gst_setState( tSession *pSess, GstState state )
          break;
    }
 
-   return;
+   return sret;
 }
 
 static GstState cisco_gst_getState( tSession *pSess )
@@ -372,7 +372,7 @@ static gboolean cisco_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer dat
 
       case GST_MESSAGE_ASYNC_DONE:
          GST_INFO("Async Done message\n");
-         pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_SEEK_DONE, 0);
+         //pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_SEEK_DONE, 0);
          break;
 
       case GST_MESSAGE_EOS:
@@ -1400,6 +1400,22 @@ static void cgmi_gst_pad_added( GstElement *element, GstPad *pad, gpointer data 
    }
 }
 
+static void cgmi_gst_no_more_pads(GstElement *element, gpointer data)
+{
+   tSession *pSess = (tSession*)data;
+   
+   GST_WARNING("Received NO_MORE_PADS signal\n");
+   
+   if (NULL != pSess)
+   {
+      pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_LOAD_DONE, 0);
+   }
+   else
+   {
+      GST_ERROR("Invalid user data\n");
+   }
+}
+
 cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
 {
    GError               *g_error_str =NULL;
@@ -1411,6 +1427,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    GSource              *source;
    uint32_t             bisBroadcomHw = FALSE;
    int                  drmStatus = 1;
+   GstStateChangeReturn sret;
 #ifdef USE_DRMPROXY
    gchar                **array = NULL;
    tProxyErr            proxy_err = {};
@@ -1726,6 +1743,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
 
          g_signal_connect (G_OBJECT (typefind), "have_type", G_CALLBACK (cgmi_gst_have_type), pSess);
          g_signal_connect( pSess->demux, "pad-added", G_CALLBACK (cgmi_gst_pad_added), pSess );
+         g_signal_connect( pSess->demux, "no-more-pads", G_CALLBACK (cgmi_gst_no_more_pads), pSess );
          g_signal_connect( pSess->demux, "psi-info", G_CALLBACK(cgmi_gst_psi_info), pSess );
       }
 
@@ -1790,8 +1808,21 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
             G_CALLBACK(cgmi_gst_notify_source), pSess );
       }
 
-      cisco_gst_setState( pSess, GST_STATE_PAUSED );
-
+      sret = cisco_gst_setState( pSess, GST_STATE_PAUSED );
+      if(GST_STATE_CHANGE_ASYNC == sret)
+      {
+         /* Wait for the async sate change to complete */
+         sret = gst_element_get_state(pSess->pipeline, NULL, NULL, 10 * GST_SECOND);
+         if(GST_STATE_CHANGE_SUCCESS != sret)
+         {
+            GST_ERROR("State change to PAUSED failed\n");
+            stat = CGMI_ERROR_FAILED;
+         }
+         else
+         {
+            pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_LOAD_DONE, 0);
+         }
+      }
 
    }while(0);
 
@@ -1815,9 +1846,6 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
          pSess->playbackURI = NULL;   
       }
    }
-
-   /* Set state to paused to create pipeline. */
-   cisco_gst_setState( pSess, GST_STATE_PAUSED );
 
    return stat;
 }

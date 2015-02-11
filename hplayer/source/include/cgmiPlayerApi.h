@@ -94,6 +94,7 @@ typedef enum
    NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE,   ///<The requested URL could not be opened. 
    NOTIFY_CHANGED_RATE,                   ///<The playback rate has changed.
    NOTIFY_DECODE_ERROR,                   ///<Decoder issued errors.
+   NOTIFY_LOAD_DONE,                      ///<Load URI done.
    NOTIFY_MEDIAPLAYER_UNKNOWN             ///<An unexpected error has occured. 
 
 }tcgmi_Event; 
@@ -259,7 +260,8 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
  *
  *  \param[in]  cpblob - a pointer to a cpBlobStruct. This struct contains  data which  is needed 
  *  for encrypted HLS streaming.For all other types of sessions(clear HLS/Live/Playback etc') NULL should be passed to the cpblob var.
- *  \post    On success the user can now play the uri pointed to 
+ *  \post    On success the user can now play the uri pointed to. The user has to wait for NOTIFY_LOAD_DONE message before querying
+ *           the duration or other metadata info of the asset pointed by the URI. 
  *
  * \return  CGMI_ERROR_SUCCESS when everything is loaded and ready to play the uri 
  * \return  CGMI_ERROR_OUT_OF_MEMORY  when an allocation of memory has failed.

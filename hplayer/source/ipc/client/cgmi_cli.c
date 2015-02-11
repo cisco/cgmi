@@ -637,6 +637,23 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
         case NOTIFY_DECODE_ERROR:
             printf("NOTIFY_DECODE_ERROR");
             break;
+        case NOTIFY_LOAD_DONE:
+            {
+               printf("NOTIFY_LOAD_DONE");
+               cgmi_Status retCode;
+               float Duration = 0.0;
+               cgmi_SessionType type = cgmi_Session_Type_UNKNOWN;
+               retCode = cgmi_GetDuration(pSession, &Duration, &type);
+               if(CGMI_ERROR_SUCCESS != retCode)
+               {
+                  printf("\nGetDuration after URI load failed\n");
+               }
+               else
+               {
+                  printf("\nDuration after URI load = %f\n", Duration);
+               }
+            }
+            break;
         case NOTIFY_MEDIAPLAYER_UNKNOWN:
             printf("NOTIFY_MEDIAPLAYER_UNKNOWN");
             break;
