@@ -542,6 +542,10 @@ static gboolean cgmi_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data
                cgmi_SetRate(pSess, 0.0); 
             }
 #endif
+            else if (0 == strcmp(ntype, "network_error"))
+            {
+               pSess->eventCB(pSess->usrParam, (void*)pSess , NOTIFY_NETWORK_ERROR, 0);
+            }
             else
             {
                GST_ERROR("Do not know how to handle %s notification\n",ntype);

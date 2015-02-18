@@ -95,6 +95,7 @@ typedef enum
    NOTIFY_CHANGED_RATE,                   ///<The playback rate has changed.
    NOTIFY_DECODE_ERROR,                   ///<Decoder issued errors.
    NOTIFY_LOAD_DONE,                      ///<Load URI done.
+   NOTIFY_NETWORK_ERROR,                  ///<A network error has occured.
    NOTIFY_MEDIAPLAYER_UNKNOWN             ///<An unexpected error has occured. 
 
 }tcgmi_Event; 

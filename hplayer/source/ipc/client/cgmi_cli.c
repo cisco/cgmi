@@ -654,6 +654,9 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
                }
             }
             break;
+        case NOTIFY_NETWORK_ERROR:
+            printf("NOTIFY_NETWORK_ERROR");
+            break;
         case NOTIFY_MEDIAPLAYER_UNKNOWN:
             printf("NOTIFY_MEDIAPLAYER_UNKNOWN");
             break;
