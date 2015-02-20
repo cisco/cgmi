@@ -16,7 +16,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <curl/curl.h>
+#ifdef ENABLE_DLNA_AUTODETECT
+   #include <curl/curl.h>
+#endif
 #include <gst/gst.h>
 #include <glib.h>
 #include <glib/gprintf.h>
@@ -49,6 +51,7 @@ typedef struct
 }httpRespHdr;
 
 
+#ifdef ENABLE_DLNA_AUTODETECT
 static size_t hdrResponseCb(void *ptr, size_t size, size_t nmemb, void *pData)
 {
    httpRespHdr *pRespHdr = (httpRespHdr *)pData;
@@ -93,7 +96,7 @@ static size_t hdrResponseCb(void *ptr, size_t size, size_t nmemb, void *pData)
    return size * nmemb;
 }
 
-
+#endif
 
 
 cgmi_Status cgmi_utils_init(void)
@@ -105,8 +108,9 @@ cgmi_Status cgmi_utils_init(void)
       //
       // Initialize the CURL library for this process.
       //
+#ifdef ENABLE_DLNA_AUTODETECT
       curl_global_init(CURL_GLOBAL_ALL);
-
+#endif
 
 
    }while (0);
@@ -122,8 +126,9 @@ cgmi_Status cgmi_utils_finalize(void)
       //
       // finalize the CURL library for this process.
       //
+#ifdef ENABLE_DLNA_AUTODETECT
       curl_global_cleanup();
-
+#endif
 
    }while (0);
    return status;
@@ -154,12 +159,16 @@ cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, uint32_t *bisDLNAConten
 
    cgmi_Status  status = CGMI_ERROR_SUCCESS;
    *bisDLNAContent = FALSE;
+   
+#ifdef ENABLE_DLNA_AUTODETECT
    httpRespHdr respHdr = {-1, CONTENT_TYPE_UNSUPPORTED, CONTENT_PROTOCOL_UNICAST_HTTP};
    CURL* ctx = NULL;
    struct curl_slist *headers = NULL;
+#endif
 
    do
    {
+#ifdef ENABLE_DLNA_AUTODETECT
       ctx = curl_easy_init();
       curl_easy_setopt(ctx, CURLOPT_HEADERFUNCTION, hdrResponseCb);
       curl_easy_setopt(ctx, CURLOPT_HEADERDATA, &respHdr);
@@ -178,12 +187,13 @@ cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, uint32_t *bisDLNAConten
       {
          *bisDLNAContent = TRUE;
       }
-
+#endif
    }while (0);
 
+#ifdef ENABLE_DLNA_AUTODETECT
    curl_slist_free_all(headers);
    curl_easy_cleanup(ctx);
-
+#endif
    return status;
 
 

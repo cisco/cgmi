@@ -162,12 +162,20 @@ AS_VERSION_COMPARE([$GST_API_VERSION], [0.10],
                    [PKG_CHECK_MODULES([GST],[gstreamer-0.10 >= 0.10.30])], 
                    [PKG_CHECK_MODULES([GST],[gstreamer-1.0 >= 1.2.0])])
 
-#LIBCURL_CHECK_CONFIG(,,curl=1, curl=0 )
-PKG_CHECK_MODULES([CURL], [libcurl])
+AC_MSG_CHECKING(Checking to see if we should autodetect DLNA streams (enables libcurl) ... )
+AC_ARG_ENABLE([dlna-autodetect],
+              [AS_HELP_STRING([--enable-dlna-autodetect],
+                             [If set to =yes  libcurl will be enabled to auto detect if the http url is DLNA  ]) ],
+                             [AC_MSG_RESULT(yes)
+                                                          ],
+                             [AC_MSG_RESULT(no)])
+AM_CONDITIONAL(DLNA_AUTODETECT_ENABLED,test x$enable_dlna_autodetect = xyes)
+
+
 
 # Add the CFLAGS and LDFLAGS for each package to the environment
-CFLAGS="$CFLAGS $GLIB_CFLAGS $GOBJECT_CFLAGS $GMODULE_CFLAGS $GTHREAD_CFLAGS $GIO_CFLAGS $GST_CFLAGS $CURL_CFLAGS"
-LDFLAGS="$LDFLAG $GLIB_LIBS $GOBJECT_LIBS $GMODULE_LIBS $GTHREAD_LIBS $GIO_LIBS $GST_LIBS $CURL_LIBS"
+CFLAGS="$CFLAGS $GLIB_CFLAGS $GOBJECT_CFLAGS $GMODULE_CFLAGS $GTHREAD_CFLAGS $GIO_CFLAGS $GST_CFLAGS "
+LDFLAGS="$LDFLAG $GLIB_LIBS $GOBJECT_LIBS $GMODULE_LIBS $GTHREAD_LIBS $GIO_LIBS $GST_LIBS "
 
 #check to see if we need to include libdiagtmets
 if test x$enable_tmet = xyes; then
@@ -176,6 +184,12 @@ if test x$enable_tmet = xyes; then
    LDFLAGS+="$LIBDIAGTMETS_LIBS"
 fi
 
+if test x$enable_dlna_autodetect = xyes; then
+   PKG_CHECK_MODULES([CURL], [libcurl])
+   CFLAGS+="$CURL_CFLAGS"
+   LDFLAGS+="$CURL_LIBS"
+   AC_DEFINE([ENABLE_DLNA_AUTODETECT], [1], [DLNA autodetect http enabled])
+fi
 #
 # Check for Doxygen for the documentation generation
 #
