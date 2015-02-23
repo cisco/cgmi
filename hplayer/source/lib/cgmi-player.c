@@ -2079,7 +2079,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
          //pause (such as HLS plugin element which resets its internal rate to 0x on pause) and
          //we want to restore internal rate state of such elements to the rate we had before pause
          //by executing the seek below
-         else if (1.0 == rate)
+         else if ((1.0 == rate) && (FALSE == pSess->pendingSeek))
          {
             cisco_gst_setState( pSess, GST_STATE_PLAYING );
             pSess->rate = rate;
