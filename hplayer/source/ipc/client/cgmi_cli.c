@@ -157,7 +157,7 @@ static void updateCurrentPlaySrcUrl(char *src)
             free(gCurrentPlaySrcUrl);
             gCurrentPlaySrcUrl = NULL;
         }
-    
+
         if(NULL != src)
         {
             gCurrentPlaySrcUrl = strdup(src);
@@ -169,7 +169,7 @@ static void updateCurrentPlaySrcUrl(char *src)
 
 /* Load Command */
 static cgmi_Status load(void *pSessionId, char *src, cpBlobStruct * cpblob)
-{   
+{
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
     updateCurrentPlaySrcUrl(src);
@@ -180,15 +180,15 @@ static cgmi_Status load(void *pSessionId, char *src, cpBlobStruct * cpblob)
         pthread_mutex_lock(&cgmiCliMutex);
         tMets_getMsSinceEpoch(&curTime);
         tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
-                              gCurrentPlaySrcUrl, 
-                              curTime, 
-                              "CGMICLI_LOAD", 
+                              gCurrentPlaySrcUrl,
+                              curTime,
+                              "CGMICLI_LOAD",
                               NULL);
         pthread_mutex_unlock(&cgmiCliMutex);
     }
 #endif // TMET_ENABLED
     /* First load the URL. */
-    retCode = cgmi_Load( pSessionId, src,cpblob );
+    retCode = cgmi_Load( pSessionId, src, cpblob );
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI Load failed: %s\n", cgmi_ErrorString(retCode) );
@@ -215,7 +215,7 @@ static cgmi_Status setstate_play(void *pSessionId, int autoPlay)
 
 /* Play Command */
 static cgmi_Status play(void *pSessionId, char *src, int autoPlay, cpBlobStruct * cpblob)
-{   
+{
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
     retCode = load(pSessionId, src, cpblob);
@@ -230,7 +230,7 @@ static cgmi_Status play(void *pSessionId, char *src, int autoPlay, cpBlobStruct 
 }
 
 /* Resume Command */
-static cgmi_Status resume(void *pSessionId, char *src, float resumePosition, int autoPlay,cpBlobStruct * cpblob)
+static cgmi_Status resume(void *pSessionId, char *src, float resumePosition, int autoPlay, cpBlobStruct * cpblob)
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
@@ -520,7 +520,7 @@ static cgmi_Status destroyfilter( void *pSessionId )
 /* Callback Function */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code )
 {
-    printf("CGMI Event Received : code = %lld event = ", code);
+    printf("CGMI Event Received : code = %llu event = ", code);
 
     switch (event)
     {
@@ -605,7 +605,7 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
             printf("NOTIFY_VIDEO_ASPECT_RATIO_CHANGED");
             break;
         case NOTIFY_VIDEO_RESOLUTION_CHANGED:
-			{
+            {
                 int ar_denominator, ar_numerator, pixelHeight, pixelWidth;
                 ar_denominator = code & 0xFFFF;
                 code >>= 16;
@@ -617,7 +617,7 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
                 /* tested in pytest, don't change output without modifying test expectations */
                 printf("NOTIFY_VIDEO_RESOLUTION_CHANGED: %dx%d\n", pixelWidth, pixelHeight);
                 printf("NOTIFY_ASPECT_RATIO_CHANGED: %d:%d", ar_numerator, ar_denominator);
-			}
+            }
             break;
         case NOTIFY_CHANGED_LANGUAGE_AUDIO:
             printf("NOTIFY_CHANGED_LANGUAGE_AUDIO");
@@ -660,7 +660,7 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
         case NOTIFY_MEDIAPLAYER_UNKNOWN:
             printf("NOTIFY_MEDIAPLAYER_UNKNOWN");
             break;
-        
+
         default:
             printf("UNKNOWN");
             break;
@@ -730,7 +730,7 @@ void help(void)
            "\t\tat interval <interval> for duration <duration>.\n"
            "\n"
            "\n"
-           "\thelp\n" 
+           "\thelp\n"
            "\thistory\n"
            "\n"
            "\tquit\n\n");
@@ -793,10 +793,10 @@ int main(int argc, char **argv)
     gchar tmpstr[3];
     int len = 0;
     int err = 0;
-    cpBlobStruct cp_Blob_Struct,cp_Blob_Struct_2;
+    cpBlobStruct cp_Blob_Struct, cp_Blob_Struct_2;
+    cpBlobStruct * p_Cp_Blob_Struct = NULL;
+    cpBlobStruct * p_Cp_Blob_Struct_2 = NULL;
 
-	cpBlobStruct * p_Cp_Blob_Struct=NULL;
-	cpBlobStruct * p_Cp_Blob_Struct_2=NULL;
     // need to put this in a define diagInit (DIAGTYPE_DEFAULT, NULL, 0);
 
 #ifdef TMET_ENABLED
@@ -851,8 +851,8 @@ int main(int argc, char **argv)
     while (!quit)
     {
         retCode = CGMI_ERROR_SUCCESS;
-		p_Cp_Blob_Struct=NULL;
-        p_Cp_Blob_Struct_2=NULL;
+        p_Cp_Blob_Struct = NULL;
+        p_Cp_Blob_Struct_2 = NULL;
         /* commandline */
         printf( "cgmi> " );
         a = 0;
@@ -902,7 +902,7 @@ int main(int argc, char **argv)
                                      MAX_COMMAND_LENGTH );
                             a = strlen( command );
                         }
-    
+
                         printf( "\ncgmi> %s", command );
                     }
                     break;
@@ -963,8 +963,8 @@ int main(int argc, char **argv)
         /* load */
         if (strncmp(command, "load", 4) == 0)
         {
-			char *arg3;
-			char *arg4;
+            char *arg3;
+            char *arg4;
 
             if ( strlen( command ) <= 5 )
             {
@@ -974,26 +974,28 @@ int main(int argc, char **argv)
             strncpy( arg, command + 5, strlen(command) - 5 );
             arg[strlen(command) - 5] = '\0';
 
- 		    arg3 = strchr( arg, ' ' );
-			if (arg3) //drm_type_for cp blob(next param)
-			{
-			  arg3++;
-			  cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( arg3 );
-			  arg4 = strchr( arg3, ' ' ); 
-              if (arg4) //cp blob				  
-			  {
-				arg4++;
-				cp_Blob_Struct.bloblength=strlen(arg4);
-				memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
-				memcpy(cp_Blob_Struct.cpBlob,arg4,cp_Blob_Struct.bloblength);
-				p_Cp_Blob_Struct=&cp_Blob_Struct;
-			  }
-			  else
-			  {
-				printf( "\tload <url> <drmType> <cpBlob>\n" );
-                continue;
-			  }
-			}
+#ifdef USE_DRMPROXY
+            arg3 = strchr( arg, ' ' );
+            if (arg3) //drm_type_for cp blob(next param)
+            {
+                arg3++;
+                cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( arg3 );
+                arg4 = strchr( arg3, ' ' );
+                if (arg4) //cp blob
+                {
+                    arg4++;
+                    cp_Blob_Struct.bloblength=strlen(arg4);
+                    memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+                    memcpy(cp_Blob_Struct.cpBlob, arg4, cp_Blob_Struct.bloblength);
+                    p_Cp_Blob_Struct = &cp_Blob_Struct;
+                }
+                else
+                {
+                    printf( "\tload <url> <drmType> <cpBlob>\n" );
+                    continue;
+                }
+            }
+#endif
 
             /* Check First */
             printf("Checking if we can play this...");
@@ -1043,8 +1045,8 @@ int main(int argc, char **argv)
         else if (strncmp(command, "play", 4) == 0)
         {
             char *arg2;
-			char *arg3;
-			char *arg4;
+            char *arg3;
+            char *arg4;
             int autoPlay = true;
 
             if ( strlen( command ) <= 5 )
@@ -1055,54 +1057,42 @@ int main(int argc, char **argv)
             strncpy( arg, command + 5, strlen(command) - 5 );
             arg[strlen(command) - 5] = '\0';
 
+#ifdef USE_DRMPROXY
             arg2 = strchr( arg, ' ' );
             if ( arg2 )
             {
-               *arg2 = 0;
-               arg2++;
-               autoPlay = atoi( arg2 );
-			   arg3 = strchr( arg2, ' ' );
-			   if (arg3) //drm_type_for cp blob(next param)
-			   {
-				  arg3++;
-				  cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( arg3 );
-				  arg4 = strchr( arg3, ' ' ); 
-                  if (arg4) //cp blob				  
-				  {
-					arg4++;
-					cp_Blob_Struct.bloblength=strlen(arg4);
-					memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
-					memcpy(cp_Blob_Struct.cpBlob,arg4,cp_Blob_Struct.bloblength);
-					p_Cp_Blob_Struct=&cp_Blob_Struct;
-				  }
-				  else
-				  {
-					printf( "\tplay <url> <autoplay> <drmType> <cpBlob>\n" );
-                    continue;
-				  }
-			   }
-               /*
-			   arg2++;
-			   if ( *arg2!=0 )
-			   {
-			        //cp blob 
-			        arg2++;
-			   
-	                //cp_Blob_Struct.drmType=VGDRM;
-	                cp_Blob_Struct.bloblength=strlen(arg2);
-	                memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
-	                memcpy(cp_Blob_Struct.cpBlob,arg2,cp_Blob_Struct.bloblength);
-	                p_Cp_Blob_Struct=&cp_Blob_Struct;
-			   }
-               */
+                *arg2 = 0;
+                arg2++;
+                autoPlay = atoi( arg2 );
+                arg3 = strchr( arg2, ' ' );
+                if (arg3) //drm_type_for cp blob(next param)
+                {
+                    arg3++;
+                    cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( arg3 );
+                    arg4 = strchr( arg3, ' ' );
+                    if (arg4) //cp blob
+                    {
+                        arg4++;
+                        cp_Blob_Struct.bloblength=strlen(arg4);
+                        memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+                        memcpy(cp_Blob_Struct.cpBlob,arg4,cp_Blob_Struct.bloblength);
+                        p_Cp_Blob_Struct=&cp_Blob_Struct;
+                    }
+                    else
+                    {
+                        printf( "\tplay <url> <autoplay> <drmType> <cpBlob>\n" );
+                        continue;
+                    }
+        }
             }
+#endif
 
             if (playing)
             {
                 printf( "Stop previous playback before starting a new one.\n" );
 
                 //update current playing url so stop can be count as part current channel change
-                updateCurrentPlaySrcUrl(arg);                
+                updateCurrentPlaySrcUrl(arg);
 
                 retCode = stop(pSessionId);
                 playing = 0;
@@ -1116,7 +1106,7 @@ int main(int argc, char **argv)
             {
                 printf( "cgmi_canPlayType Not Implemented\n" );
                 printf( "Playing \"%s\"...\n", arg );
-                retCode = play(pSessionId, arg, autoPlay,p_Cp_Blob_Struct);
+                retCode = play(pSessionId, arg, autoPlay, p_Cp_Blob_Struct);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     playing = 1;
@@ -1125,7 +1115,7 @@ int main(int argc, char **argv)
             {
                 printf( "Yes\n" );
                 printf( "Playing \"%s\"...\n", arg );
-                retCode = play(pSessionId, arg, autoPlay,p_Cp_Blob_Struct);
+                retCode = play(pSessionId, arg, autoPlay, p_Cp_Blob_Struct);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     playing = 1;
@@ -1168,35 +1158,35 @@ int main(int argc, char **argv)
                 continue;
             }
 
+#ifdef USE_DRMPROXY
             arg3 = strchr( arg2, ' ' );
             if ( arg3 )
             {
-               *arg3 = 0;
-               arg3++;
-               autoPlay = atoi( arg3 );
-			   
-			   arg4 = strchr( arg3, ' ' );
-			   if (arg4) //drm_type_for cp blob(next param)
-			   {
-				  arg4++;
-				  cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( arg4 );
-				  arg5 = strchr( arg4, ' ' ); 
-                  if (arg5) //cp blob				  
-				  {
-					arg5++;
-					cp_Blob_Struct.bloblength=strlen(arg5);
-					memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
-					memcpy(cp_Blob_Struct.cpBlob,arg5,cp_Blob_Struct.bloblength);
-					p_Cp_Blob_Struct=&cp_Blob_Struct;
-				  }
-				  else
-				  {
-					printf( "\tresume  <url> <position (seconds) (float)> <autoplay> <drmType> <cpBlob>\n" );
-                    continue;
-				  }
-			   }
+                *arg3 = 0;
+                arg3++;
+                autoPlay = atoi( arg3 );
+                arg4 = strchr( arg3, ' ' );
+                if (arg4) //drm_type_for cp blob(next param)
+                {
+                    arg4++;
+                    cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( arg4 );
+                    arg5 = strchr( arg4, ' ' );
+                    if (arg5) //cp blob
+                    {
+                        arg5++;
+                        cp_Blob_Struct.bloblength=strlen(arg5);
+                        memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+                        memcpy(cp_Blob_Struct.cpBlob, arg5, cp_Blob_Struct.bloblength);
+                        p_Cp_Blob_Struct = &cp_Blob_Struct;
+                    }
+                    else
+                    {
+                        printf( "\tresume  <url> <position (seconds) (float)> <autoplay> <drmType> <cpBlob>\n" );
+                        continue;
+                    }
+        }
             }
-
+#endif
 
             /* Check First */
             printf("Checking if we can play this...");
@@ -1206,7 +1196,7 @@ int main(int argc, char **argv)
             {
                 printf( "cgmi_canPlayType Not Implemented\n" );
                 printf( "Resuming \"%s\"...\n", arg );
-                retCode = resume(pSessionId, arg, resumePosition, autoPlay,p_Cp_Blob_Struct);
+                retCode = resume(pSessionId, arg, resumePosition, autoPlay, p_Cp_Blob_Struct);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     playing = 1;
@@ -1215,7 +1205,7 @@ int main(int argc, char **argv)
             {
                 printf( "Yes\n" );
                 printf( "Resuming \"%s\"...\n", arg );
-                retCode = resume(pSessionId, arg, resumePosition, autoPlay,p_Cp_Blob_Struct);
+                retCode = resume(pSessionId, arg, resumePosition, autoPlay, p_Cp_Blob_Struct);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     playing = 1;
@@ -1797,7 +1787,7 @@ int main(int argc, char **argv)
                 printf( "cgmi_canPlayType Not Implemented\n" );
                 printf( "Playing \"%s\"...\n", arg );
                 cgmi_SetPidInfo( pSessionId, AUTO_SELECT_STREAM, STREAM_TYPE_AUDIO, FALSE );
-                retCode = play(pEasSessionId, arg, TRUE,p_Cp_Blob_Struct);
+                retCode = play(pEasSessionId, arg, TRUE, p_Cp_Blob_Struct);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     audioplaying = 1;
@@ -1806,7 +1796,7 @@ int main(int argc, char **argv)
             {
                 printf( "Yes\n" );
                 printf( "Playing \"%s\"...\n", arg );
-                retCode = play(pEasSessionId, arg, TRUE,p_Cp_Blob_Struct);
+                retCode = play(pEasSessionId, arg, TRUE, p_Cp_Blob_Struct);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     audioplaying = 1;
@@ -1848,58 +1838,60 @@ int main(int argc, char **argv)
             str = strtok( NULL, " " );
             if ( str == NULL ) continue;
             duration = atoi( str );
-			str = strtok( NULL, " " );
+#ifdef USE_DRMPROXY
+            str = strtok( NULL, " " );
             if ( str != NULL ) 
-			{
-				if  (atoi( str )==1) //additional info for url 1 
-				{
-					str = strtok( NULL, " " );
-					if ( str == NULL ) continue;
-					cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( str );
-					str = strtok( NULL, " " );
-					if ( str == NULL ) continue;	
-					cp_Blob_Struct.bloblength=strlen(str);
-					memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
-					memcpy(cp_Blob_Struct.cpBlob,str,cp_Blob_Struct.bloblength);
-					p_Cp_Blob_Struct=&cp_Blob_Struct;
-					str = strtok( NULL, " " );
-					if ( str != NULL ) 
-					{
-						if  (atoi( str )==2) //additional info for url 2
-						{
-					str = strtok( NULL, " " );
-					if ( str == NULL ) continue;
-					cp_Blob_Struct_2.drmType=(tDRM_TYPE)atoi( str );
-					str = strtok( NULL, " " );
-					if ( str == NULL ) continue;	
-					cp_Blob_Struct_2.bloblength=strlen(str);
-					memset(cp_Blob_Struct_2.cpBlob, 0, MAX_CP_BLOB_LENGTH);
-					memcpy(cp_Blob_Struct_2.cpBlob,str,cp_Blob_Struct_2.bloblength);
-					p_Cp_Blob_Struct_2=&cp_Blob_Struct_2;
-					}
-					else
-					{
-						continue;
-					}
-					}
-				} 
-				else if (atoi( str )==2) //additional info for url 2
-				{
-					str = strtok( NULL, " " );
-					if ( str == NULL ) continue;
-					cp_Blob_Struct_2.drmType=(tDRM_TYPE)atoi( str );
-					str = strtok( NULL, " " );
-					if ( str == NULL ) continue;	
-					cp_Blob_Struct_2.bloblength=strlen(str);
-					memset(cp_Blob_Struct_2.cpBlob, 0, MAX_CP_BLOB_LENGTH);
-					memcpy(cp_Blob_Struct_2.cpBlob,str,cp_Blob_Struct_2.bloblength);
-					p_Cp_Blob_Struct_2=&cp_Blob_Struct_2;
-				}
-				else //not legit
-				{
-					continue;
-				}
-			}
+            {
+                if  (atoi( str ) == 1) //additional info for url 1
+                {
+                    str = strtok( NULL, " " );
+                    if ( str == NULL ) continue;
+                    cp_Blob_Struct.drmType = (tDRM_TYPE)atoi( str );
+                    str = strtok( NULL, " " );
+                    if ( str == NULL ) continue;
+                    cp_Blob_Struct.bloblength = strlen(str);
+                    memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+                    memcpy(cp_Blob_Struct.cpBlob, str, cp_Blob_Struct.bloblength);
+                    p_Cp_Blob_Struct = &cp_Blob_Struct;
+                    str = strtok( NULL, " " );
+                    if ( str != NULL )
+                    {
+                        if  (atoi( str ) == 2) //additional info for url 2
+                        {
+                            str = strtok( NULL, " " );
+                            if ( str == NULL ) continue;
+                            cp_Blob_Struct_2.drmType = (tDRM_TYPE)atoi( str );
+                            str = strtok( NULL, " " );
+                            if ( str == NULL ) continue;
+                            cp_Blob_Struct_2.bloblength = strlen(str);
+                            memset(cp_Blob_Struct_2.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+                            memcpy(cp_Blob_Struct_2.cpBlob, str, cp_Blob_Struct_2.bloblength);
+                            p_Cp_Blob_Struct_2 = &cp_Blob_Struct_2;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+                }
+                else if (atoi( str )==2) //additional info for url 2
+                {
+                    str = strtok( NULL, " " );
+                    if ( str == NULL ) continue;
+                    cp_Blob_Struct_2.drmType = (tDRM_TYPE)atoi( str );
+                    str = strtok( NULL, " " );
+                    if ( str == NULL ) continue;
+                    cp_Blob_Struct_2.bloblength=strlen(str);
+                    memset(cp_Blob_Struct_2.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+                    memcpy(cp_Blob_Struct_2.cpBlob, str, cp_Blob_Struct_2.bloblength);
+                    p_Cp_Blob_Struct_2 = &cp_Blob_Struct_2;
+                }
+                else //not legit
+                {
+                    continue;
+                }
+            }
+#endif
             retCode = cgmi_canPlayType( url1, &pbCanPlay );
             if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
             {
@@ -1924,26 +1916,26 @@ int main(int argc, char **argv)
             gettimeofday( &start, NULL );
             gettimeofday( &current, NULL );
             str = url1;
-			cpBlobStruct * p_Cp_Blob_Struct_Current=p_Cp_Blob_Struct;
+            cpBlobStruct *p_Cp_Blob_Struct_Current = p_Cp_Blob_Struct;
             i = 0;
             while ( (current.tv_sec - start.tv_sec) < duration )
             {
                 i++;
                 printf( "(%d) Playing %s...\n", i, str );
-                retCode = play(pSessionId, str, true,p_Cp_Blob_Struct_Current);
+                retCode = play(pSessionId, str, true, p_Cp_Blob_Struct_Current);
                 sleep( interval );
                 retCode = stop(pSessionId);
-				if (pSessionId != NULL)
-				{
-				    retCode = cgmi_DestroySession( pSessionId );
+                if (pSessionId != NULL)
+                {
+                    retCode = cgmi_DestroySession( pSessionId );
                     if (retCode != CGMI_ERROR_SUCCESS)
                     {
-                        printf("CGMI DestroySession Failed: %s\n",cgmi_ErrorString( retCode ));
-					    gettimeofday( &current, NULL );
+                        printf("CGMI DestroySession Failed: %s\n", cgmi_ErrorString( retCode ));
+                        gettimeofday( &current, NULL );
                         break;
                     } 
-					else 
-					{
+                    else 
+                    {
                         printf("CGMI DestroySession Success!\n");
                         pSessionId = NULL;
                     }
@@ -1954,24 +1946,24 @@ int main(int argc, char **argv)
                 if (retCode != CGMI_ERROR_SUCCESS)
                 {
                     printf("CGMI CreateSession Failed: %s\n", cgmi_ErrorString( retCode ));
-				    gettimeofday( &current, NULL );
+                    gettimeofday( &current, NULL );
                     break;;
                 } 
-				else 
-				{
+                else 
+                {
                     printf("CGMI CreateSession Success!\n");
                 }
 
                 if ( str == url1 )
-				{
+                {
                     str = url2;
-					p_Cp_Blob_Struct_Current=p_Cp_Blob_Struct_2;
-				}	
+                    p_Cp_Blob_Struct_Current = p_Cp_Blob_Struct_2;
+                }	
                 else
-				{
+                {
                     str = url1;
-					p_Cp_Blob_Struct_Current=p_Cp_Blob_Struct;
-				}	
+                    p_Cp_Blob_Struct_Current = p_Cp_Blob_Struct;
+                }	
 
                 gettimeofday( &current, NULL );
             }
@@ -2000,19 +1992,19 @@ int main(int argc, char **argv)
             str = strtok( NULL, " " );
             if ( str == NULL ) continue;
             duration = atoi( str );
+#ifdef USE_DRMPROXY
             str = strtok( NULL, " " );
-		    if ( str != NULL ) 
-			{
-					
-					
-				cp_Blob_Struct.drmType=(tDRM_TYPE)atoi( str );
-				str = strtok( NULL, " " );
-				if ( str == NULL ) continue;	
-				cp_Blob_Struct.bloblength=strlen(str);
-				memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
-				memcpy(cp_Blob_Struct.cpBlob,str,cp_Blob_Struct.bloblength);
-				p_Cp_Blob_Struct=&cp_Blob_Struct;
-			}
+            if ( str != NULL ) 
+            {
+                cp_Blob_Struct.drmType = (tDRM_TYPE)atoi( str );
+                str = strtok( NULL, " " );
+                if ( str == NULL ) continue;	
+                cp_Blob_Struct.bloblength = strlen(str);
+                memset(cp_Blob_Struct.cpBlob, 0, MAX_CP_BLOB_LENGTH);
+                memcpy(cp_Blob_Struct.cpBlob, str, cp_Blob_Struct.bloblength);
+                p_Cp_Blob_Struct = &cp_Blob_Struct;
+            }
+#endif
             retCode = cgmi_canPlayType( url1, &pbCanPlay );
             if ( retCode == CGMI_ERROR_NOT_IMPLEMENTED )
             {
@@ -2031,7 +2023,7 @@ int main(int argc, char **argv)
             {
                 i++;
                 printf( "(%d) Playing %s...\n", i, url1 );
-                retCode = play(pSessionId, url1, true,p_Cp_Blob_Struct);
+                retCode = play(pSessionId, url1, true, p_Cp_Blob_Struct);
                 sleep( interval );
                 retCode = stop(pSessionId);
 

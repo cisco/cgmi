@@ -13,8 +13,8 @@
 #include <glib/gprintf.h>
 #include <gst/app/gstappsink.h>
 #ifdef USE_DRMPROXY
-   #include <drmProxy.h>
-   #include <drmProxy_vgdrm.h>
+#include <drmProxy.h>
+#include <drmProxy_vgdrm.h>
 #endif
 #include "cgmiPlayerApi.h"
 #include "cgmi-priv-player.h"
@@ -45,6 +45,7 @@ GST_DEBUG_CATEGORY_STATIC (cgmi);
 
 static gboolean cgmi_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data );
 static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename );
+static void cgmi_gst_no_more_pads(GstElement *element, gpointer data);
 
 static gchar gDefaultAudioLanguage[4];
 
@@ -826,7 +827,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
 
    if ( pSess->audioLanguageIndex != INVALID_INDEX )
    {
-      g_print("Selecting audio language index %d...\n");
+      g_print("Selecting audio language index %d...\n", pSess->audioLanguageIndex);
       g_object_set( obj, "audio-stream", pSess->audioLanguageIndex, NULL );
    }
 
@@ -986,6 +987,7 @@ static void cgmi_gst_element_added( GstBin *bin, GstElement *element, gpointer d
       {
          pSess->demux = demux;
          g_signal_connect( demux, "psi-info", G_CALLBACK(cgmi_gst_psi_info), data );
+         g_signal_connect( demux, "no-more-pads", G_CALLBACK (cgmi_gst_no_more_pads), data );
       }
    }
 
@@ -1243,8 +1245,7 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
       GST_WARNING("Error creating a new Loop\n");
    }
 
-   //pSess->thread =  g_thread_create ((GThreadFunc) g_main_loop_run,(void*)pSess->loop, TRUE, NULL);
-   pSess->thread = g_thread_new("signal_thread", g_main_loop_run, (void*)pSess->loop);
+   pSess->thread = g_thread_new("signal_thread", (GThreadFunc)g_main_loop_run, (void*)pSess->loop);
    if (!pSess->thread)
    {
       GST_WARNING("Error launching thread for gmainloop\n");
@@ -1392,59 +1393,6 @@ static void cgmi_gst_have_type( GstElement *typefind, guint probability, GstCaps
    }
 }
 
-static void cgmi_gst_pad_added( GstElement *element, GstPad *pad, gpointer data )
-{
-   tSession *pSess = (tSession*)data;
-   GstCaps *caps = NULL;
-   GstPad *sinkpad;
-
-   g_print("ON_PAD_ADDED\n");
-
-   if ( NULL == pSess )
-      return;
-
-   if ( NULL == pad )
-      return;
-   
-#if GST_CHECK_VERSION(1,0,0)
-   caps = gst_pad_query_caps( pad, NULL );
-#else
-   caps = gst_pad_get_caps( pad );
-#endif
-   
-   if ( NULL != caps )
-   {
-      gchar *caps_string = gst_caps_to_string(caps);      
-      g_print("Caps: %s\n", caps_string);
-      if ( NULL != caps_string )
-      {
-         if ( NULL != strstr(caps_string, "video") )
-         {
-            sinkpad = gst_element_get_static_pad (pSess->videoDecoder, "sink");
-            g_print("Got static pad (%p) of peer\n", sinkpad);
-            if ( GST_PAD_LINK_OK != gst_pad_link (pad, sinkpad) )
-            {
-               g_print("Could not link demux to decoder!\n");
-            }           
-            gst_object_unref( sinkpad );
-         }
-         else if ( NULL != strstr(caps_string, "audio") )
-         {
-            sinkpad = gst_element_get_static_pad (pSess->audioDecoder, "sink");
-            g_print("Got static pad (%p) of peer\n", sinkpad);
-            if ( GST_PAD_LINK_OK != gst_pad_link (pad, sinkpad) )
-            {
-               g_print("Could not link demux to decoder!\n");
-            }           
-            gst_object_unref( sinkpad );
-         }
-         g_free( caps_string );
-      }
-
-      gst_caps_unref( caps );
-   }
-}
-
 static void cgmi_gst_no_more_pads(GstElement *element, gpointer data)
 {
    tSession *pSess = (tSession*)data;
@@ -1461,7 +1409,7 @@ static void cgmi_gst_no_more_pads(GstElement *element, gpointer data)
    }
 }
 
-cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
+cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
 {
    GError               *g_error_str =NULL;
    GstParseContext      *ctx;
@@ -1710,126 +1658,40 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
          break;
       }
 
-      //Using manual pipeline saves at least 10% CPU cycles compared to playbin on Broadcom
-      //Investigate how playbin performance can be improved
-      if ( TRUE == pSess->bisDLNAContent )
+      GST_INFO("Launching the pipeline with :\n%s\n", pPipeline);
+
+      pSess->pipeline = gst_parse_launch_full(pPipeline,
+                                              ctx,
+                                              GST_PARSE_FLAG_FATAL_ERRORS,
+                                              &g_error_str);
+
+      g_free(pPipeline);
+      pPipeline = NULL;
+
+      if (pSess->pipeline == NULL)
       {
-         GST_INFO("Launching manual pipeline\n");
-
-         GstElement *typefind;
-         g_free(pPipeline);
-         pPipeline = NULL;
-
-         pSess->pipeline = gst_pipeline_new("pipeline");
-         pSess->source = gst_element_factory_make("dlnasrc", "dlna-source");
-         pSess->demux  = gst_element_factory_make("brcmtsdemux", "tsdemux");
-         pSess->videoDecoder = gst_element_factory_make("brcmvideodecoder", "videodecoder");
-         pSess->audioDecoder = gst_element_factory_make("brcmaudiodecoder", "audiodecoder");
-         pSess->videoSink = gst_element_factory_make("brcmvideosink", "videosink");
-         pSess->audioSink = gst_element_factory_make("brcmaudiosink", "audiosink");
-         typefind = gst_element_factory_make ("typefind", "typefind");
-
-         if ( NULL == pSess->pipeline ||
-              NULL == pSess->source ||
-              NULL == pSess->demux ||
-              NULL == pSess->videoDecoder ||
-              NULL == pSess->audioDecoder || 
-              NULL == pSess->videoSink ||
-              NULL == pSess->audioSink ||
-              NULL == typefind)
+         GST_WARNING("PipeLine was not able to be created\n");
+         if (g_error_str)
          {
-            if ( NULL != pSess->source )
-               gst_object_unref( GST_OBJECT(pSess->source) );
-            if ( NULL != pSess->demux )
-               gst_object_unref( GST_OBJECT(pSess->demux) );
-            if ( NULL != pSess->videoDecoder )
-               gst_object_unref( GST_OBJECT(pSess->videoDecoder) );
-            if ( NULL != pSess->audioDecoder )
-               gst_object_unref(GST_OBJECT(pSess->audioDecoder) );
-            if ( NULL != pSess->audioSink )
-               gst_object_unref( GST_OBJECT(pSess->audioSink) );
-            stat = CGMI_ERROR_FAILED;
-            break;
+            g_print("Error with pipeline:%s \n", g_error_str->message);
          }
 
-         g_object_set( G_OBJECT (pSess->source), "uri", pSess->playbackURI, NULL );
-         g_print("Muting video decoder...\n");
-         g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", TRUE, NULL );
-         g_print("Muting audio decoder...\n");
-         g_object_set( G_OBJECT(pSess->audioDecoder), "decoder_mute", TRUE, NULL );
-
-         gst_bin_add_many( GST_BIN (pSess->pipeline),
-                           pSess->source,
-                           typefind,
-                           pSess->demux, 
-                           pSess->videoDecoder, 
-                           pSess->audioDecoder, 
-                           pSess->videoSink, 
-                           pSess->audioSink, 
-                           NULL );
-
-         if ( TRUE != gst_element_link(pSess->source, typefind) )
+         //now if there are missing elements that are needed in the pipeline, lets' dump
+         //those out.
+         if(g_error_matches(g_error_str, GST_PARSE_ERROR, GST_PARSE_ERROR_NO_SUCH_ELEMENT))
          {
-            GST_WARNING("Could not link source to demux\n");
-            stat = CGMI_ERROR_FAILED;
-            break;
-         }
-         if ( TRUE != gst_element_link(pSess->videoDecoder, pSess->videoSink) )
-         {
-            GST_WARNING("Could not link video decoder to video sink\n");
-            stat = CGMI_ERROR_FAILED;
-            break;
-         }
-         if ( TRUE != gst_element_link(pSess->audioDecoder, pSess->audioSink) )
-         {
-            GST_WARNING("Could not link audio decoder to audio sink\n");
-            stat = CGMI_ERROR_FAILED;
-            break;
-         }
-
-         g_signal_connect (G_OBJECT (typefind), "have_type", G_CALLBACK (cgmi_gst_have_type), pSess);
-         g_signal_connect( pSess->demux, "pad-added", G_CALLBACK (cgmi_gst_pad_added), pSess );
-         g_signal_connect( pSess->demux, "no-more-pads", G_CALLBACK (cgmi_gst_no_more_pads), pSess );
-         g_signal_connect( pSess->demux, "psi-info", G_CALLBACK(cgmi_gst_psi_info), pSess );
-      }
-
-      else
-      {
-         GST_INFO("Launching the pipeline with :\n%s\n", pPipeline);
-
-         pSess->pipeline = gst_parse_launch_full(pPipeline,
-                                                 ctx,
-                                                 GST_PARSE_FLAG_FATAL_ERRORS,
-                                                 &g_error_str);
-
-         g_free(pPipeline);
-         pPipeline = NULL;
-
-         if (pSess->pipeline == NULL)
-         {
-            GST_WARNING("PipeLine was not able to be created\n");
-            if (g_error_str)
+            guint i=0;
+            g_print("Missing these plugins:\n");
+            arr = gst_parse_context_get_missing_elements(ctx);
+            while (arr[i] != NULL)
             {
-               g_print("Error with pipeline:%s \n", g_error_str->message);
+               g_print("%s\n",arr[i]);
+               i++;
             }
-
-            //now if there are missing elements that are needed in the pipeline, lets' dump
-            //those out.
-            if(g_error_matches(g_error_str, GST_PARSE_ERROR, GST_PARSE_ERROR_NO_SUCH_ELEMENT))
-            {
-               guint i=0;
-               g_print("Missing these plugins:\n");
-               arr = gst_parse_context_get_missing_elements(ctx);
-               while (arr[i] != NULL)
-               {
-                  g_print("%s\n",arr[i]);
-                  i++;
-               }
-               g_strfreev(arr);
-            }
-            stat = CGMI_ERROR_NOT_IMPLEMENTED;
-            break;
+            g_strfreev(arr);
          }
+         stat = CGMI_ERROR_NOT_IMPLEMENTED;
+         break;
       }
 
       /* Add bus watch for events and messages */
@@ -1845,14 +1707,11 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
       g_source_set_callback(pSess->sourceWatch, (GSourceFunc)cgmi_gst_handle_msg, pSess, NULL);
       g_source_attach(pSess->sourceWatch, pSess->thread_ctx);
 
-      if (pSess->bisDLNAContent == FALSE || bisBroadcomHw == FALSE)
-      {
-         g_signal_connect( pSess->pipeline, "element-added",
-            G_CALLBACK(cgmi_gst_element_added), pSess );
+      g_signal_connect( pSess->pipeline, "element-added",
+         G_CALLBACK(cgmi_gst_element_added), pSess );
 
-         g_signal_connect( pSess->pipeline, "notify::source",
-            G_CALLBACK(cgmi_gst_notify_source), pSess );
-      }
+      g_signal_connect( pSess->pipeline, "notify::source",
+         G_CALLBACK(cgmi_gst_notify_source), pSess );
 
       sret = cisco_gst_setState( pSess, GST_STATE_PAUSED );
       if(GST_STATE_CHANGE_ASYNC == sret)

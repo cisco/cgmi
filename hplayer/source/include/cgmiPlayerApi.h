@@ -49,7 +49,9 @@ extern "C"
 
 #include <stdint.h>
 #include <glib.h>
+#ifdef USE_DRMPROXY
 #include <drmProxy.h>
+#endif
 /** Function return status values
  */
 typedef enum
@@ -134,13 +136,17 @@ typedef struct
    int pid;
    int streamType;
 }tcgmi_PidData;
+
+#ifdef USE_DRMPROXY
 typedef struct 
 {
     uint8_t  cpBlob[MAX_CP_BLOB_LENGTH]; 
     uint32_t bloblength; // The actual size of data in the cpblob array (the rest of cpBlob array will be unused).bloblength can be maximum equal to MAX_CP_BLOB_LENGTH which is the size of the cpBlob array. 
     tDRM_TYPE drmType; 
 }cpBlobStruct;
-
+#else
+typedef void* cpBlobStruct;
+#endif
 
 typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event, uint64_t code );
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );
@@ -273,7 +279,7 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_Load (void *pSession, const char *uri,cpBlobStruct * cpblob );
+cgmi_Status cgmi_Load ( void *pSession, const char *uri, cpBlobStruct * cpblob );
 
 /**
  *  \brief \b cgmi_Unload 

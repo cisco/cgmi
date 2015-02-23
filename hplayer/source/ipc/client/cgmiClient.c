@@ -107,7 +107,7 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSess = 0;
 
-    g_print("Enter on_handle_notification sessionHandle = %lu, event = %d code = %lld \n",
+    g_print("Enter on_handle_notification sessionHandle = %lu, event = %d code = %llu \n",
             (tCgmiDbusPointer)sessionHandle, event, code);
 
     // Preconditions
@@ -620,7 +620,7 @@ static int verify_dbus_env()
     newline = strchr(dbus_addr_buffer, '\n');
     if( newline != NULL ) { *newline = '\0'; }
 
-    g_print("Found %s == %s (%d)\n", DBUS_SESS_BUS_ADDR, dbus_addr_buffer, readCount);
+    g_print("Found %s == %s (%d)\n", DBUS_SESS_BUS_ADDR, dbus_addr_buffer, (gint)readCount);
 
     return setenv(DBUS_SESS_BUS_ADDR, dbus_addr_buffer, 1);
 }

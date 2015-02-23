@@ -2418,7 +2418,7 @@ static int verify_dbus_env()
     }
     dbus_addr_buffer[DBUS_SESS_BUS_ADDR_MAX-1] = '\0';
 
-    g_print("Found %s == %s (%d)\n", DBUS_SESS_BUS_ADDR, dbus_addr_buffer, readCount);
+    g_print("Found %s == %s (%d)\n", DBUS_SESS_BUS_ADDR, dbus_addr_buffer, (gint)readCount);
 
     return setenv(DBUS_SESS_BUS_ADDR, dbus_addr_buffer, 1);
 }
