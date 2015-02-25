@@ -11,9 +11,9 @@
 *   System: RDK 2.0
 *   Component Name : CGMI-Diags
 *   Language       : C
-*   License        : Proprietary 
+*   License        : BSD 
 *
-*   (c) Copyright Cisco Systems 2014
+*   (c) Copyright Cisco Systems 2015
 *
 *
 *
@@ -25,7 +25,9 @@
 *   \authors : QuocThanh Thuy
 *   \ingroup CGMI-diags
 */
-
+#ifdef HAVE_CONFIG_H
+# include <config.h>
+#endif
 #include <glib.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -172,8 +174,7 @@ cgmi_Status cgmiDiags_GetTimingMetricsMaxCount ( int *pCount )
 cgmi_Status cgmiDiags_GetTimingMetrics ( tCgmiDiags_timingMetric metrics[], int *pCount )
 {
     cgmi_Status retStatus = CGMI_ERROR_SUCCESS;
-    int i, entryCount = 0;
-    int curCount = 0;
+    int entryCount = 0;
     int inputCountAvailable = *pCount;
 
     pthread_mutex_lock(&cgmiDiagMutex);
@@ -414,7 +415,7 @@ cgmi_Status cgmiDiags_ResetTimingMetrics (void)
  */
 cgmi_Status cgmiDiags_GetNextSessionIndex(unsigned int *pIndex)
 {
-    static curIndex = 0;
+    static unsigned int curIndex = 0;
 
     if(NULL == pIndex) 
     {

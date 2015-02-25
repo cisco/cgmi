@@ -440,7 +440,7 @@ static void printPMT( tMpegTsPmt *curPmt )
 
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code )
 {
-    g_print( "CGMI Player Event Recevied : %d  code:%lld \n", event, code );
+    g_print( "CGMI Player Event Recevied : %d   \n", event);
 }
 
 static cgmi_Status cgmi_QueryBufferCallback(
@@ -534,10 +534,12 @@ static cgmi_Status cgmi_SectionBufferCallback_PAT(
     int sectionSize)
 {
     cgmi_Status retStat;
+// TODO remove dead code.
+#if 0
     tMpegTsPat pat;
     tcgmi_FilterData filterData;
     void *pNewFilterId = NULL;
-
+#endif
     //g_print( "cgmi_QueryBufferCallback -- pFilterId: 0x%08lx \n", pFilterId );
 
     if( NULL == pSection )

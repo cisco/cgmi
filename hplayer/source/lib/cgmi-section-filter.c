@@ -62,7 +62,7 @@ static void printHex (void *buffer, int size) {
 #endif
 
 
-static cgmi_Status charBufToGValueArray( char * buffer, 
+static cgmi_Status charBufToGValueArray( unsigned char * buffer, 
    int bufSize, 
    GValueArray **valueArray )
 {
@@ -291,7 +291,7 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
             // the pipeline after it has started playback.
             //if ( TRUE != gst_element_sync_state_with_parent(secFilter->appsink) )
             gst_element_get_state( pSess->demux, &state, NULL, 0 );
-            if ( TRUE != gst_element_set_state(secFilter->appsink, state) );
+            if ( TRUE != gst_element_set_state(secFilter->appsink, state) )
             {
                g_print("Could not sync appsink state with its parent!\n");
             }
@@ -502,8 +502,8 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
 
          // Convert the filter data to a glib compatible format
          retStat = charBufToGValueArray( pFilterData->value,
-            pFilterData->length,
-            &valueArray );
+                                         pFilterData->length,
+                                         &valueArray );
 
          if( CGMI_ERROR_SUCCESS != retStat ) 
          {
@@ -517,8 +517,8 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
 
          // Convert the filter data to a glib compatible format
          retStat = charBufToGValueArray( pFilterData->mask,
-            pFilterData->length,
-            &valueArray );
+                                         pFilterData->length,
+                                         &valueArray );
 
          if( CGMI_ERROR_SUCCESS != retStat ) 
          {

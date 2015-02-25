@@ -143,7 +143,7 @@ cgmi_Status cgmi_utils_finalize(void)
  *  \param[in] url  pointer to an http url shall be tested to see if it is pointing to a DLNA server
  *
  *  \param[out] bisdlnacontent  This pointer shall be populated with either TRUE or FALSE 
-*
+ *
  *
  * \post    On success the result will return a TRUE in the bisDLNAContent variable
  *
@@ -154,7 +154,7 @@ cgmi_Status cgmi_utils_finalize(void)
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, uint32_t *bisDLNAContent)
+cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, gboolean *bisDLNAContent)
 {
 
    cgmi_Status  status = CGMI_ERROR_SUCCESS;

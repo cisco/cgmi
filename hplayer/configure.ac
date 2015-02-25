@@ -163,11 +163,10 @@ AS_VERSION_COMPARE([$GST_API_VERSION], [0.10],
                    [PKG_CHECK_MODULES([GST],[gstreamer-1.0 >= 1.2.0])])
 
 AC_MSG_CHECKING(Checking to see if we should autodetect DLNA streams (enables libcurl) ... )
-AC_ARG_ENABLE([dlna-autodetect],
+AC_ARG_ENABLE([dlna_autodetect],
               [AS_HELP_STRING([--enable-dlna-autodetect],
                              [If set to =yes  libcurl will be enabled to auto detect if the http url is DLNA  ]) ],
-                             [AC_MSG_RESULT(yes)
-                                                          ],
+                             [AC_MSG_RESULT(yes) ],
                              [AC_MSG_RESULT(no)])
 AM_CONDITIONAL(DLNA_AUTODETECT_ENABLED,test x$enable_dlna_autodetect = xyes)
 
@@ -184,11 +183,10 @@ if test x$enable_tmet = xyes; then
    LDFLAGS+="$LIBDIAGTMETS_LIBS"
 fi
 
-if test x$enable_dlna_autodetect = xyes; then
+if test x$enable_dlna_autodect =xyes; then
    PKG_CHECK_MODULES([CURL], [libcurl])
    CFLAGS+="$CURL_CFLAGS"
    LDFLAGS+="$CURL_LIBS"
-   AC_DEFINE([ENABLE_DLNA_AUTODETECT], [1], [DLNA autodetect http enabled])
 fi
 #
 # Check for Doxygen for the documentation generation

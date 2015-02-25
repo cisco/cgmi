@@ -1,3 +1,7 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <glib.h>
 #include <string.h>
 #include <pthread.h>
@@ -9,7 +13,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdio.h>
-
+ 
 #include "dbusPtrCommon.h"
 #include "cgmiPlayerApi.h"
 #include "cgmi_dbus_client_generated.h"
@@ -107,7 +111,7 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSess = 0;
 
-    g_print("Enter on_handle_notification sessionHandle = %lu, event = %d code = %llu \n",
+    g_print("Enter on_handle_notification sessionHandle = %lu, event = %d code = %" G_GINT64_MODIFIER "d \n",
             (tCgmiDbusPointer)sessionHandle, event, code);
 
     // Preconditions
@@ -283,10 +287,12 @@ static int cgmi_fifoCompleteRead(int fd, void *buffer, size_t count)
 ////////////////////////////////////////////////////////////////////////////////
 
 /* Used for user data (CC) callbacks. */
+//TODO add documentation
+//
 static void *cgmi_UserDataCbThread(void *data)
 {
     tcgmi_PlayerEventCallbackData *cbData = (tcgmi_PlayerEventCallbackData *)data;
-    gchar *dataBuf = NULL;
+    guint8 *dataBuf = NULL;
     int bytesRead = 0;
     GstBuffer *pGstBuff = NULL;
     struct timeval selectTimeout;
@@ -416,7 +422,6 @@ static void *cgmi_UserDataCbThread(void *data)
             g_print("Failed to send data back to user!\n");
             g_free( dataBuf );
         }
-
         // Set dataBuf to NULL so we know not to reuse/free it.  Ownership has passed to the app.
         dataBuf = NULL;
     }
@@ -2650,12 +2655,12 @@ cgmi_Status _cgmi_stopUserDataFilterHelper(void *pSession, userDataBufferCB buff
 
 cgmi_Status cgmi_stopUserDataFilter(void *pSession, userDataBufferCB bufferCB)
 {
-    _cgmi_stopUserDataFilterHelper(pSession, bufferCB, NULL);
+    return _cgmi_stopUserDataFilterHelper(pSession, bufferCB, NULL);
 }
 
 cgmi_Status cgmi_stopRawUserDataFilter (void *pSession, userDataRawBufferCB bufferCB)
 {
-    _cgmi_stopUserDataFilterHelper(pSession, NULL, bufferCB);
+    return _cgmi_stopUserDataFilterHelper(pSession, NULL, bufferCB);
 }
 
 cgmi_Status cgmi_GetNumPids( void *pSession, int *pCount )

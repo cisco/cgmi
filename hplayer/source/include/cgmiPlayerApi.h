@@ -152,7 +152,7 @@ typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event 
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );
 typedef cgmi_Status (*sectionBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, cgmi_Status SectionStatus, char *pSection, int sectionSize);
 typedef cgmi_Status (*userDataBufferCB)(void *pUserData, void *pBuffer);
-typedef cgmi_Status (*userDataRawBufferCB)(void *pUserData, gchar *pBuffer, unsigned int bufferSize);
+typedef cgmi_Status (*userDataRawBufferCB)(void *pUserData, guint8 *pBuffer, unsigned int bufferSize);
 
 /**
  *  \brief \b cgmi_ErrorString

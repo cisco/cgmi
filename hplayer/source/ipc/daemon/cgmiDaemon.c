@@ -1,8 +1,9 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <string.h>
-#define _GNU_SOURCE
 #include <stdio.h>
-#undef _GNU_SOURCE
 #include <signal.h>
 #include <stdlib.h>
 #include <glib.h>
@@ -179,22 +180,15 @@ static size_t handleLogMessage( void *cookie, char const *data, size_t leng )
             break;
         }
 
-        // Syslog buffered data and new data, if we have both
+        syslog(logLevel->priority, "%-14s - %.*s%.*s", logLevel->open, 
+            gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer, 
+            (int)leng, data);
+
         if( gLoggingBuffer.bufferUsed > 0 )
         {
-            syslog(logLevel->priority, "%-14s - %.*s%.*s", logLevel->open, 
-                gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer, 
-                (int)leng, data);
-
             gLoggingBuffer.bufferUsed = 0;
         }
         // Syslog new data data
-        else
-        {
-            syslog(logLevel->priority, "%-14s - %.*s", logLevel->open, 
-                gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer, 
-                (int)leng, data);
-        }        
 
     }while(0);
 
@@ -234,12 +228,11 @@ static void * createFifoThreadFnc( void *data )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     tcgmi_FifoCallbackSink *callbackData = data;
-    int ret;
 
     if( NULL == callbackData )
     {
         CGMID_ERROR("Failed start callback fifo thread\n" );
-        return NULL;  
+        return NULL ;  
     }
 
     // Open fifo
@@ -260,11 +253,11 @@ static void * createFifoThreadFnc( void *data )
 
     // Success if we reach here.
     callbackData->state = CGMI_FIFO_STATE_OPENED;
+    return NULL;
 }
 
 static cgmi_Status asyncCreateFifo( tcgmi_FifoCallbackSink *cbData )
 {
-    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     int ret;
 
     if( NULL == cbData )
@@ -455,7 +448,7 @@ static cgmi_Status cgmiSectionBufferCallback(
 }
 
 /* This function will write exactly count bytes */
-static cgmi_fifoCompleteWrite(int fd, void *buffer, size_t count)
+static int cgmi_fifoCompleteWrite(int fd, void *buffer, size_t count)
 {
     int bytesWritten = 0;
     int totalWritten = 0;
@@ -517,7 +510,7 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
     bufferSize = GST_BUFFER_SIZE( pGstbuffer );
 #endif
 
-    if( bufferSize < 0 )
+    if( bufferSize == 0 )
     {
         CGMID_ERROR("Empty buffer?.\n");
 #if GST_CHECK_VERSION(1,0,0)

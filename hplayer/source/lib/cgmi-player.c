@@ -144,48 +144,6 @@ static void cgmi_flush_pipeline(tSession *pSess)
    return;
 }
 
-static gboolean isRateSupported(void *pSession, float rate)
-{
-   cgmi_Status stat = CGMI_ERROR_FAILED;
-   float *rates_array = NULL;
-   unsigned int numRates = 32;
-   gint ii = 0;
-   gboolean rateSupported = FALSE;
-
-   do {
-      rates_array = g_malloc0(sizeof(float) * numRates);
-      if(NULL == rates_array)
-      {
-         GST_ERROR("Failed to malloc rates array\n");
-         break;
-      }
-
-      stat = cgmi_GetRates(pSession, rates_array, &numRates);
-      if(stat != CGMI_ERROR_SUCCESS)
-      {
-         GST_ERROR("cgmi_GetRates() failed\n");
-         break;
-      }
-
-      for(ii = 0; ii < numRates; ii++)
-      {
-         if(rate == rates_array[ii])
-         {
-            rateSupported = TRUE;
-            break;
-         }
-      }
-
-   }while(0);
-   
-   if(NULL != rates_array)
-   {
-      g_free(rates_array);
-      rates_array = NULL;
-   }
-  
-   return rateSupported;
-}
 
 void debug_cisco_gst_streamDurPos( tSession *pSess )
 {
@@ -206,7 +164,7 @@ void debug_cisco_gst_streamDurPos( tSession *pSess )
    GST_INFO("Duration: %lld (seconds)\n", (curDur/GST_SECOND), gstFormat );
 
 }
-
+//TODO need to document this thread, when does it get shutdown.
 gpointer cgmi_monitor( gpointer data )
 {
    gint64 videoPts, audioPts;
@@ -261,7 +219,7 @@ gpointer cgmi_monitor( gpointer data )
                if ( videoPts - audioPts > PTS_FLUSH_THRESHOLD || videoPts - audioPts < -PTS_FLUSH_THRESHOLD )
                {
                   g_print("Flushing buffers due to large audio-video PTS difference...\n");
-                  g_print("videoPts = %lld, audioPts = %lld, diff = %lld\n", videoPts, audioPts, videoPts - audioPts);
+                  g_print("videoPts = %" G_GINT64_MODIFIER "d, audioPts = %" G_GINT64_MODIFIER "d, diff = %" G_GINT64_MODIFIER "d\n", videoPts, audioPts, (videoPts - audioPts));
 
                   cgmi_flush_pipeline( pSess );
                   flushDone = TRUE;
@@ -353,8 +311,10 @@ gpointer cgmi_monitor( gpointer data )
             pSess->steadyStateWindow++;
          }
       }
-      g_usleep(1000000);
+
+      g_usleep(1000000); //TODO : random number?
    }
+   return NULL;
 }
 
 static void cgmi_gst_delayed_seek( tSession *pSess )
@@ -665,7 +625,6 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
    GObject *pmtInfo = NULL, *streamInfo = NULL;
    GValueArray *streamInfos = NULL;
    GValueArray *descriptors = NULL;
-   GValueArray *languages = NULL;
    gint i, j, z;
    GValue *value;
    guint program, version, pcrPid, esPid, esType;
@@ -1109,7 +1068,7 @@ char* cgmi_ErrorString(cgmi_Status stat)
    "CGMI_ERROR_WRONG_STATE",       ///<The Requested state could not be set
    "CGMI_ERROR_NUM_ERRORS "        ///<Place Holder to know how many errors there are in the struct enum.
    };
-   if ((stat > CGMI_ERROR_NUM_ERRORS) || (stat < 0))
+   if ((stat > CGMI_ERROR_NUM_ERRORS))
    {
       return errorString[CGMI_ERROR_NUM_ERRORS];
    }
@@ -1338,60 +1297,6 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    return stat;
 }
 
-static void cgmi_gst_have_type( GstElement *typefind, guint probability, GstCaps *caps, gpointer user_data )
-{
-   tSession *pSess = (tSession*)user_data;
-   gchar *caps_string;
-   GstElement *drmStreamParser = NULL;
-   GstElement *drmMgr = NULL;
-
-   g_print ("FOUND_TYPE\n");
-
-   if ( NULL == pSess )
-      return;
-
-   caps_string = gst_caps_to_string( caps );
-   if ( NULL != caps_string )
-   {
-      g_print("Caps: %s\n", caps_string);
-   }
-
-   if ( NULL != caps_string && NULL != g_strstr_len(caps_string, -1, VGDRM_CAPS) )
-   {
-      drmStreamParser = gst_element_factory_make("ciscvgdrmstreamparser", "drm-stream-parser");
-      if ( NULL == drmStreamParser )
-      {
-         GST_WARNING("Could not obtain a DRM stream parser element!\n");
-         return;
-      }
-      drmMgr = gst_element_factory_make("ciscdrmmgr", "drmmgr");
-      if ( NULL == drmMgr )
-      {
-         GST_WARNING("Could not obtain a DRM Manager element!\n");
-         gst_object_unref( GST_OBJECT(drmStreamParser) );
-         return;
-      }
-
-      gst_bin_add_many( GST_BIN (pSess->pipeline), drmStreamParser, drmMgr, NULL );
-
-      if ( TRUE != gst_element_link_many(typefind, drmStreamParser, drmMgr, pSess->demux, NULL) )
-      {
-         GST_WARNING("Could not link source to DRM streamer parser to DRM manager to demux\n");
-         return;
-      }
-
-      gst_element_set_state(drmStreamParser, GST_STATE_PLAYING);
-      gst_element_set_state(drmMgr, GST_STATE_PLAYING);
-   }
-   else
-   {
-      if ( TRUE != gst_element_link_many(typefind, pSess->demux, NULL) )
-      {
-         GST_WARNING("Could not link source to demux\n");
-         return;
-      }
-   }
-}
 
 static void cgmi_gst_no_more_pads(GstElement *element, gpointer data)
 {
@@ -1417,7 +1322,6 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
    gchar                **arr;
    gchar                *pPipeline;
    cgmi_Status          stat = CGMI_ERROR_SUCCESS;
-   GSource              *source;
    uint32_t             bisBroadcomHw = FALSE;
    int                  drmStatus = 1;
    GstStateChangeReturn sret;
@@ -1870,14 +1774,6 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
       return CGMI_ERROR_INVALID_HANDLE;
    }
 
-#if 0
-   if(TRUE != isRateSupported(pSession, rate))
-   {
-      GST_ERROR("rate %f is not supported. Call getRates API to get the list of supported rates\n", rate);
-      return CGMI_ERROR_BAD_PARAM;
-   }
-#endif
-
    gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
    
    /* Obtain the current position, needed for the seek event before a flush.
@@ -1980,9 +1876,12 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
          GST_ERROR("gst_element_send_event() failed");
          return CGMI_ERROR_FAILED;
       }
-      
-      if(((0.0 == pSess->rate) || (1.0 == pSess->rate)) && ((rate > 1.0) || (rate < -1.0)) ||
-         ((0.0 == rate) || (1.0 == rate)) && ((pSess->rate > 1.0) || (pSess->rate < -1.0)))
+     
+      // are we paused or playing and are we being asked to fast forward or rewind?
+      // or
+      // are we asked to pause or play when we are fast fowarding or rewinding?
+      if( (((0.0 == pSess->rate) || (1.0 == pSess->rate)) && ((rate > 1.0) || (rate < -1.0))) ||
+         (((0.0 == rate) || (1.0 == rate)) && ((pSess->rate > 1.0) || (pSess->rate < -1.0))))
       {
          if (rate > 1.0 || rate < -1.0)
          {
@@ -2268,7 +2167,6 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay )
 
 cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw, int srch, int dstx, int dsty, int dstw, int dsth )
 {
-   char *ptr;
    tSession *pSess = (tSession*)pSession;
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
@@ -2457,7 +2355,6 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
 
 cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
 {
-   cgmi_Status stat;
    tSession *pSess = (tSession*)pSession;
 
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
@@ -2490,7 +2387,6 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
 
 cgmi_Status cgmi_SetDefaultAudioLang ( void *pSession, const char *language )
 {
-   char *ptr;
    tSession *pSess = (tSession*)pSession;
 
    if ( NULL == language )
@@ -2569,7 +2465,6 @@ cgmi_Status cgmi_GetClosedCaptionServiceInfo (void *pSession, int index, char* i
 cgmi_Status cgmi_startUserDataFilter( void *pSession, userDataBufferCB bufferCB, void *pUserData )
 {
    GstCaps *caps = NULL;
-   GstState pipelineState;
    GstStateChangeReturn stateChangeRet;
 
    tSession *pSess = (tSession*)pSession;

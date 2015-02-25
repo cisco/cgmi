@@ -1,3 +1,7 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 /* Includes */
 #include <glib.h>
 #include <stdio.h>
@@ -27,6 +31,7 @@
 #define MAX_HISTORY 50
 
 static void *filterid = NULL;
+//TODO DOES THIS GLOBAL need to be mutex protected?
 static bool filterRunning = false;
 static struct termios oldt, newt;
 static int gAutoPlay = true;
@@ -493,7 +498,7 @@ static cgmi_Status sectionfilter( void *pSessionId, gint pid, guchar *value,
 
 static cgmi_Status destroyfilter( void *pSessionId )
 {
-    cgmi_Status retCode = CGMI_ERROR_SUCCESS;
+    cgmi_Status retCode = CGMI_ERROR_FAILED ;
 
     if ( filterid != NULL )
     {
@@ -504,7 +509,7 @@ static cgmi_Status destroyfilter( void *pSessionId )
             {
                 printf("CGMI StopSectionFilterFailed\n");
             }
-            filterRunning == false;
+            filterRunning = false;
         }
 
         retCode = cgmi_DestroySectionFilter( pSessionId, filterid );
@@ -515,13 +520,12 @@ static cgmi_Status destroyfilter( void *pSessionId )
 
         filterid = NULL;
     }    
+    return retCode;
 }
 
 /* Callback Function */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code )
 {
-    printf("CGMI Event Received : code = %llu event = ", code);
-
     switch (event)
     {
         case NOTIFY_STREAMING_OK:
@@ -793,7 +797,10 @@ int main(int argc, char **argv)
     gchar tmpstr[3];
     int len = 0;
     int err = 0;
+
+#ifdef USE_DRMPROXY
     cpBlobStruct cp_Blob_Struct, cp_Blob_Struct_2;
+#endif
     cpBlobStruct * p_Cp_Blob_Struct = NULL;
     cpBlobStruct * p_Cp_Blob_Struct_2 = NULL;
 
@@ -963,9 +970,10 @@ int main(int argc, char **argv)
         /* load */
         if (strncmp(command, "load", 4) == 0)
         {
+#ifdef USE_DRMPROXY
             char *arg3;
             char *arg4;
-
+#endif
             if ( strlen( command ) <= 5 )
             {
                 printf( "\tload <url> Or load <url> <drmType> <cpBlob>\n" );
@@ -1044,9 +1052,11 @@ int main(int argc, char **argv)
         /* play */
         else if (strncmp(command, "play", 4) == 0)
         {
+#ifdef USE_DRMPROXY
             char *arg2;
             char *arg3;
             char *arg4;
+#endif
             int autoPlay = true;
 
             if ( strlen( command ) <= 5 )
@@ -1127,7 +1137,10 @@ int main(int argc, char **argv)
         /* resume */
         else if (strncmp(command, "resume", 6) == 0)
         {
-            char *arg2, *arg3, *arg4, *arg5;
+            char *arg2;
+#ifdef USE_DRMPROXY
+            char  *arg3, *arg4, *arg5;
+#endif
             int autoPlay = true;
             float resumePosition = 0.0;
 
