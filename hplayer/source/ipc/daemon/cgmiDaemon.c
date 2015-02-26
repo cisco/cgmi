@@ -2136,6 +2136,214 @@ on_handle_cgmi_get_tsb_slide (
     return TRUE;
 }
 
+static gboolean
+on_handle_cgmi_get_num_subtitle_languages (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    gint count = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetNumSubtitleLanguages( (void *)pSession, &count );
+
+    }while(0);    
+
+    org_cisco_cgmi_complete_get_num_subtitle_languages (object,
+            invocation,
+            count,
+            retStat);
+
+    return TRUE;
+}
+
+static gboolean
+on_handle_cgmi_get_subtitle_info (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId,
+    gint index,
+    gint bufSize )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    char *buffer = NULL;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+    gushort pid = 0;
+    gushort compPageId = 0;
+    gushort ancPageId = 0;
+    guchar type = 0;
+
+
+    CGMID_ENTER();
+    
+    do{
+        if ( bufSize <= 0 )
+        {
+            retStat = CGMI_ERROR_BAD_PARAM;
+            break;
+    
+        }
+
+        buffer = g_malloc0(bufSize);    
+        if ( NULL == buffer )
+        {
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+         
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetSubtitleInfo( (void *)pSession, index, buffer, bufSize, &pid, &type, &compPageId, &ancPageId );
+
+    }while(0);
+       
+    org_cisco_cgmi_complete_get_subtitle_info( object,
+                                               invocation,
+                                               buffer,
+                                               pid,
+                                               type,
+                                               compPageId,
+                                               ancPageId,
+                                               retStat );
+
+    if ( NULL != buffer )
+        g_free( buffer );
+
+    return TRUE;
+}
+
+static gboolean
+on_handle_cgmi_set_default_subtitle_lang (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId,
+    const char *language )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_SetDefaultSubtitleLang( (void *)pSession, language );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_set_default_subtitle_lang (object,
+            invocation,
+            retStat);
+
+    return TRUE;
+}
+
+static gboolean
+on_handle_cgmi_create_filter( OrgCiscoCgmi *object,
+                              GDBusMethodInvocation *invocation,
+                              GVariant *arg_sessionId,
+                              gint arg_filterPid,
+                              gint arg_filterFormat )
+{
+   cgmi_Status retStat = CGMI_ERROR_FAILED;
+   void *pFilterId;
+   GVariant *sessVar = NULL;
+   GVariant *filterIdVar = NULL, *dbusVar = NULL;
+   tCgmiDbusPointer pSession;
+
+   CGMID_ENTER();
+
+   do
+   {
+      g_variant_get( arg_sessionId, "v", &sessVar );
+      if ( sessVar == NULL )
+      {
+         retStat = CGMI_ERROR_FAILED;
+         break;
+      }
+      g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+      g_variant_unref( sessVar );
+
+      // Provide a pointer to the sessionId as the private data.
+      retStat = cgmi_CreateFilter( (void *)pSession,
+                                   arg_filterPid,
+                                   (void *)object,
+                                   arg_filterFormat,
+                                   &pFilterId );
+
+      // Build GVariant to return filter ID pointer
+      filterIdVar = g_variant_new( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pFilterId );
+      if ( filterIdVar == NULL )
+      {
+         CGMID_INFO( "Failed to create new variant\n" );
+         retStat = CGMI_ERROR_OUT_OF_MEMORY;
+         break;
+      }
+      filterIdVar = g_variant_ref_sink( filterIdVar );
+
+      dbusVar = g_variant_new( "v", filterIdVar );
+      if ( dbusVar == NULL )
+      {
+         CGMID_INFO( "Failed to create new variant\n" );
+         retStat = CGMI_ERROR_OUT_OF_MEMORY;
+         break;
+      }
+      dbusVar = g_variant_ref_sink( dbusVar );
+
+      // Return results
+      org_cisco_cgmi_complete_create_filter( object,
+                                             invocation,
+                                             dbusVar,
+                                             retStat );
+
+   }while ( 0 );
+
+   if ( dbusVar != NULL )
+   {g_variant_unref( dbusVar ); }
+   if ( filterIdVar != NULL )
+   {g_variant_unref( filterIdVar ); }
+
+   if ( retStat != CGMI_ERROR_SUCCESS )
+   {
+      CGMID_ERROR( "Failed with error %s.", cgmi_ErrorString( retStat ) );
+   }
+
+   return TRUE;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS setup callbacks
 ////////////////////////////////////////////////////////////////////////////////
@@ -2361,6 +2569,26 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-get-tsb-slide",
                       G_CALLBACK (on_handle_cgmi_get_tsb_slide),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-num-subtitle-languages",
+                      G_CALLBACK (on_handle_cgmi_get_num_subtitle_languages),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-subtitle-info",
+                      G_CALLBACK (on_handle_cgmi_get_subtitle_info),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-set-default-subtitle-lang",
+                      G_CALLBACK (on_handle_cgmi_set_default_subtitle_lang),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-create-filter",
+                      G_CALLBACK (on_handle_cgmi_create_filter),
                       NULL);
 
     if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (interface),

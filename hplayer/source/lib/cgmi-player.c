@@ -47,6 +47,7 @@ static gboolean cgmi_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data
 static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename );
 
 static gchar gDefaultAudioLanguage[4];
+static gchar gDefaultSubtitleLanguage[4];
 
 static int  cgmi_CheckSessionHandle(tSession *pSess)
 {
@@ -741,6 +742,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                switch ( (guint8)string->str[pos] )
                {
                   case 0x0A: /* ISO_639_language_descriptor */
+                  {
                      g_print("Found audio language descriptor for stream %d\n", j);
                      if ( pSess->numAudioLanguages < MAX_AUDIO_LANGUAGE_DESCRIPTORS && len >= 4 )
                      {
@@ -765,7 +767,33 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                         g_print("Maximum number of audio language descriptors %d has been reached!!!\n",
                                 MAX_AUDIO_LANGUAGE_DESCRIPTORS);
                      }
-                     break;
+                  }
+                  break;
+
+                  case 0x59: /* Subtitling descriptor */
+                  {
+                     g_print("Found subtitle language descriptor for stream %d\n", j);
+                     if ( pSess->numSubtitleLanguages < MAX_SUBTITLE_LANGUAGES && len >= 8 )
+                     {
+                        pSess->subtitleInfo[pSess->numSubtitleLanguages].pid = esPid;
+                        strncpy(pSess->subtitleInfo[pSess->numSubtitleLanguages].isoCode, &string->str[pos + 2], 3);
+                        pSess->subtitleInfo[pSess->numSubtitleLanguages].isoCode[3] = 0;
+                        pSess->subtitleInfo[pSess->numSubtitleLanguages].type = string->str[pos + 5];
+                        pSess->subtitleInfo[pSess->numSubtitleLanguages].compPageId = (gushort)(((gushort)string->str[pos + 6] << 8) | string->str[pos + 7]);
+                        pSess->subtitleInfo[pSess->numSubtitleLanguages].ancPageId = (gushort)(((gushort)string->str[pos + 8] << 8) | string->str[pos + 9]);
+                        if ( strlen(pSess->defaultSubtitleLanguage) > 0 && pSess->subtitleLanguageIndex == INVALID_INDEX )
+                        {
+                           if ( strncmp(pSess->subtitleInfo[pSess->numSubtitleLanguages].isoCode, pSess->defaultSubtitleLanguage, 3) == 0 )
+                           {
+                              g_print("Stream (%d) subtitle language matched to default subtitle lang %s\n", j, pSess->defaultSubtitleLanguage);
+                              pSess->subtitleLanguageIndex = j;
+                           }
+                        }
+
+                        pSess->numSubtitleLanguages++;
+                     }
+                  }
+                  break;
 
                   case 0x86: /* Closed Caption Service Descriptor */
                   {
@@ -814,6 +842,10 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                      }
                   }
                   break;
+
+                  default:
+                     break;
+
                }
 
                pos += len + 2;
@@ -1225,6 +1257,10 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->defaultAudioLanguage[sizeof(pSess->defaultAudioLanguage) - 1] = 0;
    pSess->audioLanguageIndex = INVALID_INDEX;
 
+   strncpy( pSess->defaultSubtitleLanguage, gDefaultSubtitleLanguage, sizeof(pSess->defaultSubtitleLanguage) );
+   pSess->defaultSubtitleLanguage[sizeof(pSess->defaultSubtitleLanguage) - 1] = 0;
+   pSess->subtitleLanguageIndex = INVALID_INDEX;
+
    pSess->thread_ctx = g_main_context_new();
 
    pSess->autoPlayMutex = g_mutex_new ();
@@ -1504,10 +1540,12 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
 
    pSess->numAudioLanguages = 0;
    pSess->numClosedCaptionServices = 0;
+   pSess->numSubtitleLanguages = 0;
    pSess->numStreams = 0;
    pSess->videoStreamIndex = INVALID_INDEX;
    pSess->audioStreamIndex = INVALID_INDEX;
    pSess->audioLanguageIndex = INVALID_INDEX;
+   pSess->subtitleLanguageIndex = INVALID_INDEX;
    pSess->isAudioMuted = FALSE;
    pSess->rate = 0.0;
    pSess->rateBeforePause = 0.0;
@@ -3085,3 +3123,97 @@ cgmi_Status cgmi_GetTsbSlide(void *pSession, unsigned long *pTsbSlide)
 
    return stat;
 }
+
+cgmi_Status cgmi_GetNumSubtitleLanguages( void *pSession, int *count )
+{
+   tSession *pSess = (tSession *)pSession;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == count )
+   {
+      g_print("Null count pointer passed for subtitle language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   *count = pSess->numSubtitleLanguages;
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_GetSubtitleInfo( void *pSession, int index, char *buf, int bufSize, unsigned short *pid,
+                                  unsigned char *type, unsigned short *compPageId, unsigned short *ancPageId )
+{
+   tSession *pSess = (tSession *)pSession;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( NULL == buf )
+   {
+      g_print("Null buffer pointer passed for subtitle language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   if ( index > pSess->numSubtitleLanguages - 1 || index < 0 )
+   {
+      g_print("Bad index value passed for subtitle language!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   strncpy(buf, pSess->subtitleInfo[index].isoCode, bufSize);
+   buf[bufSize - 1] = 0;
+
+   if ( pid != NULL )
+   {
+      *pid = pSess->subtitleInfo[index].pid;
+   }
+
+   if ( type != NULL )
+   {
+      *type = pSess->subtitleInfo[index].type;
+   }
+
+   if (  compPageId != NULL )
+   {
+      *compPageId = pSess->subtitleInfo[index].compPageId;
+   }
+
+   if ( ancPageId != NULL )
+   {
+      *ancPageId = pSess->subtitleInfo[index].ancPageId;
+   }
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_SetDefaultSubtitleLang( void *pSession, const char *language )
+{
+   char *ptr;
+   tSession *pSess = (tSession *)pSession;
+
+   if ( NULL == language )
+   {
+      g_print("Bad subtitle language pointer passed!\n");
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   strncpy(gDefaultSubtitleLanguage, language, sizeof(gDefaultSubtitleLanguage));
+   gDefaultSubtitleLanguage[sizeof(gDefaultSubtitleLanguage) - 1] = 0;
+
+   if ( NULL != pSess )
+   {
+      strncpy(pSess->defaultSubtitleLanguage, language, sizeof(pSess->defaultSubtitleLanguage));
+      pSess->defaultSubtitleLanguage[sizeof(pSess->defaultSubtitleLanguage) - 1] = 0;
+   }
+
+   return CGMI_ERROR_SUCCESS;
+}
+

@@ -2992,3 +2992,325 @@ cgmi_Status cgmi_GetTsbSlide( void *pSession, unsigned long *pTsbSlide )
 
     return retStat;
 }
+
+cgmi_Status cgmi_GetNumSubtitleLanguages( void *pSession, int *count )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( pSession == NULL || count == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_get_num_subtitle_languages_sync( gProxy,
+                dbusVar,
+                count,
+                (gint *)&retStat,
+                NULL,
+                &error );
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_GetSubtitleInfo( void *pSession, int index, char *buf, int bufSize, unsigned short *pid,
+                                  unsigned char *type, unsigned short *compPageId, unsigned short *ancPageId )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    gchar *buffer = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( NULL == pSession || NULL == buf )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_get_subtitle_info_sync( gProxy,
+                                                    dbusVar,
+                                                    index,
+                                                    bufSize,
+                                                    (gchar **)&buffer,
+                                                    (gushort *)pid,
+                                                    (guchar *)type,
+                                                    (gushort *)compPageId,
+                                                    (gushort *)ancPageId,
+                                                    (gint *)&retStat,
+                                                    NULL,
+                                                    &error );
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    if( NULL == buffer )
+    {
+       return CGMI_ERROR_FAILED;
+    }
+
+    strncpy( buf, buffer, bufSize );
+    buf[bufSize - 1] = 0;
+    g_free( buffer );
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_SetDefaultSubtitleLang( void *pSession, const char *language )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    GVariant *sessVar = NULL, *dbusVar = NULL;
+
+    // Preconditions
+    if( pSession == NULL || language == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        dbusVar = g_variant_new ( "v", sessVar );
+        if( dbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        dbusVar = g_variant_ref_sink(dbusVar);
+
+        org_cisco_cgmi_call_set_default_subtitle_lang_sync( gProxy,
+                dbusVar,
+                language,
+                (gint *)&retStat,
+                NULL,
+                &error );
+
+    }while(0);
+
+    //Clean up
+    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_CreateFilter( void *pSession, int pid, void *pFilterPriv, tcgmi_FilterFormat format, void **pFilterId )
+{
+    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
+    GError *error = NULL;
+    tcgmi_SectionFilterCbData *sectionFilterData;
+    tcgmi_PlayerEventCallbackData *cbData;
+    GVariant *sessVar = NULL, *sessDbusVar = NULL;
+    GVariant *filterIdVar = NULL, *filterDbusVar = NULL;
+    tCgmiDbusPointer filterIdPtr;
+
+    // Preconditions
+    if( pSession == NULL || pFilterId == NULL )
+    {
+        return CGMI_ERROR_BAD_PARAM;
+    }
+
+    enforce_session_preconditions(pSession);
+
+    enforce_dbus_preconditions();
+
+    do{
+        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+        if( sessVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessVar = g_variant_ref_sink(sessVar);
+
+        sessDbusVar = g_variant_new ( "v", sessVar );
+        if( sessDbusVar == NULL )
+        {
+            g_print("Failed to create new variant\n");
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+        sessDbusVar = g_variant_ref_sink(sessDbusVar);
+
+        org_cisco_cgmi_call_create_filter_sync( gProxy,
+                                                sessDbusVar,
+                                                pid,
+                                                format,
+                                                &filterDbusVar,
+                                                (gint *)&retStat,
+                                                NULL,
+                                                &error );
+
+        if (error)
+        {   g_print("%s:%d: IPC failure: %s\n", __FUNCTION__, __LINE__, error->message);
+            g_error_free (error);
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( filterDbusVar, "v", &filterIdVar );
+        if( filterIdVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+        g_variant_get( filterIdVar, DBUS_POINTER_TYPE, &filterIdPtr );
+        g_variant_unref( filterIdVar );
+        g_variant_unref( filterDbusVar );
+
+        *pFilterId = (void *)filterIdPtr;
+
+    }while(0);
+
+    //Clean up
+    if( sessDbusVar != NULL ) { g_variant_unref(sessDbusVar); }
+    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+
+    dbus_check_error(error);
+
+    //TODO:  Remove debug
+    g_print("Created filter ID 0x%08lx\n", filterIdPtr);
+
+    do
+    {
+        if ( gSectionFilterCbs == NULL )
+        {
+            g_print("Internal error:  Callback hash table not initialized.\n");
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        sectionFilterData = g_malloc0(sizeof(tcgmi_SectionFilterCbData));
+        if (sectionFilterData == NULL)
+        {
+            retStat = CGMI_ERROR_OUT_OF_MEMORY;
+            break;
+        }
+
+        cbData = g_hash_table_lookup(gPlayerEventCallbacks, (gpointer)pSession);
+        if (cbData == NULL)
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        sectionFilterData->pFilterPriv = pFilterPriv;
+        sectionFilterData->pUserData = cbData->userParam;
+        sectionFilterData->running = FALSE;
+
+        g_hash_table_insert( gSectionFilterCbs, (gpointer)*pFilterId,
+                             (gpointer)sectionFilterData );
+
+        if( NULL == g_hash_table_lookup( gSectionFilterCbs, 
+            (gpointer)*pFilterId ) )
+        {
+            g_print("Can't find the new filter in the hash!!!\n");
+        }
+
+    }while(0);
+
+    return retStat;
+}
+
+cgmi_Status cgmi_DestroyFilter( void *pSession, void *pFilterId )
+{
+   return cgmi_DestroySectionFilter(pSession, pFilterId);
+}
+
+cgmi_Status cgmi_SetFilter( void *pSession, void *pFilterId, tcgmi_FilterData *pFilter )
+{
+   return cgmi_SetSectionFilter(pSession, pFilterId, pFilter);
+}
+
+cgmi_Status cgmi_StartFilter( void *pSession,
+                              void *pFilterId,
+                              int timeout,
+                              int bOneShot,
+                              int bEnableCRC,
+                              queryBufferCB bufferCB,
+                              sectionBufferCB sectionCB )
+{
+   return cgmi_StartSectionFilter(pSession, pFilterId, timeout, bOneShot, bEnableCRC, bufferCB, sectionCB);
+}
+
+cgmi_Status cgmi_StopFilter( void *pSession, void *pFilterId )
+{
+   return cgmi_StopSectionFilter(pSession, pFilterId);
+}
+

@@ -9,6 +9,7 @@ extern "C"
 #endif
 
 #define MAX_AUDIO_LANGUAGE_DESCRIPTORS 32
+#define MAX_SUBTITLE_LANGUAGES         16
 #define MAX_CLOSED_CAPTION_SERVICES    71
 #define MAX_STREAMS                    32
 #define SOCKET_RECEIVE_BUFFER_SIZE     1000000
@@ -30,6 +31,15 @@ typedef struct
    gint serviceNum;
    gchar isoCode[4];
 }tCCLang;
+
+typedef struct
+{
+   guint    pid;
+   guchar   type;
+   gushort  compPageId;
+   gushort  ancPageId;
+   gchar    isoCode[4];
+}tSubtitleInfo;
 
 typedef struct
 {
@@ -69,11 +79,15 @@ typedef struct
    tCgmiRect          vidDestRect;
    tAudioLang         audioLanguages[MAX_AUDIO_LANGUAGE_DESCRIPTORS];
    tCCLang            closedCaptionServices[MAX_CLOSED_CAPTION_SERVICES];
+   tSubtitleInfo      subtitleInfo[MAX_SUBTITLE_LANGUAGES];
    gchar              defaultAudioLanguage[4];
+   gchar              defaultSubtitleLanguage[4];
    gint               numAudioLanguages;
    gint               audioLanguageIndex;
    gint               numClosedCaptionServices;
    gint               numStreams;
+   gint               numSubtitleLanguages;
+   gint               subtitleLanguageIndex;
    tCgmiStream        streams[MAX_STREAMS];
    /* user registered data */ 
    cgmi_EventCallback eventCB;

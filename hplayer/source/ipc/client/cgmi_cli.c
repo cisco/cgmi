@@ -698,6 +698,9 @@ void help(void)
            "\tgetaudiolanginfo\n"
            "\tsetaudiolang <index>\n"
            "\tsetdefaudiolang <lang>\n"
+          "\n"
+          "\tgetsubtitleinfo\n"
+          "\tsetdefsubtitlelang <lang>\n"
            "\n"
            "\tgetccinfo\n"
            "\n"
@@ -2136,6 +2139,47 @@ int main(int argc, char **argv)
                printf("CGMI GetTsbSlide Failed\n");
             }
         }
+      /* get subtitle languages available */
+      else if ( strncmp(command, "getsubtitleinfo", 19) == 0 )
+      {
+         gint count;
+         gint i;
+         gushort compPageId, ancPageId, pid;
+         guchar type;
+
+         gchar lang[4] = { 0 };
+         retCode = cgmi_GetNumSubtitleLanguages(pSessionId, &count);
+         if ( retCode != CGMI_ERROR_SUCCESS )
+         {
+            printf("Error returned %d\n", retCode);
+            continue;
+         }
+         printf("\nAvailable Subtitle Languages:\n");
+         printf("--------------------------\n");
+         for ( i = 0; i < count; i++ )
+         {
+            retCode = cgmi_GetSubtitleInfo(pSessionId, i, lang, sizeof(lang), &pid, &type, &compPageId, &ancPageId);
+            if ( retCode != CGMI_ERROR_SUCCESS ) break;
+            printf("%d: %s pid (%04x) type (%02x) compPageId (%04x) ancPageId (%04x)\n", i, lang, pid, type, compPageId, ancPageId);
+         }
+      }
+      /* set default subtitle language */
+      else if ( strncmp(command, "setdefsubtitlelang", 18) == 0 )
+      {
+         if ( strlen(command) <= 19 )
+         {
+            printf("\tsetdefsubtitlelang <lang>\n");
+            continue;
+         }
+         strncpy(arg, command + 19, strlen(command) - 19);
+         arg[strlen(command) - 19] = '\0';
+
+         retCode = cgmi_SetDefaultSubtitleLang(pSessionId, arg);
+         if ( retCode != CGMI_ERROR_SUCCESS )
+         {
+            printf("Error returned %d\n", retCode);
+         }
+      }
         /* unknown */
         else
         {

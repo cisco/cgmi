@@ -124,6 +124,13 @@ typedef struct
 
 typedef enum
 {
+   FILTER_PSI,
+   FILTER_PES,
+   FILTER_TS
+}tcgmi_FilterFormat; 
+
+typedef enum
+{
    STREAM_TYPE_AUDIO,
    STREAM_TYPE_VIDEO,
    STREAM_TYPE_UNKNOWN
@@ -906,6 +913,215 @@ cgmi_Status cgmi_SetLogging ( const char *gstDebugStr);
  */
 cgmi_Status cgmi_GetTsbSlide(void *pSession, unsigned long *pTsbSlide);
 
+/**
+ *  \brief \b cgmi_GetNumSubtitleLanguages
+ *
+ *  This is a request to find out how many subtitle languages
+ *  the currently loaded asset has.
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[out] count  this int will be populated with the
+ *        nubmer of subtitle languages the current asset has.
+ *
+ *  \pre    The Session must be open the the url must be loaded
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ *  \image html subtitle_language_selection.png "How to do
+ *         Subtitle Language Selection"
+ */
+cgmi_Status cgmi_GetNumSubtitleLanguages( void *pSession,  int *count );
+
+/**
+ *  \brief \b cgmi_GetSubtitleInfo
+ *
+ *  This is to find out ISO-639 language code of the requested stream.
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[in] index  Index of the subtitle stream in the
+ *        returned number of available languages
+ *
+ *  \param[out] buf    Buffer to write the ISO-639 code in
+ *
+ *  \param[in] bufSize Size of the buffer passed in
+ *  
+ *  \param[out] pid  Pointer to unsigned short.
+ * 
+ *  \param[out] type  Pointer to unsigned char.
+ * 
+ *  \param[out] compPageId  Pointer to unsigned short.
+ * 
+ *  \param[out] ancPageId  Pointer to unsigned short.
+ *  
+ *  \pre    The Session must be open the the url must be loaded.
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ *  \image html subtitle_language_selection.png "How to do
+ *         Subtitle Language Selection"
+ */
+cgmi_Status cgmi_GetSubtitleInfo( void *pSession, int index, char *buf, int bufSize, unsigned short *pid,
+                                  unsigned char *type, unsigned short *compPageId, unsigned short *ancPageId );
+
+/**
+ *  \brief \b cgmi_SetDefaultSubtitleLang
+ *
+ *  This is a request to specify the default subtitle language.
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[in] language  The ISO-639 code for the default
+ *        subtitle language to be set
+ *
+ * \return  CGMI_ERROR_SUCCESS when the API succeeds
+ *  \ingroup CGMI
+ *
+ *  \image html subtitle_language_selection.png "How to do
+ *         Subtitle Language Selection"
+ */
+cgmi_Status cgmi_SetDefaultSubtitleLang (void *pSession,  const char *language);
+
+/**
+ *  \brief \b cgmi_CreateFilter 
+ *
+ *  Create a filter for a playing CGMI session.
+ *
+ *  \param[in] pid          This is the pid to filter.  A pFilterId can be reused only for the same pid.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterPriv  Private data that will be passed to section filter callbacks.
+ * 
+ *  \param[in] format       Data format requested as defined by
+ *                          tcgmi_FilterFormat.
+ * 
+ *  \param[out] pFilterId   This pointer will be set to a pointer to the section filter instance created.
+ *
+ *  \pre     The Session must be open and the url must be loaded.
+ *
+ *  \post    On success the user can now SET the section filter.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when handle allocation succeeds.
+ *
+ *
+ *  \image html Filtering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_CreateFilter( void *pSession, int pid, void* pFilterPriv, tcgmi_FilterFormat format, void** pFilterId);
+
+/**
+ *  \brief \b cgmi_DestroyFilter 
+ *
+ *  Destroy a section filter.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterId    This is a handle to an active filter ID.
+ *
+ *  \pre     A section filter ID must have be acquired via a
+ *           successful cgmi_CreateFilter call.
+ *
+ *  \post    On success the resources associated with the provided section filter ID will be freed
+ *
+ *  \return  CGMI_ERROR_SUCCESS when resources are freed successfully.
+ *
+ *
+ *  \image html SectionFiltering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_DestroyFilter( void *pSession, void* pFilterId  );
+
+/**
+ *  \brief \b cgmi_SetFilter 
+ *
+ *  Set the section filter parameters (see the tcgmi_FilterData for specifics).
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterId    This is a handle to an active filter ID.
+ *
+ *  \param[in] pFilter      A pointer to the section filter parameters.  The value/mask values are limited to 16 bytes, and 3rd byte is ignored due to a Broadcom bug.
+ *
+ *  \pre     A section filter ID must have be acquired via a successful cgmi_CreateSectionFilter call, and not be started.
+ *
+ *  \post    On success the section filter will be ready to start.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when parameters valid.
+ *
+ *
+ *  \image html SectionFiltering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_SetFilter( void *pSession, void* pFilterId, tcgmi_FilterData *pFilter );
+
+/**
+ *  \brief \b cgmi_StartFilter 
+ *
+ *  Start receiving callbacks for a section filter.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterId    This is a handle to an active filter ID.
+ *
+ *  \param[in] timeout      [Not Implemented]  Section filter timeout value in seconds.  Callback is fired with error code when expired.
+ *
+ *  \param[in] bOneShot     [Not Implemented]  When non-zero the
+ *        first successful callback will automatically trigger
+ *        cgmi_StopFilter.
+ *
+ *  \param[in] bEnableCRC   [Not Implemented]
+ *
+ *  \param[in] bufferCB     Callback utilized to acquire a buffer from the user to be filled and returned via sectionCB.
+ *
+ *  \param[in] sectionCB    Callback to be fired providing a stream of data (matching section filter parameters).
+ *
+ *  \pre     The section filter handle must have successfully
+ *           been created and set (via cgmi_CreateFilter and
+ *           cgmi_SetSectionFilter).
+ *
+ *  \post    The callback (sectionCB) will be called with a stream of matching data, or with an error code once timeout expires without finding matching data.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when section filter is started awaiting callbacks.
+ *
+ *
+ *  \image html SectionFiltering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_StartFilter( void *pSession, void* pFilterId, int timeout, int bOneShot , int bEnableCRC, queryBufferCB bufferCB,  sectionBufferCB sectionCB );
+
+/**
+ *  \brief \b cgmi_StopFilter 
+ *
+ *  Stop filtering and callbacks for a section filter.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pFilterId    This is a handle to an active filter ID.
+ *
+ *  \pre     The section filter handle must have successfully
+ *           been created, set, and started (via
+ *           cgmi_StartFilter).
+ *
+ *  \post    The section filter will stop calling bufferCB/sectionCB.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when filtering/callbacks have successfully been stopped.
+ *
+ *
+ *  \image html SectionFiltering.png "How to do section filtering. "
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_StopFilter( void *pSession, void* pFilterId );
 
 /**
  * \section How To section
