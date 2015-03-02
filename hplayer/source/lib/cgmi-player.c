@@ -27,6 +27,7 @@ GST_DEBUG_CATEGORY_STATIC (cgmi);
 #define GST_CAT_DEFAULT cgmi
 
 #define INVALID_INDEX                  -2
+#define INVALID_PID                    (-1)
 
 #define PTS_FLUSH_THRESHOLD            (10 * 45000) //10 secs
 #define PTS_ERROR_COUNT_THRESHOLD      20
@@ -751,6 +752,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                         pSess->audioLanguages[pSess->numAudioLanguages].index = j;
                         strncpy( pSess->audioLanguages[pSess->numAudioLanguages].isoCode, &string->str[pos+2], 3 );
                         pSess->audioLanguages[pSess->numAudioLanguages].isoCode[3] = 0;
+                        pSess->audioLanguages[pSess->numAudioLanguages].bDiscrete = FALSE;
 
                         if ( strlen(pSess->defaultAudioLanguage) > 0 && pSess->audioLanguageIndex == INVALID_INDEX )
                         {
@@ -1557,6 +1559,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    pSess->rateAfterPause = 0.0;
    pSess->maskRateChangedEvent = FALSE;
    pSess->noVideo = FALSE;
+   pSess->bQueryDiscreteAudioInfo = TRUE;
 
    // 
    // check to see if this is a DLNA url.
@@ -2587,23 +2590,115 @@ cgmi_Status cgmi_GetVideoDecoderIndex(void *pSession, int *idx)
 
 cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
 {
-   tSession *pSess = (tSession*)pSession;
+   tSession     *pSess = (tSession*)pSession;
+   GstStructure *structure = NULL;
+   GstQuery     *query = NULL;
+   gboolean     ret = FALSE;
+   cgmi_Status  stat = CGMI_ERROR_FAILED;
+   gchar        *muxedLangISO = NULL;
+   gchar        *discreteLangISO = NULL;
+   gchar        **strArr = NULL;
+   gchar        **walk = NULL;
 
-   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   do 
    {
-      g_print("%s:Invalid session handle\n", __FUNCTION__);
-      return CGMI_ERROR_INVALID_HANDLE;
+
+      if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+      {
+         GST_ERROR("%s:Invalid session handle\n", __FUNCTION__);
+         stat = CGMI_ERROR_INVALID_HANDLE;
+         break;
+      }
+
+      if ( NULL == count )
+      {
+         GST_ERROR("Null count pointer passed for audio language!\n");
+         stat = CGMI_ERROR_BAD_PARAM;
+         break;
+      }
+
+      if(TRUE == pSess->bQueryDiscreteAudioInfo)
+      {
+         /* Query the pipeline for info about discrete audio streams */
+         structure = gst_structure_new ("getAudioLangInfo", 
+               "commaSepMuxedLangISO", G_TYPE_STRING, NULL, 
+               "commaSepDiscreteLangISO", G_TYPE_STRING, NULL, 
+               NULL);
+
+#if GST_CHECK_VERSION(1,0,0)
+         query = gst_query_new_custom (GST_QUERY_CUSTOM, structure);
+#else
+         query = gst_query_new_application (GST_QUERY_CUSTOM, structure);
+#endif
+
+         ret = gst_element_query (pSess->pipeline, query);
+         if(ret)
+         {
+            muxedLangISO = gst_structure_get_string(structure, "commaSepMuxedLangISO");
+            GST_INFO("Comma Separted muxed audio languages: %s\n", muxedLangISO); 
+
+            discreteLangISO = gst_structure_get_string(structure, "commaSepDiscreteLangISO");
+            GST_INFO("Comma Separted discrete audio languages: %s\n", discreteLangISO);
+
+            /* Are there language descriptors for the muxed audio languages? If no, add
+             * the muxed audio languages to the list */
+            if(0 == pSess->numAudioLanguages)
+            {
+               strArr = g_strsplit(muxedLangISO, ",", -1);
+               walk = strArr;
+               while((*walk) && (pSess->numAudioLanguages < MAX_AUDIO_LANGUAGE_DESCRIPTORS))
+               {
+                  if(pSess->numAudioLanguages >= 1)
+                  {
+                     GST_ERROR("There is more than one muxed audio stream without language descriptor\n");
+                  }
+                  GST_DEBUG("Muxed Audio Lang ISO: %s\n", *walk);
+                  g_strlcpy(pSess->audioLanguages[pSess->numAudioLanguages].isoCode, *walk,
+                        sizeof(pSess->audioLanguages[pSess->numAudioLanguages].isoCode));
+                  pSess->audioLanguages[pSess->numAudioLanguages].index = INVALID_INDEX;
+                  pSess->audioLanguages[pSess->numAudioLanguages].streamType = STREAM_TYPE_AUDIO;
+                  pSess->audioLanguages[pSess->numAudioLanguages].pid = INVALID_PID;
+                  pSess->audioLanguages[pSess->numAudioLanguages].bDiscrete = FALSE;
+                  pSess->numAudioLanguages++;
+                  walk++;
+               }
+               g_strfreev(strArr);
+            }
+            else
+            {
+               GST_WARNING("Muxed audio stream(s) do not have language descriptors\n");
+            }
+            
+            strArr = g_strsplit(discreteLangISO, ",", -1);
+            walk = strArr;
+            while((*walk) && (pSess->numAudioLanguages < MAX_AUDIO_LANGUAGE_DESCRIPTORS))
+            {
+               GST_DEBUG("Discrete Audio Lang ISO: %s\n", *walk);
+               g_strlcpy(pSess->audioLanguages[pSess->numAudioLanguages].isoCode, *walk,
+                     sizeof(pSess->audioLanguages[pSess->numAudioLanguages].isoCode));
+               pSess->audioLanguages[pSess->numAudioLanguages].index = INVALID_INDEX;
+               pSess->audioLanguages[pSess->numAudioLanguages].streamType = STREAM_TYPE_AUDIO;
+               pSess->audioLanguages[pSess->numAudioLanguages].pid = INVALID_PID;
+               pSess->audioLanguages[pSess->numAudioLanguages].bDiscrete = TRUE;
+               pSess->numAudioLanguages++;
+               walk++;
+            }
+            g_strfreev(strArr);
+         }
+         pSess->bQueryDiscreteAudioInfo = FALSE;
+      }
+
+      *count = pSess->numAudioLanguages;
+      stat = CGMI_ERROR_SUCCESS;
+   }while(0);
+   
+   if( NULL != query )
+   {
+      gst_query_unref ( query );
+      query = NULL;
    }
 
-   if ( NULL == count )
-   {
-      g_print("Null count pointer passed for audio language!\n");
-      return CGMI_ERROR_BAD_PARAM;
-   }
-
-   *count = pSess->numAudioLanguages;
-
-   return CGMI_ERROR_SUCCESS;
+   return stat;
 }
 
 cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize)
@@ -2660,9 +2755,24 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
    g_print("Setting audio stream index to %d for language %s\n",
            pSess->audioLanguages[index].index, pSess->audioLanguages[index].isoCode);
 
-   pSess->audioLanguageIndex = pSess->audioLanguages[index].index;
-
-   g_object_set( G_OBJECT(pSess->demux), "audio-stream", pSess->audioLanguageIndex, NULL );
+   if(FALSE == pSess->audioLanguages[index].bDiscrete)
+   {
+      if(INVALID_INDEX != pSess->audioLanguages[index].index)
+      {
+         pSess->audioLanguageIndex = pSess->audioLanguages[index].index;
+         g_object_set( G_OBJECT(pSess->demux), "audio-stream", pSess->audioLanguageIndex, NULL );
+      }
+      else
+      {
+         GST_ERROR("Switching to a muxed audio stream without a language descriptor is currently unsupported\n");
+         return CGMI_ERROR_NOT_SUPPORTED;
+      }
+   }
+   else
+   {
+      GST_ERROR("Switching to a discrete audio stream is currently unsupported\n");
+      return CGMI_ERROR_NOT_SUPPORTED;
+   }
 
    return CGMI_ERROR_SUCCESS;
 }

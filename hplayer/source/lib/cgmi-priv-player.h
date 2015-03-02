@@ -23,6 +23,7 @@ typedef struct
    guint index;
    guint streamType;
    gchar isoCode[4];
+   gboolean bDiscrete;
 }tAudioLang;
 
 typedef struct
@@ -116,6 +117,7 @@ typedef struct
    guint              steadyStateWindow;
    gboolean           maskRateChangedEvent;
    gboolean           noVideo;
+   gboolean           bQueryDiscreteAudioInfo;
 
 }tSession;
 
