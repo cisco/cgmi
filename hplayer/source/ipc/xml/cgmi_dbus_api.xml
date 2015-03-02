@@ -288,10 +288,10 @@
             <arg name="index" direction="in" type="i"/>
             <arg name="bufSize" direction="in" type="i"/>
             <arg name="buffer" direction="out" type="s"/>
-            <arg name="pid" direction="out" type="u"/>
-            <arg name="type" direction="out" type="u"/>
-            <arg name="compPageId" direction="out" type="u"/>
-            <arg name="ancPageId" direction="out" type="u"/>
+            <arg name="pid" direction="out" type="q"/>
+            <arg name="type" direction="out" type="y"/>
+            <arg name="compPageId" direction="out" type="q"/>
+            <arg name="ancPageId" direction="out" type="q"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
