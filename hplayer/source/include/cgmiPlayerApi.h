@@ -26,7 +26,7 @@
 *    Thread Safe: Yes
 *
 *    \authors : Matt Snoby, Kris Kersey, Zack Wine, Chris Foster, Tankut Akgul, Saravanakumar Periyaswamy
-*    Platform Dependencies: Gstreamer 0.10.
+*    Platform Dependencies: Gstreamer 0.10/1.0.
 *  \ingroup CGMI
 */
 
@@ -43,8 +43,16 @@ extern "C"
 {
 #endif
 
-#define SECTION_FILTER_EMPTY_PID 0x1FFF // Indicates filter shouldn't match PID
-#define AUTO_SELECT_STREAM       -1     // Indicates the first stream of specified type in the PMT will be auto selected
+/** Indicates filter shouldn't match PID
+ */
+#define SECTION_FILTER_EMPTY_PID 0x1FFF
+
+/** Indicates the first stream of specified type in the PMT will be auto selected
+ */
+#define AUTO_SELECT_STREAM       -1
+
+/** Indicates maximum copy protection blob length
+ */
 #define MAX_CP_BLOB_LENGTH 64000
 
 #include <stdint.h>
@@ -102,6 +110,8 @@ typedef enum
 
 }tcgmi_Event; 
 
+/** CGMI session types
+ */
 typedef enum
 {
    LIVE,                                  ///<This is a Live stream 
@@ -110,20 +120,26 @@ typedef enum
 
 }cgmi_SessionType; 
 
+/** Section filter types
+ */
 typedef enum
 {
-    FILTER_COMP_EQUAL,
-    FILTER_COMP_NOT_EQUAL
+    FILTER_COMP_EQUAL,                    ///<Filter passes data when it matches the data pattern
+    FILTER_COMP_NOT_EQUAL                 ///<Filter passes data when it doesn't match the data pattern
 }cgmi_FilterComparitor;
 
+/** Section filter configuration parameters
+ */
 typedef struct
 {
-   unsigned char *value;
-   unsigned char *mask;
-   int length;
-   cgmi_FilterComparitor comparitor;
+   unsigned char *value;                  ///<Value to match against in a section
+   unsigned char *mask;                   ///<Bits to be included within value during check for a match or a non-match
+   int length;                            ///<Length of the value field to match against
+   cgmi_FilterComparitor comparitor;      ///<Comparison type
 }tcgmi_FilterData; 
 
+/** Stream types
+ */
 typedef enum
 {
    STREAM_TYPE_AUDIO,
@@ -131,27 +147,55 @@ typedef enum
    STREAM_TYPE_UNKNOWN
 }tcgmi_StreamType;
 
+/** PID information returned for a selected stream index in a PMT
+ */
 typedef struct
 {
-   int pid;
-   int streamType;
+   int pid;                               ///<PID value of the selected stream
+   int streamType;                        ///<Type of the selected stream (see Table 2-29 of ISO/IEC 13818-1)
 }tcgmi_PidData;
 
 #ifdef USE_DRMPROXY
+/** Structure that holds DRM copy protection data passed to CGMI
+
+    bloblength holds the actual size of data in the cpblob array
+    (the rest of cpBlob array will be unused).
+    bloblength can be equal to MAX_CP_BLOB_LENGTH at max which is
+    the size of the cpBlob array.
+ */
 typedef struct 
 {
     uint8_t  cpBlob[MAX_CP_BLOB_LENGTH]; 
-    uint32_t bloblength; // The actual size of data in the cpblob array (the rest of cpBlob array will be unused).bloblength can be maximum equal to MAX_CP_BLOB_LENGTH which is the size of the cpBlob array. 
+    uint32_t bloblength;
     tDRM_TYPE drmType; 
 }cpBlobStruct;
 #else
+/** Opaque pointer that is used in place when DRM copy protection is disabled
+ */
 typedef void* cpBlobStruct;
 #endif
 
+/** Function pointer type for event callback that CGMI uses to report async events
+ */
 typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event, uint64_t code );
+/** Function pointer type for callback that requests a buffer from the application.
+    This buffer is filled with filtered section data and returned back to the application
+    in another callback (see sectionBufferCB below)
+ */
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );
+/** Function pointer type for callback that submits a buffer filled with filtered
+    section data back to the application.
+ */
 typedef cgmi_Status (*sectionBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, cgmi_Status SectionStatus, char *pSection, int sectionSize);
+/** Function pointer type for callback that submits a buffer filled with
+    MPEG user data back to the application. The buffer submitted is a gstreamer GstBuffer
+    which must be unreffed by the application after it is used.
+ */
 typedef cgmi_Status (*userDataBufferCB)(void *pUserData, void *pBuffer);
+/** Function pointer type for callback that submits a buffer filled with
+    MPEG user data back to the application. The buffer submitted is a raw data buffer
+    The application is responsible for freeing this buffer after use.
+ */
 typedef cgmi_Status (*userDataRawBufferCB)(void *pUserData, guint8 *pBuffer, unsigned int bufferSize);
 
 /**

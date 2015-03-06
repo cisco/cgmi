@@ -160,8 +160,8 @@ void debug_cisco_gst_streamDurPos( tSession *pSess )
 #endif
 
    GST_INFO("Stream: %s\n", pSess->playbackURI );
-   GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND), gstFormat );
-   GST_INFO("Duration: %lld (seconds)\n", (curDur/GST_SECOND), gstFormat );
+   GST_INFO("Position: %" G_GINT64_MODIFIER "d (seconds)\n", (curPos/GST_SECOND));
+   GST_INFO("Duration: %" G_GINT64_MODIFIER "d (seconds)\n", (curDur/GST_SECOND));
 
 }
 //TODO need to document this thread, when does it get shutdown.
@@ -1822,7 +1822,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
           */
          if((1.0 == rate) && (TRUE == is_live) && (FALSE == in_tsb))
          {
-            GST_WARNING("Switching to TSB by seeking to the pause pos: %lld at 1x\n", position);
+            GST_WARNING("Switching to TSB by seeking to the pause pos: %" G_GINT64_MODIFIER "d at 1x\n", position);
             /* Flush to avoid displaying few more frames before the seek to pause pos */
             cgmi_flush_pipeline(pSess);
          }
@@ -1982,7 +1982,7 @@ cgmi_Status cgmi_GetPosition (void *pSession, float *pPosition)
       gst_element_query_position( pSess->pipeline, &gstFormat, &curPos );
 #endif
 
-      GST_INFO("Position: %lld (seconds)\n", (curPos/GST_SECOND) );
+      GST_INFO("Position: %" G_GINT64_MODIFIER "d (seconds)\n", (curPos/GST_SECOND) );
       *pPosition = (curPos/GST_SECOND);
 
    } while (0);
@@ -2013,7 +2013,7 @@ cgmi_Status cgmi_GetDuration (void *pSession, float *pDuration, cgmi_SessionType
 #endif
 
       GST_INFO("Stream: %s\n", pSess->playbackURI );
-      GST_INFO("Position: %lld (seconds)\n", (Duration/GST_SECOND) );
+      GST_INFO("Position: %" G_GINT64_MODIFIER "d (seconds)\n", (Duration/GST_SECOND) );
       *pDuration = (float)(Duration/GST_SECOND);
       
       if(TRUE == pSess->bisDLNAContent)
@@ -2495,7 +2495,7 @@ cgmi_Status cgmi_startUserDataFilter( void *pSession, userDataBufferCB bufferCB,
       return CGMI_ERROR_FAILED;
    }
 
-   caps = gst_caps_new_simple( "application/x-video-user-data", NULL );
+   caps = gst_caps_new_simple( "application/x-video-user-data", NULL, NULL );
    g_object_set( pSess->userDataAppsink, "emit-signals", TRUE, "caps", caps, NULL );
    gst_caps_unref( caps );
 
