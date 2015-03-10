@@ -3327,3 +3327,39 @@ cgmi_Status cgmi_SetDefaultSubtitleLang( void *pSession, const char *language )
    return CGMI_ERROR_SUCCESS;
 }
 
+cgmi_Status cgmi_GetStc(void *pSession, uint64_t *pStc)
+{
+   cgmi_Status stat = CGMI_ERROR_FAILED;
+   tSession *pSess = (tSession*)pSession;
+
+   do
+   {
+      if(NULL == pStc)
+      {
+         g_print("%s: pTsbSlide param is NULL\n", __FUNCTION__);
+         stat = CGMI_ERROR_BAD_PARAM;
+         break;
+      }
+
+      *pStc = 0;
+
+      if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+      {
+         g_print("%s:Invalid session handle\n", __FUNCTION__);
+         stat = CGMI_ERROR_INVALID_HANDLE;
+         break;
+      }
+
+      if (NULL == pSess->demux)
+      {
+         stat = CGMI_ERROR_NOT_INITIALIZED;
+         break;
+      }
+
+      g_object_get(pSess->demux, "stc", pStc, NULL);
+      stat = CGMI_ERROR_SUCCESS;
+
+   }while(0);
+
+   return stat;
+}

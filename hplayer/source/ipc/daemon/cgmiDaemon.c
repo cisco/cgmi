@@ -2272,6 +2272,42 @@ on_handle_cgmi_set_default_subtitle_lang (
 }
 
 static gboolean
+on_handle_cgmi_get_stc (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId )
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    uint64_t stc = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    //CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL )
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetStc( (void *)pSession, &stc );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_get_stc ( object,
+                                      invocation,
+                                      stc,
+                                      retStat );
+
+    return TRUE;
+}
+
+static gboolean
 on_handle_cgmi_create_filter( OrgCiscoCgmi *object,
                               GDBusMethodInvocation *invocation,
                               GVariant *arg_sessionId,
@@ -2584,6 +2620,11 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-set-default-subtitle-lang",
                       G_CALLBACK (on_handle_cgmi_set_default_subtitle_lang),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-stc",
+                      G_CALLBACK (on_handle_cgmi_get_stc),
                       NULL);
 
     g_signal_connect (interface,

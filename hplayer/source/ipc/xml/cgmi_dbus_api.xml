@@ -108,6 +108,12 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
+        <method name="getStc">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="stc" direction="out" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
         <!-- Audio APIs -->
         <method name="getNumAudioLanguages">
             <arg name="sessionId" direction="in" type="v"/>

@@ -983,6 +983,22 @@ cgmi_Status cgmi_GetSubtitleInfo( void *pSession, int index, char *buf, int bufS
 cgmi_Status cgmi_SetDefaultSubtitleLang (void *pSession,  const char *language);
 
 /**
+ *  \brief \b cgmi_GetStc
+ *
+ *	 Returns decoder STC clock value
+ *
+ *  \param[in] pSession  This is a handle to the active session.
+ *
+ *  \param[out] pStc     Decoder STC clock value
+ *
+ *  \return              CGMI_ERROR_SUCCESS when call succeeds.
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetStc(void *pSession, uint64_t *pStc);
+
+/**
  *  \brief \b cgmi_CreateFilter 
  *
  *  Create a filter for a playing CGMI session.
