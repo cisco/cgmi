@@ -290,11 +290,14 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
                g_print("Could not link demux to appsink!\n");
             }
 
+            // Disable async state change to prevent get_state() delay after appsink is flushed.
+            gst_base_sink_set_async_enabled(GST_BASE_SINK(secFilter->appsink), FALSE);
+
             // This sync state is required when the appsink element is added to
             // the pipeline after it has started playback.
             //if ( TRUE != gst_element_sync_state_with_parent(secFilter->appsink) )
             gst_element_get_state(pSess->demux, &state, NULL, 0);
-            if ( TRUE != gst_element_set_state(secFilter->appsink, state) );
+            if ( GST_STATE_CHANGE_FAILURE == gst_element_set_state(secFilter->appsink, state) )
             {
                g_print("Could not sync appsink state with its parent!\n");
             }
