@@ -2646,7 +2646,7 @@ cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
             {
                strArr = g_strsplit(muxedLangISO, ",", -1);
                walk = strArr;
-               while((*walk) && (pSess->numAudioLanguages < MAX_AUDIO_LANGUAGE_DESCRIPTORS))
+               while((walk) && (*walk) && (pSess->numAudioLanguages < MAX_AUDIO_LANGUAGE_DESCRIPTORS))
                {
                   if(pSess->numAudioLanguages >= 1)
                   {
@@ -2671,7 +2671,7 @@ cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
             
             strArr = g_strsplit(discreteLangISO, ",", -1);
             walk = strArr;
-            while((*walk) && (pSess->numAudioLanguages < MAX_AUDIO_LANGUAGE_DESCRIPTORS))
+            while((walk) && (*walk) && (pSess->numAudioLanguages < MAX_AUDIO_LANGUAGE_DESCRIPTORS))
             {
                GST_DEBUG("Discrete Audio Lang ISO: %s\n", *walk);
                g_strlcpy(pSess->audioLanguages[pSess->numAudioLanguages].isoCode, *walk,
