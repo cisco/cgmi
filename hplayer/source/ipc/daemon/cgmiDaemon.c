@@ -2380,6 +2380,79 @@ on_handle_cgmi_create_filter( OrgCiscoCgmi *object,
    return TRUE;
 }
 
+static gboolean
+on_handle_cgmi_set_picture_setting(
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId,
+    int pctl,
+    int value)
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL ) 
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_SetPictureSetting( (void *)pSession, pctl, value );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_set_picture_setting (object,
+            invocation,
+            retStat);
+
+    return TRUE;
+}
+
+static gboolean
+on_handle_cgmi_get_picture_setting (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation,
+    GVariant *arg_sessionId,
+    int pctl)
+{
+    cgmi_Status retStat = CGMI_ERROR_FAILED;
+    gint value = 0;
+    GVariant *sessVar = NULL;
+    tCgmiDbusPointer pSession;
+
+    CGMID_ENTER();
+
+    do{
+        g_variant_get( arg_sessionId, "v", &sessVar );
+        if( sessVar == NULL )
+        {
+            retStat = CGMI_ERROR_FAILED;
+            break;
+        }
+
+        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+        g_variant_unref( sessVar );
+
+        retStat = cgmi_GetPictureSetting( (void *)pSession, pctl, &value );
+
+    }while(0);
+
+    org_cisco_cgmi_complete_get_picture_setting (object,
+            invocation,
+            value,
+            retStat);
+
+    return TRUE;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS setup callbacks
 ////////////////////////////////////////////////////////////////////////////////
@@ -2630,6 +2703,16 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-create-filter",
                       G_CALLBACK (on_handle_cgmi_create_filter),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-set-picture-setting",
+                      G_CALLBACK (on_handle_cgmi_set_picture_setting),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-picture-setting",
+                      G_CALLBACK (on_handle_cgmi_get_picture_setting),
                       NULL);
 
     if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (interface),

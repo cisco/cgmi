@@ -114,6 +114,20 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
+        <method name="setPictureSetting">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="pctl" direction="in" type="i"/>
+            <arg name="value" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getPictureSetting">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="pctl" direction="in" type="i"/>
+            <arg name="value" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
         <!-- Audio APIs -->
         <method name="getNumAudioLanguages">
             <arg name="sessionId" direction="in" type="v"/>

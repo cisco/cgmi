@@ -136,11 +136,22 @@ typedef enum
    STREAM_TYPE_UNKNOWN
 }tcgmi_StreamType;
 
+typedef enum
+{
+    PICTURE_CTRL_CONTRAST = 0,
+    PICTURE_CTRL_SATURATION,
+    PICTURE_CTRL_HUE,
+    PICTURE_CTRL_BRIGHTNESS,
+    PICTURE_CTRL_COLORTEMP,
+    PICTURE_CTRL_SHARPNESS
+}tcgmi_PictureCtrl;
+
 typedef struct
 {
    int pid;
    int streamType;
 }tcgmi_PidData;
+
 typedef struct 
 {
     uint8_t  cpBlob[MAX_CP_BLOB_LENGTH]; 
@@ -1138,6 +1149,49 @@ cgmi_Status cgmi_StartFilter( void *pSession, void* pFilterId, int timeout, int 
  *
  */
 cgmi_Status cgmi_StopFilter( void *pSession, void* pFilterId );
+
+/**
+ *  \brief \b cgmi_SetPictureSetting
+ *
+ *  Set a particular video setting on this video decode.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pctl         This is the control you wish to set.
+ *
+ *  \param[in] value        This is the value of the control, range between -32768 and 32767.
+ *
+ *  \pre     The Session must be open the the url must be loaded.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when the setting has been successfully applied.
+ *
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_SetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int value );
+
+/**
+ *  \brief \b cgmi_GetPictureSetting
+ *
+ *  Get a particular video setting from this video decode.
+ *
+ *  \param[in] pSession     This is a handle to the active session.
+ *
+ *  \param[in] pctl         This is the control you wish to get.
+ *
+ *  \param[out] pvalue       This is the value of the control, range between -32768 and 32767.
+ *
+ *  \pre     The Session must be open the the url must be loaded.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when the setting has been successfully gotten.
+ *
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int *pvalue );
+
 
 /**
  * \section How To section

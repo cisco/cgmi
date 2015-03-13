@@ -3363,3 +3363,72 @@ cgmi_Status cgmi_GetStc(void *pSession, uint64_t *pStc)
 
    return stat;
 }
+
+cgmi_Status cgmi_SetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int value )
+{
+   tSession *pSess = (tSession*)pSession;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( (value < -32768) || (value > 32767) )
+   {
+      g_print("%s:Invalid value for picture setting. -32768 < %d < 32767!\n", __FUNCTION__, value);
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   switch (pctl)
+   {
+      case PICTURE_CTRL_SATURATION:
+         if (NULL != pSess->videoDecoder)
+             g_object_set(G_OBJECT(pSess->videoDecoder), "video-saturation", value, NULL );
+         break;
+      case PICTURE_CTRL_CONTRAST:
+      case PICTURE_CTRL_HUE:
+      case PICTURE_CTRL_BRIGHTNESS:
+      case PICTURE_CTRL_COLORTEMP:
+      case PICTURE_CTRL_SHARPNESS:
+         return CGMI_ERROR_NOT_IMPLEMENTED;
+      default:
+         return CGMI_ERROR_BAD_PARAM;
+   }
+
+   return CGMI_ERROR_SUCCESS;
+}
+
+cgmi_Status cgmi_GetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int *pvalue )
+{
+   tSession *pSess = (tSession*)pSession;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      g_print("%s:Invalid session handle\n", __FUNCTION__);
+      return CGMI_ERROR_INVALID_HANDLE;
+   }
+
+   if ( pvalue == NULL )
+   {
+       return CGMI_ERROR_BAD_PARAM;
+   }
+
+   switch (pctl)
+   {
+       case PICTURE_CTRL_SATURATION:
+           if (NULL != pSess->videoDecoder)
+               g_object_get(G_OBJECT(pSess->videoDecoder), "video-saturation", pvalue, NULL );
+           break;
+       case PICTURE_CTRL_CONTRAST:
+       case PICTURE_CTRL_HUE:
+       case PICTURE_CTRL_BRIGHTNESS:
+       case PICTURE_CTRL_COLORTEMP:
+       case PICTURE_CTRL_SHARPNESS:
+           return CGMI_ERROR_NOT_IMPLEMENTED;
+       default:
+           return CGMI_ERROR_BAD_PARAM;
+   }
+
+   return CGMI_ERROR_SUCCESS;
+}
