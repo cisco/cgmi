@@ -73,6 +73,7 @@ typedef struct
    GstElement         *audioDecoder;
    GstElement         *demux;
    GstElement         *udpsrc;   
+   GstElement         *hlsDemux;
    GstBus             *bus;
    GstMessage         *msg;
    void*              usrParam;
