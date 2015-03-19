@@ -726,6 +726,7 @@ void help(void)
            "\tgetpicturesetting <setting>\n"
            "\tsetpicturesetting <setting> <value>\n"
            "\t(Settings: CONTRAST, SATURATION, HUE, BRIGHTNESS, COLORTEMP, SHARPNESS)\n"
+           "\t(-32768 <= value <= 32767)\n"
            "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)> [<1><drmType for url #1><cpBlob for url #1>] [<2><drmType for url #2><cpBlob for url #2>]\n"
@@ -2146,7 +2147,7 @@ int main(int argc, char **argv)
         /* get picture settings */
         else if (strncmp(command, "getpicturesetting", 17) == 0)
         {
-            tcgmi_PictureCtrl pctl;
+            tcgmi_PictureCtrl pctl = -1;
             gint value = 0;
             if ( strlen( command ) <= 18 )
             {
@@ -2192,14 +2193,14 @@ int main(int argc, char **argv)
             }
             else
             {
-                printf("%d\n", value);
+                printf("%s: %d\n", arg, value);
             }
         }
 
         /* set picture settings */
         else if (strncmp(command, "setpicturesetting", 17) == 0)
         {
-            tcgmi_PictureCtrl pctl;
+            tcgmi_PictureCtrl pctl = -1;
             gint value;
             if ( strlen( command ) <= 18 )
             {
