@@ -3443,11 +3443,25 @@ cgmi_Status cgmi_SetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int 
              g_object_set(G_OBJECT(pSess->videoDecoder), "video-saturation", value, NULL );
          break;
       case PICTURE_CTRL_CONTRAST:
+         if (NULL != pSess->videoDecoder)
+             g_object_set(G_OBJECT(pSess->videoDecoder), "video-contrast", value, NULL );
+         break;
       case PICTURE_CTRL_HUE:
+         if (NULL != pSess->videoDecoder)
+             g_object_set(G_OBJECT(pSess->videoDecoder), "video-hue", value, NULL );
+         break;
       case PICTURE_CTRL_BRIGHTNESS:
+         if (NULL != pSess->videoDecoder)
+             g_object_set(G_OBJECT(pSess->videoDecoder), "video-brightness", value, NULL );
+         break;
       case PICTURE_CTRL_COLORTEMP:
+         if (NULL != pSess->videoDecoder)
+             g_object_set(G_OBJECT(pSess->videoDecoder), "video-colortemp", value, NULL );
+         break;
       case PICTURE_CTRL_SHARPNESS:
-         return CGMI_ERROR_NOT_IMPLEMENTED;
+         if (NULL != pSess->videoDecoder)
+             g_object_set(G_OBJECT(pSess->videoDecoder), "video-sharpness", value, NULL );
+         break;
       default:
          return CGMI_ERROR_BAD_PARAM;
    }
@@ -3477,11 +3491,25 @@ cgmi_Status cgmi_GetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int 
                g_object_get(G_OBJECT(pSess->videoDecoder), "video-saturation", pvalue, NULL );
            break;
        case PICTURE_CTRL_CONTRAST:
+           if (NULL != pSess->videoDecoder)
+               g_object_get(G_OBJECT(pSess->videoDecoder), "video-contrast", pvalue, NULL );
+           break;
        case PICTURE_CTRL_HUE:
+           if (NULL != pSess->videoDecoder)
+               g_object_get(G_OBJECT(pSess->videoDecoder), "video-hue", pvalue, NULL );
+           break;
        case PICTURE_CTRL_BRIGHTNESS:
+           if (NULL != pSess->videoDecoder)
+               g_object_get(G_OBJECT(pSess->videoDecoder), "video-brightness", pvalue, NULL );
+           break;
        case PICTURE_CTRL_COLORTEMP:
+           if (NULL != pSess->videoDecoder)
+               g_object_get(G_OBJECT(pSess->videoDecoder), "video-colortemp", pvalue, NULL );
+           break;
        case PICTURE_CTRL_SHARPNESS:
-           return CGMI_ERROR_NOT_IMPLEMENTED;
+           if (NULL != pSess->videoDecoder)
+               g_object_get(G_OBJECT(pSess->videoDecoder), "video-sharpness", pvalue, NULL );
+           break;
        default:
            return CGMI_ERROR_BAD_PARAM;
    }
