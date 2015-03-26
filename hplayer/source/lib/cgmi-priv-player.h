@@ -119,6 +119,11 @@ typedef struct
    gboolean           maskRateChangedEvent;
    gboolean           noVideo;
    gboolean           bQueryDiscreteAudioInfo;
+   void               *cpblob;
+   gchar              currAudioLanguage[4];
+   /* used when we reconstruct the pipeline for discrete<->muxed audio language switch */
+   gchar              newAudioLanguage[4];
+   gboolean           suppressLoadDone;
 
 }tSession;
 
