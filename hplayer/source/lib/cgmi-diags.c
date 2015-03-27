@@ -1,3 +1,26 @@
+/*
+    CGMI
+    Copyright (C) {2015}  {Cisco System}
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+    USA
+
+    Contributing Authors: Matt Snoby, Kris Kersey, Zack Wine, Chris Foster,
+                          Tankut Akgul, Saravanakumar Periyaswamy
+
+*/
 /**
  * * \addtogroup CGMI-diags
  * @{
@@ -11,7 +34,6 @@
 *   System: RDK 2.0
 *   Component Name : CGMI-Diags
 *   Language       : C
-*   License        : BSD 
 *
 *   (c) Copyright Cisco Systems 2015
 *
@@ -75,11 +97,11 @@ cgmi_Status cgmiDiags_Init (void)
 
     pthread_mutex_lock(&cgmiDiagMutex);
 
-    if(false == cgmiDiagInitialized) 
+    if(false == cgmiDiagInitialized)
     {
         gTimingBuf = (tCgmiDiags_timingMetric *) calloc(sizeof(tCgmiDiags_timingMetric) * CGMI_DIAGS_TIMING_METRIC_MAX_ENTRY, sizeof(char));
 
-        if(NULL == gTimingBuf) 
+        if(NULL == gTimingBuf)
         {
             retStatus = CGMI_ERROR_NOT_INITIALIZED;
         }
@@ -104,7 +126,7 @@ cgmi_Status cgmiDiags_Init (void)
  *
  *  Terminate the diags tracking data structures.  Clean up all resources.
  *
- *  \post    On success the diags subsystem is completely shutdown and all memory is freed. 
+ *  \post    On success the diags subsystem is completely shutdown and all memory is freed.
  *
  *  \return  CGMI_ERROR_SUCCESS when everything has shutdown properly and all memory freed
  *
@@ -120,7 +142,7 @@ cgmi_Status cgmiDiags_Term (void)
 
     cgmiDiagInitialized = false;
 
-    if(gTimingBuf) 
+    if(gTimingBuf)
     {
         free(gTimingBuf);
         gTimingBuf=NULL;
@@ -146,7 +168,7 @@ cgmi_Status cgmiDiags_Term (void)
  *
  *  \return  CGMI_ERROR_SUCCESS when the API succeeds
  *
- *  \ingroup CGMI-diags 
+ *  \ingroup CGMI-diags
  *
  */
 cgmi_Status cgmiDiags_GetTimingMetricsMaxCount ( int *pCount )
@@ -181,13 +203,13 @@ cgmi_Status cgmiDiags_GetTimingMetrics ( tCgmiDiags_timingMetric metrics[], int 
 
     if(true == cgmiDiagInitialized)
     {
-        if(true == timingBufWrapped) 
-        {        
+        if(true == timingBufWrapped)
+        {
             //calculate how much we need to fill up the first round
             entryCount = CGMI_DIAGS_TIMING_METRIC_MAX_ENTRY - timingBufIndex;
-    
+
             //fill the output buffer and update remaining buffer count
-            if(entryCount > inputCountAvailable) 
+            if(entryCount > inputCountAvailable)
             {
                 memcpy(metrics, &gTimingBuf[timingBufIndex], sizeof(tCgmiDiags_timingMetric)*inputCountAvailable);
                 inputCountAvailable = 0;
@@ -198,11 +220,11 @@ cgmi_Status cgmiDiags_GetTimingMetrics ( tCgmiDiags_timingMetric metrics[], int 
                 inputCountAvailable = inputCountAvailable - entryCount;
             }
         }
-    
-        if(inputCountAvailable > 0) 
+
+        if(inputCountAvailable > 0)
         {
             //fill the output buffer and update remaining buffer count
-            if(timingBufIndex > inputCountAvailable) 
+            if(timingBufIndex > inputCountAvailable)
             {
                 memcpy(&metrics[entryCount], gTimingBuf, sizeof(tCgmiDiags_timingMetric)*inputCountAvailable);
                 inputCountAvailable = 0;
@@ -213,7 +235,7 @@ cgmi_Status cgmiDiags_GetTimingMetrics ( tCgmiDiags_timingMetric metrics[], int 
                 inputCountAvailable = inputCountAvailable - timingBufIndex;
             }
         }
-    
+
         *pCount = *pCount - inputCountAvailable;
     }
     else
@@ -227,7 +249,7 @@ cgmi_Status cgmiDiags_GetTimingMetrics ( tCgmiDiags_timingMetric metrics[], int 
 }
 
 /**
- *  \brief \b cgmiDiag_addTimingEntry 
+ *  \brief \b cgmiDiag_addTimingEntry
  *
  *  Add a timing metric entry.
  *  \param[in] timingEvent  This is the timing event you want to
@@ -237,7 +259,7 @@ cgmi_Status cgmiDiags_GetTimingMetrics ( tCgmiDiags_timingMetric metrics[], int 
  *
  *  \param[in] markTime  This is the time you want to mark the
  *        event with.
- *  
+ *
  *  Note: markTime should be MS since the Epoch. If user input
  *        0, this indicate that user want cgmiDiag to internally
  *        mark the time.
@@ -256,10 +278,10 @@ cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned 
     cgmi_Status retStatus = CGMI_ERROR_SUCCESS;
 
     pthread_mutex_lock(&cgmiDiagMutex);
-    
-    if(true == cgmiDiagInitialized) 
+
+    if(true == cgmiDiagInitialized)
     {
-        if(0 == markTime) 
+        if(0 == markTime)
         {
             struct timeval  current_tv;
 
@@ -271,7 +293,7 @@ cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned 
         gTimingBuf[timingBufIndex].sessionIndex = index;
         gTimingBuf[timingBufIndex].markTime = markTime;
 
-        if(NULL == uri) 
+        if(NULL == uri)
         {
             snprintf(gTimingBuf[timingBufIndex].sessionUri, sizeof(gTimingBuf[timingBufIndex].sessionUri), "NULL URI");
         }
@@ -303,52 +325,52 @@ cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned 
                 case DIAG_TIMING_METRIC_UNLOAD:
                 {
                     tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
-                                          pSessionUriTemp, 
-                                          markTime, 
-                                          "CGMID_UNLOAD", 
+                                          pSessionUriTemp,
+                                          markTime,
+                                          "CGMID_UNLOAD",
                                           NULL);
                 }
-                break; 
-                */ 
+                break;
+                */
                 case DIAG_TIMING_METRIC_LOAD:
                 {
                     tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
-                                          pSessionUriTemp, 
-                                          markTime, 
-                                          "CGMID_LOAD", 
+                                          pSessionUriTemp,
+                                          markTime,
+                                          "CGMID_LOAD",
                                           NULL);
                 }
                 break;
                 case DIAG_TIMING_METRIC_PLAY:
                 {
                     tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
-                                          pSessionUriTemp, 
-                                          markTime, 
-                                          "CGMID_PLAY", 
+                                          pSessionUriTemp,
+                                          markTime,
+                                          "CGMID_PLAY",
                                           NULL);
                 }
                 break;
                 case DIAG_TIMING_METRIC_PTS_DECODED:
                 {
                     tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
-                                          pSessionUriTemp, 
-                                          markTime, 
-                                          "CGMID_PTS_DECODE", 
+                                          pSessionUriTemp,
+                                          markTime,
+                                          "CGMID_PTS_DECODE",
                                           NULL);
-    
+
                     tMets_postAllCachedMilestone(gDefaultPostUrl);
                 }
                 break;
                 default:
                     /* unhandled message */
                 break;
-            } //end of switch 
+            } //end of switch
         }
 #endif // TMET_ENABLED
-    
+
         timingBufIndex++;
-    
-        if(timingBufIndex >= CGMI_DIAGS_TIMING_METRIC_MAX_ENTRY) 
+
+        if(timingBufIndex >= CGMI_DIAGS_TIMING_METRIC_MAX_ENTRY)
         {
             timingBufIndex = 0;
             timingBufWrapped = true;
@@ -383,8 +405,8 @@ cgmi_Status cgmiDiags_ResetTimingMetrics (void)
     cgmi_Status retStatus = CGMI_ERROR_SUCCESS;
 
     pthread_mutex_lock(&cgmiDiagMutex);
-    
-    if(true == cgmiDiagInitialized) 
+
+    if(true == cgmiDiagInitialized)
     {
         timingBufIndex = 0;
         timingBufWrapped = false;
@@ -404,7 +426,7 @@ cgmi_Status cgmiDiags_ResetTimingMetrics (void)
  *
  *  This is a request to get the next diag session index, used
  *  to track the event with a session. Note: not using session
- *  id since the address can be re-use. 
+ *  id since the address can be re-use.
  *
  *  \pre    The system has to be initialized via cgmi_Init()
  *
@@ -417,7 +439,7 @@ cgmi_Status cgmiDiags_GetNextSessionIndex(unsigned int *pIndex)
 {
     static unsigned int curIndex = 0;
 
-    if(NULL == pIndex) 
+    if(NULL == pIndex)
     {
         return CGMI_ERROR_BAD_PARAM;
     }

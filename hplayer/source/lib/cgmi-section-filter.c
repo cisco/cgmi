@@ -1,4 +1,27 @@
-#ifdef HAVE_CONFIG_H
+/*
+    CGMI
+    Copyright (C) {2015}  {Cisco System}
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+    USA
+
+    Contributing Authors: Matt Snoby, Kris Kersey, Zack Wine, Chris Foster,
+                          Tankut Akgul, Saravanakumar Periyaswamy
+
+*/
+ #ifdef HAVE_CONFIG_H
 # include <config.h>
 #endif
 
@@ -62,8 +85,8 @@ static void printHex (void *buffer, int size) {
 #endif
 
 
-static cgmi_Status charBufToGValueArray( unsigned char * buffer, 
-   int bufSize, 
+static cgmi_Status charBufToGValueArray( unsigned char * buffer,
+   int bufSize,
    GValueArray **valueArray )
 {
    int i;
@@ -173,7 +196,7 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
       retBufferSize = (int)sinkDataSize;
 
       // Ask nicely for a buffer from the app
-      retStat = secFilter->bufferCB( pSess->usrParam, secFilter->filterPrivate, 
+      retStat = secFilter->bufferCB( pSess->usrParam, secFilter->filterPrivate,
          (void*)secFilter, &retBuffer, &retBufferSize );
 
       // Verify the app provided a useful buffer
@@ -213,7 +236,7 @@ static GstFlowReturn cgmi_filter_gst_appsink_new_buffer( GstAppSink *sink, gpoin
 #endif
 
       // Return filled buffer to the app
-      retStat = secFilter->sectionCB( pSess->usrParam, secFilter->filterPrivate, 
+      retStat = secFilter->sectionCB( pSess->usrParam, secFilter->filterPrivate,
          secFilter, CGMI_ERROR_SUCCESS, retBuffer, (int)sinkDataSize );
 #if GST_CHECK_VERSION(1,0,0)
       gst_buffer_unmap( buffer, &map );
@@ -282,12 +305,12 @@ static void cgmi_filter_gst_pad_added( GstElement *element, GstPad *pad, gpointe
             gst_app_sink_set_callbacks( GST_APP_SINK(secFilter->appsink), &appsink_cbs, secFilter, NULL);
             gst_bin_add_many( GST_BIN(GST_ELEMENT_PARENT(pSess->demux)), secFilter->appsink, NULL );
             g_print("Linking appsink (%p) to demux (%p)\n", secFilter->appsink, pSess->demux);
-            if ( TRUE != gst_element_link(pSess->demux, secFilter->appsink) ) 
+            if ( TRUE != gst_element_link(pSess->demux, secFilter->appsink) )
             {
                g_print("Could not link demux to appsink!\n");
             }
 
-            // This sync state is required when the appsink element is added to 
+            // This sync state is required when the appsink element is added to
             // the pipeline after it has started playback.
             //if ( TRUE != gst_element_sync_state_with_parent(secFilter->appsink) )
             gst_element_get_state( pSess->demux, &state, NULL, 0 );
@@ -343,9 +366,9 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, int pid, void* pFilterPriv,
    secFilter->sectionCB = NULL;
    secFilter->appsink = NULL;
 
-   do{ 
+   do{
 
-      // We must have a demux reference.  The demux is found/set by the 
+      // We must have a demux reference.  The demux is found/set by the
       // element-added callback in cgmi-player.c
       if( pSess->demux == NULL )
       {
@@ -355,7 +378,7 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, int pid, void* pFilterPriv,
       }
 
       // Setup callback
-      secFilter->padAddedCbId = g_signal_connect( pSess->demux, "pad-added", 
+      secFilter->padAddedCbId = g_signal_connect( pSess->demux, "pad-added",
          G_CALLBACK(cgmi_filter_gst_pad_added), secFilter );
 
 
@@ -431,7 +454,7 @@ cgmi_Status cgmi_DestroySectionFilter(void *pSession, void* pFilterId )
 
    // Unlink and remove app sink from pipeline
    gst_element_unlink( pSess->demux, secFilter->appsink );
-   
+
    gst_element_set_state( secFilter->appsink, GST_STATE_NULL );
 
    gst_bin_remove_many( GST_BIN(GST_ELEMENT_PARENT(pSess->demux)), secFilter->appsink, NULL );
@@ -486,7 +509,7 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
       if ( pFilterData->length > 0 )
       {
 
-         // Broadcom bug workaround.  The section filter drivers/hardware 
+         // Broadcom bug workaround.  The section filter drivers/hardware
          // doesn't mask the 3rd byte correctly, so mask it out
          if( pFilterData->length > 2 )
          {
@@ -505,12 +528,12 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
                                          pFilterData->length,
                                          &valueArray );
 
-         if( CGMI_ERROR_SUCCESS != retStat ) 
+         if( CGMI_ERROR_SUCCESS != retStat )
          {
             g_print("Failed setting section filter value.\n");
-            break; 
+            break;
          }
-    
+
          g_object_set( secFilter->handle, "filter-data", valueArray, NULL );
          g_value_array_free( valueArray );
 
@@ -520,10 +543,10 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
                                          pFilterData->length,
                                          &valueArray );
 
-         if( CGMI_ERROR_SUCCESS != retStat ) 
+         if( CGMI_ERROR_SUCCESS != retStat )
          {
             g_print("Failed setting section filter mask.\n");
-            break; 
+            break;
          }
 
          g_object_set( secFilter->handle, "filter-mask", valueArray, NULL );
@@ -532,11 +555,11 @@ cgmi_Status cgmi_SetSectionFilter(void *pSession, void* pFilterId, tcgmi_FilterD
       }
 
       secFilter->lastAction = FILTER_SET;
-   
+
       // Set other filter params
-      g_print("Filtering for pid: 0x%04x, with secFilter: %p\n", 
+      g_print("Filtering for pid: 0x%04x, with secFilter: %p\n",
         secFilter->pid, secFilter->handle );
-      
+
       g_object_set( secFilter->handle, "filter-pid", secFilter->pid, NULL );
       g_object_set( secFilter->handle, "filter-mode", pFilterData->comparitor, NULL );
       g_object_set( secFilter->handle, "filter-type", FILTER_TYPE_IP, NULL );

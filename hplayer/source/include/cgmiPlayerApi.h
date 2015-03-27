@@ -13,20 +13,17 @@
 *   Status         : Version 1.0 Release 1
 *   Language       : C
 *
-*   License        : Proprietary 
 *
-*   (c) Copyright Cisco Systems 2013
+*   (c) Copyright Cisco Systems 2015
 *
 *
 
-   Description: This header file contains the Media Player prototypes 
-*                for the RDK 1.3 implementation.  It is meant to replace
-*                the usage of RMF for Media Playback.
+   Description: This header file contains the Media Player prototypes
 *
 *    Thread Safe: Yes
 *
 *    \authors : Matt Snoby, Kris Kersey, Zack Wine, Chris Foster, Tankut Akgul, Saravanakumar Periyaswamy
-*    Platform Dependencies: Gstreamer 0.10/1.0.
+*     \Platform Dependencies: Gstreamer 0.10/1.0.
 *  \ingroup CGMI
 */
 
@@ -101,24 +98,24 @@ typedef enum
    NOTIFY_CHANGED_LANGUAGE_AUDIO,         ///<The streams Audio language has changed
    NOTIFY_CHANGED_LANGUAGE_SUBTITLE,      ///<The subtitle language has changed.
    NOTIFY_CHANGED_LANGUAGE_TELETEXT,      ///<The teletext language has changed.
-   NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE,   ///<The requested URL could not be opened. 
+   NOTIFY_MEDIAPLAYER_URL_OPEN_FAILURE,   ///<The requested URL could not be opened.
    NOTIFY_CHANGED_RATE,                   ///<The playback rate has changed.
    NOTIFY_DECODE_ERROR,                   ///<Decoder issued errors.
    NOTIFY_LOAD_DONE,                      ///<Load URI done.
    NOTIFY_NETWORK_ERROR,                  ///<A network error has occured.
-   NOTIFY_MEDIAPLAYER_UNKNOWN             ///<An unexpected error has occured. 
+   NOTIFY_MEDIAPLAYER_UNKNOWN             ///<An unexpected error has occured.
 
-}tcgmi_Event; 
+}tcgmi_Event;
 
 /** CGMI session types
  */
 typedef enum
 {
-   LIVE,                                  ///<This is a Live stream 
-   FIXED,                                 ///<This is a normal stram or file  
+   LIVE,                                  ///<This is a Live stream
+   FIXED,                                 ///<This is a normal stram or file
    cgmi_Session_Type_UNKNOWN
 
-}cgmi_SessionType; 
+}cgmi_SessionType;
 
 /** Section filter types
  */
@@ -136,7 +133,7 @@ typedef struct
    unsigned char *mask;                   ///<Bits to be included within value during check for a match or a non-match
    int length;                            ///<Length of the value field to match against
    cgmi_FilterComparitor comparitor;      ///<Comparison type
-}tcgmi_FilterData; 
+}tcgmi_FilterData;
 
 /** Stream types
  */
@@ -163,11 +160,11 @@ typedef struct
     bloblength can be equal to MAX_CP_BLOB_LENGTH at max which is
     the size of the cpBlob array.
  */
-typedef struct 
+typedef struct
 {
-    uint8_t  cpBlob[MAX_CP_BLOB_LENGTH]; 
+    uint8_t  cpBlob[MAX_CP_BLOB_LENGTH];
     uint32_t bloblength;
-    tDRM_TYPE drmType; 
+    tDRM_TYPE drmType;
 }cpBlobStruct;
 #else
 /** Opaque pointer that is used in place when DRM copy protection is disabled
@@ -201,11 +198,11 @@ typedef cgmi_Status (*userDataRawBufferCB)(void *pUserData, guint8 *pBuffer, uns
 /**
  *  \brief \b cgmi_ErrorString
  *
- *  For Debugging returns a string for the error status 
+ *  For Debugging returns a string for the error status
  *
  * \param   stat
  *
- * \return  String of the error status passed in 
+ * \return  String of the error status passed in
  *
  *
  *  \ingroup CGMI
@@ -222,7 +219,7 @@ char* cgmi_ErrorString (cgmi_Status stat);
  *
  * \return  CGMI_ERROR_SUCCESS when everything has started correctly
  * \return  CGMI_ERROR_NOT_INITIALIZED when gstreamer returns an error message and can't initialize
- * \return  CGMI_ERROR_NOT_SUPPORTED when GLIB threads are not available on the platform 
+ * \return  CGMI_ERROR_NOT_SUPPORTED when GLIB threads are not available on the platform
  *
  *  \image html Initialization_and_Shutdown.png "How to Initialize and shutdown the subsystem"
  *
@@ -236,7 +233,7 @@ cgmi_Status cgmi_Init (void);
  *
  *  Terminate  the gstreamer subsystem This should not get called by anyone but the main process.
  *
- * \post    On success the gstreamer subsystem is completely shutdown and all memory is freed. 
+ * \post    On success the gstreamer subsystem is completely shutdown and all memory is freed.
  *
  * \return  CGMI_ERROR_SUCCESS when everything has shutdown properly and all memory freed
  *
@@ -248,7 +245,7 @@ cgmi_Status cgmi_Init (void);
 cgmi_Status cgmi_Term (void);
 
 /**
- *  \brief \b cgmi_CreateSession 
+ *  \brief \b cgmi_CreateSession
  *
  *  Create a session to interact with the gstreamer frame work
  *  \param[in] eventCB  This is a function pointer for CGMI to report async events too.
@@ -269,15 +266,15 @@ cgmi_Status cgmi_Term (void);
 cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, void **pSession );
 
 /**
- *  \brief \b cgmi_DestroyDession 
+ *  \brief \b cgmi_DestroyDession
  *
- *  Terminate and destroy the passed in session. 
+ *  Terminate and destroy the passed in session.
  *  \param[in] pSession  This is a handle to the active session.
  *
  *  \post    On success the user can no longer call any CGMI api's and all the memory has been freed.
  *
  * \return  CGMI_ERROR_SUCCESS when everything has been terminated  correctly
- * \return  CGMI_ERROR_NOT_READY if the video is still playing and has not been Unloaded then we will return this error. 
+ * \return  CGMI_ERROR_NOT_READY if the video is still playing and has not been Unloaded then we will return this error.
  *
  *  \ingroup CGMI
  *
@@ -285,7 +282,7 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
 cgmi_Status cgmi_DestroySession (void *pSession );
 
 /**
- *  \brief \b cgmi_canPlay 
+ *  \brief \b cgmi_canPlay
  *
  *  Return whether we can play this asset or not.
  *  \param[in] type  This is a string to the url that is requested to be checked to see if we can play it.
@@ -302,19 +299,19 @@ cgmi_Status cgmi_DestroySession (void *pSession );
 cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
 
 /**
- *  \brief \b cgmi_Load 
+ *  \brief \b cgmi_Load
  *
- *  Load the URL and get ready to play the asset 
+ *  Load the URL and get ready to play the asset
  *  \param[in] pSession  This is a handle to the active session.
  *
  *  \param[in] uri  String that hold the location of the asset to play
  *
- *  \param[in]  cpblob - a pointer to a cpBlobStruct. This struct contains  data which  is needed 
+ *  \param[in]  cpblob - a pointer to a cpBlobStruct. This struct contains  data which  is needed
  *  for encrypted HLS streaming.For all other types of sessions(clear HLS/Live/Playback etc') NULL should be passed to the cpblob var.
  *  \post    On success the user can now play the uri pointed to. The user has to wait for NOTIFY_LOAD_DONE message before querying
- *           the duration or other metadata info of the asset pointed by the URI. 
+ *           the duration or other metadata info of the asset pointed by the URI.
  *
- * \return  CGMI_ERROR_SUCCESS when everything is loaded and ready to play the uri 
+ * \return  CGMI_ERROR_SUCCESS when everything is loaded and ready to play the uri
  * \return  CGMI_ERROR_OUT_OF_MEMORY  when an allocation of memory has failed.
  * \return  CGMI_ERROR_NOT_IMPLEMENTED  when the pipeline can not be created because of a missing plugin.
  *
@@ -326,15 +323,15 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
 cgmi_Status cgmi_Load ( void *pSession, const char *uri, cpBlobStruct * cpblob );
 
 /**
- *  \brief \b cgmi_Unload 
+ *  \brief \b cgmi_Unload
  *
- *  Tear down the pipeline for the current asset that is playing and or has been loaded. 
+ *  Tear down the pipeline for the current asset that is playing and or has been loaded.
  *  \param[in] pSession  This is a handle to the active session.
  *
  *
- *  \post    On success the user can now load a new uri or shutdown the system. 
+ *  \post    On success the user can now load a new uri or shutdown the system.
  *
- * \return  CGMI_ERROR_SUCCESS when everything is loaded and ready to play the uri 
+ * \return  CGMI_ERROR_SUCCESS when everything is loaded and ready to play the uri
  *
  *
  *  \image html channel_change.png "How to do playback and trick modes "
@@ -351,7 +348,7 @@ cgmi_Status cgmi_Unload (void *pSession );
  *  \param[in] pSession  This is a handle to the active session.
  *
  *  \param[in] autoPlay A flag that determines whether the playback should start automatically
- *             or after PIDs are set manually (this flag currently is a don't care for non-transport 
+ *             or after PIDs are set manually (this flag currently is a don't care for non-transport
  *             stream content, that is, playback will always start automatically for other content types).
  *
  *  \pre    The Session must be open the the url must be loaded
@@ -369,7 +366,7 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay);
 /**
  *  \brief \b cgmi_SetRate
  *
- *  Change the playback rate of the asset, this is essentially trick modes for FF and RWD. 
+ *  Change the playback rate of the asset, this is essentially trick modes for FF and RWD.
  *  \param[in] pSession  This is a handle to the active session.
  *
  *  \param[in] rate  This is a handle to the active session.
@@ -389,13 +386,13 @@ cgmi_Status cgmi_SetRate (void *pSession,  float rate);
 /**
  *  \brief \b cgmi_SetPosition
  *
- *  This is a request to set the currently playing stream to a different position.  This is essentially a seek cmd. 
+ *  This is a request to set the currently playing stream to a different position.  This is essentially a seek cmd.
  *  \param[in] pSession  This is a handle to the active session.
  *
- *  \param[in] position  The position you want to seek to based in seconds from the start of the stream. 
+ *  \param[in] position  The position you want to seek to based in seconds from the start of the stream.
  *
  *  \pre    The Session must be open the the url must be loaded
- *  \post   The Media event NOTIFY_SEEK_DONE NOTIFY_FIRST_PTS_DECODED will be sent when the seek is complete and 
+ *  \post   The Media event NOTIFY_SEEK_DONE NOTIFY_FIRST_PTS_DECODED will be sent when the seek is complete and
  *          when the decoding has taken place at the new postion.
  *
  * \return  CGMI_ERROR_SUCCESS when the Seek is successful is playing
@@ -408,10 +405,10 @@ cgmi_Status cgmi_SetPosition (void *pSession,  float position);
 /**
  *  \brief \b cgmi_GetPosition
  *
- *  This is a request to set the currently playing stream to a different position.  This is essentially a seek cmd. 
+ *  This is a request to set the currently playing stream to a different position.  This is essentially a seek cmd.
  *  \param[in] pSession  This is a handle to the active session.
  *
- *  \param[in] pPosition  The current position in seconds will be populated in this float. 
+ *  \param[in] pPosition  The current position in seconds will be populated in this float.
  *
  *  \pre    The Session must be open the the url must be loaded
  *
@@ -425,7 +422,7 @@ cgmi_Status cgmi_GetPosition (void *pSession,  float *pPosition);
 /**
  *  \brief \b cgmi_GetDuration
  *
- *  This is a request to set the currently playing stream to a different position.  This is essentially a seek cmd. 
+ *  This is a request to set the currently playing stream to a different position.  This is essentially a seek cmd.
  *  \param[in] pSession  This is a handle to the active session.
  *
  *  \param[out] pDuration  The Duration of the file in seconds shall be populated in this variable.
@@ -443,7 +440,7 @@ cgmi_Status cgmi_GetDuration  (void *pSession,  float *pDuration, cgmi_SessionTy
 /**
  *  \brief \b cgmi_GetRates
  *
- *  This is a request to find out what trick mode rates that this playing asset supports. 
+ *  This is a request to find out what trick mode rates that this playing asset supports.
  *  \param[in] pSession  This is a handle to the active session.
  *
  *  \param[out] pRates An array of rewind and fast forward speeds supported.
@@ -486,7 +483,7 @@ cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumR
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw, int srch, 
+cgmi_Status cgmi_SetVideoRectangle( void *pSession, int srcx, int srcy, int srcw, int srch,
                                     int dstx, int dsty, int dstw, int dsth );
 
 
@@ -531,7 +528,7 @@ cgmi_Status cgmi_GetVideoDecoderIndex (void *pSession,  int *idx);
  *  This is a request to find out how many audio languages the currently loaded asset has.
  *  \param[in] pSession  This is a handle to the active session.
  *
- *  \param[out] count  this int will be populated with the nubmer of audio languages the current asset has. 
+ *  \param[out] count  this int will be populated with the nubmer of audio languages the current asset has.
  *
  *  \pre    The Session must be open the the url must be loaded
  *
@@ -637,7 +634,7 @@ cgmi_Status cgmi_GetNumClosedCaptionServices (void *pSession,  int *count);
 cgmi_Status cgmi_GetClosedCaptionServiceInfo (void *pSession, int index, char* isoCode, int isoCodeSize, int *serviceNum, char *isDigital);
 
 /**
- *  \brief \b cgmi_CreateSectionFilter 
+ *  \brief \b cgmi_CreateSectionFilter
  *
  *  Create a section filter for a playing CGMI session.
  *
@@ -664,7 +661,7 @@ cgmi_Status cgmi_GetClosedCaptionServiceInfo (void *pSession, int index, char* i
 cgmi_Status cgmi_CreateSectionFilter(void *pSession, int pid, void* pFilterPriv, void** pFilterId  );
 
 /**
- *  \brief \b cgmi_DestroySectionFilter 
+ *  \brief \b cgmi_DestroySectionFilter
  *
  *  Destroy a section filter.
  *
@@ -687,7 +684,7 @@ cgmi_Status cgmi_CreateSectionFilter(void *pSession, int pid, void* pFilterPriv,
 cgmi_Status cgmi_DestroySectionFilter (void *pSession, void* pFilterId  );
 
 /**
- *  \brief \b cgmi_SetSectionFilter 
+ *  \brief \b cgmi_SetSectionFilter
  *
  *  Set the section filter parameters (see the tcgmi_FilterData for specifics).
  *
@@ -712,7 +709,7 @@ cgmi_Status cgmi_DestroySectionFilter (void *pSession, void* pFilterId  );
 cgmi_Status cgmi_SetSectionFilter (void *pSession, void* pFilterId, tcgmi_FilterData *pFilter  );
 
 /**
- *  \brief \b cgmi_StartSectionFilter 
+ *  \brief \b cgmi_StartSectionFilter
  *
  *  Start receiving callbacks for a section filter.
  *
@@ -745,7 +742,7 @@ cgmi_Status cgmi_SetSectionFilter (void *pSession, void* pFilterId, tcgmi_Filter
 cgmi_Status cgmi_StartSectionFilter (void *pSession, void* pFilterId, int timeout, int bOneShot , int bEnableCRC, queryBufferCB bufferCB,  sectionBufferCB sectionCB);
 
 /**
- *  \brief \b cgmi_StopSectionFilter 
+ *  \brief \b cgmi_StopSectionFilter
  *
  *  Stop filtering and callbacks for a section filter.
  *
@@ -768,17 +765,17 @@ cgmi_Status cgmi_StartSectionFilter (void *pSession, void* pFilterId, int timeou
 cgmi_Status cgmi_StopSectionFilter (void *pSession, void* pFilterId );
 
 /**
- *  \brief \b cgmi_startUserDataFilter 
+ *  \brief \b cgmi_startUserDataFilter
  *
  *  Start receiving user data (CC data) via callbacks.
- *  
+ *
  *  Note: data is passed back as GstBuffer.
  *
  *  \param[in] pSession     This is a handle to the active session.
  *
  *  \param[in] bufferCB     User data callback to be called with
  *        a stream of data. Note: it is expected that the
- *        callback it SYNC. 
+ *        callback it SYNC.
  *
  *  \param[in] pUserData    Private user data pointer to be passed to subsequent calls to bufferCB.
  *
@@ -794,7 +791,7 @@ cgmi_Status cgmi_StopSectionFilter (void *pSession, void* pFilterId );
 cgmi_Status cgmi_startUserDataFilter (void *pSession, userDataBufferCB bufferCB, void *pUserData);
 
 /**
- *  \brief \b cgmi_stopUserDataFilter 
+ *  \brief \b cgmi_stopUserDataFilter
  *
  *  Stop receiving user data callbacks.
  *
@@ -814,12 +811,12 @@ cgmi_Status cgmi_startUserDataFilter (void *pSession, userDataBufferCB bufferCB,
 cgmi_Status cgmi_stopUserDataFilter (void *pSession, userDataBufferCB bufferCB);
 
 /**
- *  \brief \b cgmi_startRawUserDataFilter 
+ *  \brief \b cgmi_startRawUserDataFilter
  *
  *  Start receiving user data (CC data) via callbacks.
- *  
+ *
  *  Note: data is passed back as gchar buffer.
- *  
+ *
  *  This function is also ONLY availble on the client library.
  *
  *  \param[in] pSession     This is a handle to the active session.
@@ -840,10 +837,10 @@ cgmi_Status cgmi_stopUserDataFilter (void *pSession, userDataBufferCB bufferCB);
 cgmi_Status cgmi_startRawUserDataFilter (void *pSession, userDataRawBufferCB bufferCB, void *pUserData);
 
 /**
- *  \brief \b cgmi_stopRawUserDataFilter 
+ *  \brief \b cgmi_stopRawUserDataFilter
  *
  *  Stop receiving user data callbacks.
- *  
+ *
  *  This function is also ONLY availble on the client library.
  *
  *  \param[in] pSession     This is a handle to the active session.
@@ -863,7 +860,7 @@ cgmi_Status cgmi_startRawUserDataFilter (void *pSession, userDataRawBufferCB buf
 cgmi_Status cgmi_stopRawUserDataFilter (void *pSession, userDataRawBufferCB bufferCB);
 
 /**
- *  \brief \b cgmi_GetNumPids 
+ *  \brief \b cgmi_GetNumPids
  *
  *  Get number of available stream PIDs in the PMT.
  *
@@ -881,13 +878,13 @@ cgmi_Status cgmi_stopRawUserDataFilter (void *pSession, userDataRawBufferCB buff
 cgmi_Status cgmi_GetNumPids( void *pSession, int *pCount );
 
 /**
- *  \brief \b cgmi_GetPidInfo 
+ *  \brief \b cgmi_GetPidInfo
  *
  *  Get information about a stream in the PMT.
  *
  *  \param[in]  pSession     This is a handle to the active session.
  *
- *  \param[in]  index        Index to the stream to get info about, 
+ *  \param[in]  index        Index to the stream to get info about,
  *                           index is 0-based upto number of pids minus one
  *
  *  \param[out] pPidData     Structure to hold returned PID info
@@ -903,13 +900,13 @@ cgmi_Status cgmi_GetPidInfo( void *pSession, int index, tcgmi_PidData *pPidData 
 
 
 /**
- *  \brief \b cgmi_SetPidInfo 
+ *  \brief \b cgmi_SetPidInfo
  *
  *  Sets the specified stream the active stream or enables or disables the active stream
  *
  *  \param[in]  pSession     This is a handle to the active session.
  *
- *  \param[in]  index        Index to the PID to set active 
+ *  \param[in]  index        Index to the PID to set active
  *                           index is 0-based index upto number of pids minus one
  *
  *  \param[in]  type         Stream type for the stream to set active
@@ -960,9 +957,9 @@ cgmi_Status cgmi_GetTsbSlide(void *pSession, unsigned long *pTsbSlide);
 /**
  * \section How To section
  *  \attention "How to Initialize and shutdown the subsystem"
- * 
+ *
  *  \image html Initialization_and_Shutdown.png "How to Initialize and shutdown the subsystem"
- *    
+ *
  */
 
 
@@ -974,4 +971,4 @@ cgmi_Status cgmi_GetTsbSlide(void *pSession, unsigned long *pTsbSlide);
 }
 #endif
 
-#endif 
+#endif

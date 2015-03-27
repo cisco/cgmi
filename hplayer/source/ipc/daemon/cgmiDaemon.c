@@ -1,3 +1,26 @@
+/*
+    CGMI
+    Copyright (C) {2015}  {Cisco System}
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+    USA
+
+    Contributing Authors: Matt Snoby, Kris Kersey, Zack Wine, Chris Foster,
+                          Tankut Akgul, Saravanakumar Periyaswamy
+
+*/
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -138,7 +161,7 @@ static tcgmi_LogggingLevel stderr_log_level = { "STDERR", LOG_INFO };
 
 /* The broadcom libraries call fflush after each fprintf(stderr,...).  This
  * breaks the buffering logic the flag _IOLBF would enable, and requires the
- * verboseness in this function to ensure syslog gets chunks of data separated 
+ * verboseness in this function to ensure syslog gets chunks of data separated
  * by new lines.  Without this the 5-6 fprinf(stderr,...); fflush(); calls made
  * for a single line of debug are spread over 5-6 lines in syslog.
  */
@@ -154,7 +177,7 @@ static size_t handleLogMessage( void *cookie, char const *data, size_t leng )
         // Flush buffer if log levels don't match...
         if( gLoggingBuffer.curLogLevel != logLevel && gLoggingBuffer.curLogLevel != NULL )
         {
-            syslog( gLoggingBuffer.curLogLevel->priority, "%-14s - %.*s", gLoggingBuffer.curLogLevel->open, 
+            syslog( gLoggingBuffer.curLogLevel->priority, "%-14s - %.*s", gLoggingBuffer.curLogLevel->open,
                 gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer);
 
             gLoggingBuffer.curLogLevel = logLevel;
@@ -180,8 +203,8 @@ static size_t handleLogMessage( void *cookie, char const *data, size_t leng )
             break;
         }
 
-        syslog(logLevel->priority, "%-14s - %.*s%.*s", logLevel->open, 
-            gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer, 
+        syslog(logLevel->priority, "%-14s - %.*s%.*s", logLevel->open,
+            gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer,
             (int)leng, data);
 
         if( gLoggingBuffer.bufferUsed > 0 )
@@ -213,7 +236,7 @@ static void flushLoggingBuffer()
 {
     if( gLoggingBuffer.curLogLevel == NULL ) return;
     pthread_mutex_lock(&gLoggingBuffer.lock);
-    syslog( gLoggingBuffer.curLogLevel->priority, "%-14s - %.*s", gLoggingBuffer.curLogLevel->open, 
+    syslog( gLoggingBuffer.curLogLevel->priority, "%-14s - %.*s", gLoggingBuffer.curLogLevel->open,
         gLoggingBuffer.bufferUsed, gLoggingBuffer.buffer);
 
     gLoggingBuffer.curLogLevel = NULL;
@@ -232,12 +255,12 @@ static void * createFifoThreadFnc( void *data )
     if( NULL == callbackData )
     {
         CGMID_ERROR("Failed start callback fifo thread\n" );
-        return NULL ;  
+        return NULL ;
     }
 
     // Open fifo
     callbackData->fd = open(callbackData->fifoName, O_WRONLY);
-    if( -1 == callbackData->fd ) 
+    if( -1 == callbackData->fd )
     {
         callbackData->state = CGMI_FIFO_STATE_FAILED;
         retStat = CGMI_ERROR_FAILED;
@@ -247,7 +270,7 @@ static void * createFifoThreadFnc( void *data )
     else
     {
         // Set to nonblocking
-        fcntl(callbackData->fd, F_SETFL, 
+        fcntl(callbackData->fd, F_SETFL,
             fcntl(callbackData->fd, F_GETFL) | O_NONBLOCK);
     }
 
@@ -263,16 +286,16 @@ static cgmi_Status asyncCreateFifo( tcgmi_FifoCallbackSink *cbData )
     if( NULL == cbData )
     {
         CGMID_ERROR("Failed start callback fifo thread with NULL cbData\n" );
-        return CGMI_ERROR_FAILED;  
+        return CGMI_ERROR_FAILED;
     }
 
     // Create fifo
     unlink(cbData->fifoName);
     ret = mkfifo(cbData->fifoName, 0777);
-    if( 0 != ret ) 
+    if( 0 != ret )
     {
         cbData->state = CGMI_FIFO_STATE_FAILED;
-        return CGMI_ERROR_FAILED; 
+        return CGMI_ERROR_FAILED;
     }
 
     cbData->state = CGMI_FIFO_STATE_CREATED;
@@ -458,11 +481,11 @@ static int cgmi_fifoCompleteWrite(int fd, void *buffer, size_t count)
         bytesWritten = write( fd, buffer + totalWritten, count - totalWritten );
         if (0 >= bytesWritten)
         {
-             return bytesWritten; 
+             return bytesWritten;
         }
         totalWritten += bytesWritten;
     }while( totalWritten < count );
-    return totalWritten;    
+    return totalWritten;
 }
 
 static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
@@ -480,7 +503,7 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
     if( pUserData == NULL || pBuffer == NULL )
     {
         CGMID_ERROR("NULL userData/buffer passed to cgmiUserDataBufferCB.\n");
-        return CGMI_ERROR_BAD_PARAM;  
+        return CGMI_ERROR_BAD_PARAM;
     }
 
     //CGMID_INFO("cgmiUserDataBufferCB -- pUserData: %lu, pBuffer: %lu \n",
@@ -516,11 +539,11 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
 #if GST_CHECK_VERSION(1,0,0)
         gst_buffer_unmap( pGstbuffer, &map );
 #endif
-        return CGMI_ERROR_BAD_PARAM;  
+        return CGMI_ERROR_BAD_PARAM;
     }
 
     // Prepend bufferSize to the fifo. This way the client will be able to read
-    // the whole buffer before passing it to the CC callback. 
+    // the whole buffer before passing it to the CC callback.
     bytesWritten = cgmi_fifoCompleteWrite( callbackData->fd, &bufferSize, sizeof(bufferSize) );
     if( 0 >= bytesWritten ) {
         CGMID_ERROR("Failed writing to fifo with (%d).\n", errno);
@@ -537,7 +560,7 @@ static cgmi_Status cgmiUserDataBufferCB (void *pUserData, void *pBuffer)
             callbackData->state = CGMI_FIFO_STATE_FAILED;
         }
     }
-    
+
 #if GST_CHECK_VERSION(1,0,0)
     gst_buffer_unmap( pGstbuffer, &map );
 #endif
@@ -587,7 +610,7 @@ on_handle_cgmi_term (
 
     CGMID_ENTER();
 
-    // MZW:  The deamon shouldn't call Term (which calls gst_deinit breaking 
+    // MZW:  The deamon shouldn't call Term (which calls gst_deinit breaking
     // all gstreamer apis), so just nod and smile (return success).
     //retStat = cgmi_Term( );
 
@@ -676,7 +699,7 @@ on_handle_cgmi_destroy_session (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -739,7 +762,7 @@ on_handle_cgmi_load (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -756,13 +779,13 @@ on_handle_cgmi_load (
 				break;
 			}
 
-		   g_variant_get(arg_cpBlobStruct, "ay", &iter); 
+		   g_variant_get(arg_cpBlobStruct, "ay", &iter);
 		   if(NULL != iter)
-		   {    
+		   {
 			  while(g_variant_iter_loop(iter, "y", &byte) && (ii < arg_cpBlobStructSize))
-			  {    
+			  {
 				 cpBlob[ii++] = byte;
-			  }    
+			  }
 			  g_variant_iter_free(iter);
 		   }
 		  else
@@ -771,7 +794,7 @@ on_handle_cgmi_load (
 			free(cpBlob);
             break;
 		  }
-		}	
+		}
         retStat = cgmi_Load( (void *)pSession, uri,(cpBlobStruct *)cpBlob );
         if (NULL != cpBlob)
         {
@@ -800,7 +823,7 @@ on_handle_cgmi_unload (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -836,7 +859,7 @@ on_handle_cgmi_play (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -871,7 +894,7 @@ on_handle_cgmi_set_rate (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -906,7 +929,7 @@ on_handle_cgmi_set_position (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -941,7 +964,7 @@ on_handle_cgmi_get_position (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -978,7 +1001,7 @@ on_handle_cgmi_get_duration (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1011,7 +1034,7 @@ on_handle_cgmi_get_rates (
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSession;
     float *pRates = NULL;
-    gdouble rate = 0.0; 
+    gdouble rate = 0.0;
     GVariantBuilder *ratesBuilder = NULL;
     GVariant *rateArr = NULL;
     int ii = 0;
@@ -1020,7 +1043,7 @@ on_handle_cgmi_get_rates (
 
     do {
        g_variant_get( arg_sessionId, "v", &sessVar );
-       if( sessVar == NULL ) 
+       if( sessVar == NULL )
        {
           retStat = CGMI_ERROR_FAILED;
           break;
@@ -1047,7 +1070,7 @@ on_handle_cgmi_get_rates (
           retStat = CGMI_ERROR_FAILED;
           break;
        }
-       
+
        for( ii = 0; ii < numRates; ii++ )
        {
           //CGMID_INFO("pRates[%d] = %f\n", ii, pRates[ii]);
@@ -1058,11 +1081,11 @@ on_handle_cgmi_get_rates (
 
        org_cisco_cgmi_complete_get_rates (object,
                                           invocation,
-                                          rateArr, 
+                                          rateArr,
                                           retStat);
-    
+
     }while(0);
-    
+
     if(NULL != ratesBuilder)
     {
        g_variant_builder_unref(ratesBuilder);
@@ -1081,7 +1104,7 @@ on_handle_cgmi_set_video_rectangle (
     GDBusMethodInvocation *invocation,
     GVariant *arg_sessionId,
     int srcx,
-    int srcy, 
+    int srcy,
     int srcw,
     int srch,
     int dstx,
@@ -1097,7 +1120,7 @@ on_handle_cgmi_set_video_rectangle (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1185,7 +1208,7 @@ on_handle_cgmi_get_video_decoder_index (
     org_cisco_cgmi_complete_get_video_decoder_index (object,
             invocation,
             idx,
-            retStat); 
+            retStat);
 
     return TRUE;
 }
@@ -1205,7 +1228,7 @@ on_handle_cgmi_get_num_audio_languages (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1216,7 +1239,7 @@ on_handle_cgmi_get_num_audio_languages (
 
         retStat = cgmi_GetNumAudioLanguages( (void *)pSession, &count );
 
-    }while(0);    
+    }while(0);
 
     org_cisco_cgmi_complete_get_num_audio_languages (object,
             invocation,
@@ -1240,24 +1263,24 @@ on_handle_cgmi_get_audio_lang_info (
     tCgmiDbusPointer pSession;
 
     CGMID_ENTER();
-    
+
     do{
         if ( bufSize <= 0 )
         {
             retStat = CGMI_ERROR_BAD_PARAM;
             break;
-    
+
         }
 
-        buffer = g_malloc0(bufSize);    
+        buffer = g_malloc0(bufSize);
         if ( NULL == buffer )
         {
             retStat = CGMI_ERROR_OUT_OF_MEMORY;
             break;
         }
-         
+
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1269,7 +1292,7 @@ on_handle_cgmi_get_audio_lang_info (
         retStat = cgmi_GetAudioLangInfo( (void *)pSession, index, buffer, bufSize );
 
     }while(0);
-       
+
     org_cisco_cgmi_complete_get_audio_lang_info (object,
             invocation,
             buffer,
@@ -1296,7 +1319,7 @@ on_handle_cgmi_set_audio_stream (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1331,7 +1354,7 @@ on_handle_cgmi_set_default_audio_lang (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1462,7 +1485,7 @@ on_handle_cgmi_create_section_filter (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1529,7 +1552,7 @@ on_handle_cgmi_destroy_section_filter (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1538,7 +1561,7 @@ on_handle_cgmi_destroy_section_filter (
         g_variant_unref( sessVar );
 
         g_variant_get( arg_filterId, "v", &filterIdVar );
-        if( filterIdVar == NULL ) 
+        if( filterIdVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1595,13 +1618,13 @@ on_handle_cgmi_set_section_filter (
                 CGMID_INFO("Error allocating memory.\n");
                 retStat = CGMI_ERROR_OUT_OF_MEMORY;
                 break;
-            }   
+            }
         }
 
         // Unmarshal value and mask
         g_variant_get( arg_filterValue, "ay", &iter );
         idx = 0;
-        while( idx < arg_filterLength && 
+        while( idx < arg_filterLength &&
             g_variant_iter_loop(iter, "y", &filterValue[idx]) )
         {
             idx++;
@@ -1609,7 +1632,7 @@ on_handle_cgmi_set_section_filter (
 
         g_variant_get( arg_filterMask, "ay", &iter );
         idx = 0;
-        while( idx < arg_filterLength && 
+        while( idx < arg_filterLength &&
             g_variant_iter_loop(iter, "y", &filterMask[idx]) )
         {
             idx++;
@@ -1623,7 +1646,7 @@ on_handle_cgmi_set_section_filter (
 
         // Unmarshal id pointers
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1632,7 +1655,7 @@ on_handle_cgmi_set_section_filter (
         g_variant_unref( sessVar );
 
         g_variant_get( arg_filterId, "v", &filterIdVar );
-        if( filterIdVar == NULL ) 
+        if( filterIdVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1641,7 +1664,7 @@ on_handle_cgmi_set_section_filter (
         g_variant_unref( filterIdVar );
 
         retStat = cgmi_SetSectionFilter( (void *)pSession,
-                                      (void *)pFilterId, 
+                                      (void *)pFilterId,
                                       &pFilter );
 
     }while(0);
@@ -1676,7 +1699,7 @@ on_handle_cgmi_start_section_filter (
     do{
         // Unmarshal id pointers
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1685,7 +1708,7 @@ on_handle_cgmi_start_section_filter (
         g_variant_unref( sessVar );
 
         g_variant_get( arg_filterId, "v", &filterIdVar );
-        if( filterIdVar == NULL ) 
+        if( filterIdVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1727,7 +1750,7 @@ on_handle_cgmi_stop_section_filter (
     do{
         // Unmarshal id pointers
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1736,7 +1759,7 @@ on_handle_cgmi_stop_section_filter (
         g_variant_unref( sessVar );
 
         g_variant_get( arg_filterId, "v", &filterIdVar );
-        if( filterIdVar == NULL ) 
+        if( filterIdVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1772,7 +1795,7 @@ on_handle_cgmi_start_user_data_filter (
     do{
         // Unmarshal id pointers
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             CGMID_ERROR("Failed to get variant\n");
             retStat = CGMI_ERROR_FAILED;
@@ -1794,7 +1817,7 @@ on_handle_cgmi_start_user_data_filter (
                              (gpointer)callbackData );
 
         // Create unique fifo name
-        snprintf(callbackData->fifoName, CMGI_FIFO_NAME_MAX, 
+        snprintf(callbackData->fifoName, CMGI_FIFO_NAME_MAX,
             "/tmp/cgmiUserData-%016lx.fifo", pSession);
 
         // Create thread to open fifo
@@ -1807,7 +1830,7 @@ on_handle_cgmi_start_user_data_filter (
         if( CGMI_ERROR_SUCCESS != retStat )
         {
             CGMID_ERROR("Failed to create fifo (%s)\n", callbackData->fifoName );
-            break; 
+            break;
         }
 
         CGMID_INFO("Calling lib cgmi_startUserDataFilter\n");
@@ -1841,7 +1864,7 @@ on_handle_cgmi_stop_user_data_filter (
     do{
         // Unmarshal id pointers
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1892,7 +1915,7 @@ on_handle_cgmi_get_num_pids (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1903,7 +1926,7 @@ on_handle_cgmi_get_num_pids (
 
         retStat = cgmi_GetNumPids( (void *)pSession, &count );
 
-    }while(0);    
+    }while(0);
 
     org_cisco_cgmi_complete_get_num_pids (object,
             invocation,
@@ -1926,10 +1949,10 @@ on_handle_cgmi_get_pid_info (
     tcgmi_PidData pidData;
 
     CGMID_ENTER();
-    
-    do{       
+
+    do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1941,7 +1964,7 @@ on_handle_cgmi_get_pid_info (
         retStat = cgmi_GetPidInfo( (void *)pSession, index, &pidData );
 
     }while(0);
-       
+
     org_cisco_cgmi_complete_get_pid_info (object,
             invocation,
             pidData.pid,
@@ -1968,7 +1991,7 @@ on_handle_cgmi_set_pid_info (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -2004,7 +2027,7 @@ on_handle_cgmi_set_logging (
     return TRUE;
 }
 
-static gboolean 
+static gboolean
 on_handle_cgmiDiags_get_timing_metrics_max_count (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation)
@@ -2021,7 +2044,7 @@ on_handle_cgmiDiags_get_timing_metrics_max_count (
     return TRUE;
 }
 
-static gboolean 
+static gboolean
 on_handle_cgmiDiags_get_timing_metrics(
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation,
@@ -2040,7 +2063,7 @@ on_handle_cgmiDiags_get_timing_metrics(
         inBufSize = sizeof(tCgmiDiags_timingMetric)*count;
         pInBuf = g_malloc(inBufSize);
 
-        if(NULL == pInBuf) 
+        if(NULL == pInBuf)
         {
            g_print("Failed to create input buffer\n");
            retStat = CGMI_ERROR_OUT_OF_MEMORY;
@@ -2077,7 +2100,7 @@ on_handle_cgmiDiags_get_timing_metrics(
     return TRUE;
 }
 
-static gboolean 
+static gboolean
 on_handle_cgmiDiags_reset_timing_metrics (
     OrgCiscoCgmi *object,
     GDBusMethodInvocation *invocation)
@@ -2108,7 +2131,7 @@ on_handle_cgmi_get_tsb_slide (
 
     do{
         g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -2350,7 +2373,7 @@ on_bus_acquired (GDBusConnection *connection,
                       "handle-reset-timing-metrics",
                       G_CALLBACK (on_handle_cgmiDiags_reset_timing_metrics),
                       NULL);
-    
+
     g_signal_connect (interface,
                       "handle-get-tsb-slide",
                       G_CALLBACK (on_handle_cgmi_get_tsb_slide),
@@ -2395,7 +2418,7 @@ static int verify_dbus_env()
     }
 
     g_print( "Warning: %s was not set in the env.  Looking for default.\n", DBUS_SESS_BUS_ADDR );
-    
+
     fp = fopen("/var/run/dbus/SessionBusAddress.txt", "r");
     if( fp == NULL )
     {
@@ -2479,7 +2502,7 @@ int main( int argc, char *argv[] )
     }
 
     /* Init Callback Globals */
-    gUserDataCallbackHash = g_hash_table_new_full(g_direct_hash, 
+    gUserDataCallbackHash = g_hash_table_new_full(g_direct_hash,
         g_direct_equal,
         NULL,
         g_free);

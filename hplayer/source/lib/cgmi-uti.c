@@ -1,10 +1,30 @@
 /*
+    CGMI
+    Copyright (C) {2015}  {Cisco System}
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+    USA
+
+    Contributing Authors: Matt Snoby, Kris Kersey, Zack Wine, Chris Foster,
+                          Tankut Akgul, Saravanakumar Periyaswamy
+
+*/
+
+/*
  * This source file is where utility functions for the CGMI interface should be placed.
- *
- *
- *
- *
- */
+*/
 
 #ifdef HAVE_CONFIG_H
 # include <config.h>
@@ -64,27 +84,27 @@ static size_t hdrResponseCb(void *ptr, size_t size, size_t nmemb, void *pData)
          break;
       }
       printf("%s", (char *)ptr);
-      
+
       if(strstr(ptr, "HTTP/1.1 200 OK") != NULL)
       {
          pRespHdr->httpStatusCode = 200;
       }
-      
+
       if(strstr(ptr, "Content-Type: video") != NULL)
       {
          pRespHdr->httpContentType = CONTENT_TYPE_VIDEO;
       }
-      
+
       if(strstr(ptr, "Content-Type: audio") != NULL)
       {
          pRespHdr->httpContentType = CONTENT_TYPE_AUDIO;
       }
-      
+
       if(strstr(ptr, "contentFeatures.dlna.org") != NULL)
       {
          pRespHdr->protocol = CONTENT_PROTOCOL_DLNA;
       }
-      
+
       if((strstr(ptr, "Content-Type: application/vnd.apple.mpegurl") != NULL) ||
          (strstr(ptr, "Content-Type: audio/x-mpegurl") != NULL) ||
          (strstr(ptr, "Content-Type: audio/mpegurl") != NULL))
@@ -142,7 +162,7 @@ cgmi_Status cgmi_utils_finalize(void)
  *
  *  \param[in] url  pointer to an http url shall be tested to see if it is pointing to a DLNA server
  *
- *  \param[out] bisdlnacontent  This pointer shall be populated with either TRUE or FALSE 
+ *  \param[out] bisdlnacontent  This pointer shall be populated with either TRUE or FALSE
  *
  *
  * \post    On success the result will return a TRUE in the bisDLNAContent variable
@@ -159,7 +179,7 @@ cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, gboolean *bisDLNAConten
 
    cgmi_Status  status = CGMI_ERROR_SUCCESS;
    *bisDLNAContent = FALSE;
-   
+
 #ifdef ENABLE_DLNA_AUTODETECT
    httpRespHdr respHdr = {-1, CONTENT_TYPE_UNSUPPORTED, CONTENT_PROTOCOL_UNICAST_HTTP};
    CURL* ctx = NULL;
@@ -179,11 +199,11 @@ cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, gboolean *bisDLNAConten
       curl_easy_setopt(ctx,CURLOPT_NOBODY ,1 );
       curl_easy_setopt(ctx,CURLOPT_URL, url);
       curl_easy_setopt(ctx,CURLOPT_NOPROGRESS ,1 );
-      curl_easy_setopt(ctx,CURLOPT_CONNECTTIMEOUT, 2); 
+      curl_easy_setopt(ctx,CURLOPT_CONNECTTIMEOUT, 2);
       curl_easy_setopt(ctx,CURLOPT_TIMEOUT, 3);
 
       curl_easy_perform(ctx);
-      if(CONTENT_PROTOCOL_DLNA == respHdr.protocol)    
+      if(CONTENT_PROTOCOL_DLNA == respHdr.protocol)
       {
          *bisDLNAContent = TRUE;
       }

@@ -1,3 +1,26 @@
+/*
+    CGMI
+    Copyright (C) {2015}  {Cisco System}
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+    USA
+
+    Contributing Authors: Matt Snoby, Kris Kersey, Zack Wine, Chris Foster,
+                          Tankut Akgul, Saravanakumar Periyaswamy
+
+*/
 #ifdef HAVE_CONFIG_H
 # include <config.h>
 #endif
@@ -110,7 +133,7 @@ static void cgmi_flush_pipeline(tSession *pSess)
 
    GST_INFO("%s()\n", __FUNCTION__);
 
-   do 
+   do
    {
       if(NULL == pSess)
       {
@@ -136,11 +159,11 @@ static void cgmi_flush_pipeline(tSession *pSess)
          ret = gst_element_send_event(GST_ELEMENT(pSess->pipeline), flushStop);
          if(FALSE == ret)
          {
-            GST_ERROR("Failed to send flush stop event\n"); 
+            GST_ERROR("Failed to send flush stop event\n");
          }
       }
    }while(0);
-   
+
    return;
 }
 
@@ -186,30 +209,30 @@ gpointer cgmi_monitor( gpointer data )
 
    while( pSess->runMonitor )
    {
-      if ( cisco_gst_getState(pSess) == GST_STATE_PLAYING && pSess->rate == 1.0 ) 
-      {         
+      if ( cisco_gst_getState(pSess) == GST_STATE_PLAYING && pSess->rate == 1.0 )
+      {
          videoPts = 0;
          audioPts = 0;
 
          if ( NULL != pSess->videoDecoder )
          {
-            g_object_get( pSess->videoDecoder, 
-                          "video_pts", &videoPts, 
+            g_object_get( pSess->videoDecoder,
+                          "video_pts", &videoPts,
                           "video_pts_errors", &videoPtsErrors,
                           "video_decode_errors", &videoDecodeErrors,
-                          "video_decode_drops", &videoDecodeDrops, 
+                          "video_decode_drops", &videoDecodeDrops,
                           NULL);
          }
          if ( NULL != pSess->audioDecoder )
          {
-            g_object_get( pSess->audioDecoder, 
-                          "audio_pts", &audioPts, 
+            g_object_get( pSess->audioDecoder,
+                          "audio_pts", &audioPts,
                           "audio_pts_errors", &audioPtsErrors,
                           NULL );
          }
 
          //During seeks or transition between trick modes, the monitored counters
-         //may have spikes which may cause spurious errors. Therefore, we need monitoring 
+         //may have spikes which may cause spurious errors. Therefore, we need monitoring
          //to take action only during steady 1x playback state
          if ( TRUE == pSess->steadyState )
          {
@@ -254,11 +277,11 @@ gpointer cgmi_monitor( gpointer data )
                {
                   g_print("Decoder error threshold reached within %d ms", errorWindow * 1000);
 
-                  g_print("videoPtsErrors = %u (prev = %u, diff = %u)\n", videoPtsErrors, videoPtsErrorsPrev, videoPtsErrors - videoPtsErrorsPrev);               
+                  g_print("videoPtsErrors = %u (prev = %u, diff = %u)\n", videoPtsErrors, videoPtsErrorsPrev, videoPtsErrors - videoPtsErrorsPrev);
                   g_print("videoDecodeErrors = %u (prev = %u, diff = %u)\n", videoDecodeErrors, videoDecodeErrorsPrev, videoDecodeErrors - videoDecodeErrorsPrev);
                   g_print("videoDecodeDrops = %u (prev = %u, diff = %u)\n", videoDecodeDrops, videoDecodeDropsPrev, videoDecodeDrops - videoDecodeDropsPrev);
                   g_print("audioPtsErrors = %u (prev = %u, diff = %u)\n", audioPtsErrors, audioPtsErrorsPrev, audioPtsErrors - audioPtsErrorsPrev);
-                  
+
                   g_print("Flushing buffers due to decode errors...\n");
                   pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_DECODE_ERROR, 0);
                   cgmi_flush_pipeline( pSess );
@@ -500,7 +523,7 @@ static gboolean cgmi_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data
             else if (0 == strcmp(ntype, "BOF"))
             {
                pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_START_OF_STREAM, 0);
-               cgmi_SetRate(pSess, 0.0); 
+               cgmi_SetRate(pSess, 0.0);
             }
 #endif
             else if (0 == strcmp(ntype, "network_error"))
@@ -569,7 +592,7 @@ static gboolean cgmi_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data
                   g_object_get( pSess->pipeline, "video-sink", &videoSink, NULL );
                   if ( NULL != videoSink )
                   {
-                     g_print("Found element class (%s), handle = %p\n", G_OBJECT_CLASS_NAME(G_OBJECT_GET_CLASS(videoSink)), videoSink); 
+                     g_print("Found element class (%s), handle = %p\n", G_OBJECT_CLASS_NAME(G_OBJECT_GET_CLASS(videoSink)), videoSink);
                      if ( GST_IS_BIN(videoSink) )
                      {
                         innerSink = cgmi_gst_find_element( GST_BIN(videoSink), "videosink" );
@@ -1042,7 +1065,7 @@ static GstFlowReturn cgmi_gst_new_user_data_buffer_available (GstAppSink *sink, 
    gst_sample_unref(sample);
 #else
    gst_buffer_unref(buffer);
-#endif 
+#endif
 
    return GST_FLOW_OK;
 }
@@ -1191,13 +1214,18 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->autoPlayMutex = g_mutex_new ();
    pSess->autoPlayCond = g_cond_new ();
 
-   pSess->runMonitor = TRUE;
+   //TODO Do a runtime or #define for running this monitor thread
+
+   pSess->runMonitor = FALSE;
+   pSess->monitor = NULL;
+
+#if 0
    pSess->monitor = g_thread_new("monitoring_thread", cgmi_monitor, pSess);
    if (!pSess->monitor)
    {
       GST_WARNING("Error launching thread for monitoring timestamp errors\n");
    }
-
+#endif
    pSess->loop = g_main_loop_new (pSess->thread_ctx, FALSE);
    if (pSess->loop == NULL)
    {
@@ -1279,7 +1307,7 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    if (pSess->autoPlayMutex) {g_mutex_free(pSess->autoPlayMutex);}
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
 #ifdef USE_DRMPROXY
-   if (0 != pSess->drmProxyHandle) 
+   if (0 != pSess->drmProxyHandle)
    {
        g_print("Calling DRMPROXY_DestroySession. pSess->drmProxyHandle = %lld", pSess->drmProxyHandle);
        DRMPROXY_DestroySession(pSess->drmProxyHandle);
@@ -1301,9 +1329,9 @@ cgmi_Status cgmi_DestroySession (void *pSession)
 static void cgmi_gst_no_more_pads(GstElement *element, gpointer data)
 {
    tSession *pSess = (tSession*)data;
-   
+
    GST_WARNING("Received NO_MORE_PADS signal\n");
-   
+
    if (NULL != pSess)
    {
       pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_LOAD_DONE, 0);
@@ -1372,7 +1400,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
    pSess->maskRateChangedEvent = FALSE;
    pSess->noVideo = FALSE;
 
-   // 
+   //
    // check to see if this is a DLNA url.
    //
    if (0 == strncmp(uri, "http", 4))
@@ -1385,14 +1413,14 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
          return stat;
       }
    }
-   
+
    if (pSess->bisDLNAContent == TRUE)
    {
       //for the gstreamer pipeline to autoplug we have to add
       //dlna+ to the protocol.
       pSess->playbackURI = g_strdup_printf("%s%s","dlna+", uri);
    }
-   else 
+   else
    {
       pSess->playbackURI = g_strdup_printf("%s", uri);
    }
@@ -1405,7 +1433,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
    }
 
    cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_LOAD, pSess->diagIndex, pSess->playbackURI, 0);
-   
+
    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
 
@@ -1489,7 +1517,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
               ret = vgdrm_construct_ott_cp_blob_data(pSess->drmProxyHandle, cpblob->cpBlob,&DRMPrivateData, &DRMPrivateDataSize);
               if(0 != ret)
               {
-                 GST_ERROR("vgdrm_construct_OTT_CPBlob_data (and_assign_asset_id()) failed\n");  
+                 GST_ERROR("vgdrm_construct_OTT_CPBlob_data (and_assign_asset_id()) failed\n");
                  drmStatus = 0;
                  break;
               }
@@ -1506,7 +1534,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
               }
 
               g_print("DRMPROXY_Activate() Passed."
-                      "returned licenseID  : %" PRIu64"\n", 
+                      "returned licenseID  : %" PRIu64"\n",
                       licenseId);
               g_strlcat(pPipeline, pSess->playbackURI, 1024);
               g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
@@ -1516,7 +1544,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
             } while (0);
           }
           else
-          { 
+          {
                g_print("drmType is not VGDRM -not supported!" );
                g_free(pPipeline);
                g_free(pSess->playbackURI);
@@ -1532,6 +1560,10 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
    }
 #else
    g_strlcat(pPipeline, pSess->playbackURI, 1024);
+
+   // TODO for COMCAST EMULATOR ONLY
+   // RMS
+   g_strlcat(pPipeline, " video-sink=fbdevsink", 1024);
 #endif
 
    // let's see if we are running on broadcom hardware if we are let's see if we can find there
@@ -1652,7 +1684,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
       if ( NULL != pSess->playbackURI )
       {
          g_free(pSess->playbackURI);
-         pSess->playbackURI = NULL;   
+         pSess->playbackURI = NULL;
       }
    }
 
@@ -1753,7 +1785,7 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
    pSess->rate = 1.0;
 
    cisco_gst_setState( pSess, GST_STATE_PLAYING );
-   
+
    return stat;
 }
 
@@ -1775,7 +1807,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
    }
 
    gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
-   
+
    /* Obtain the current position, needed for the seek event before a flush.
     * Position returned is sometimes incorrect after a flush
     */
@@ -1808,7 +1840,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
        *      flush, unpause and seek to the pause pos to switch to TSB with rate 1x.
        *   else just unpause and return.
        */
-      
+
       if(rate == pSess->rateBeforePause)
       {
          if(TRUE == pSess->bisDLNAContent)
@@ -1818,7 +1850,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
          }
 
          /* The switch to TSB logic is implement here instead of dlnasrc because
-          * dlnasrc cannot differentiate pause/unpause from pipeline state transition 
+          * dlnasrc cannot differentiate pause/unpause from pipeline state transition
           */
          if((1.0 == rate) && (TRUE == is_live) && (FALSE == in_tsb))
          {
@@ -1843,10 +1875,10 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
       }
       else
       {
-         /* We have to put the pipeline in playing state before sending a seek to transition to the 
+         /* We have to put the pipeline in playing state before sending a seek to transition to the
           * new requested play speed. On pause to play transition, a rate changed event with
-          * rateBeforePause is sent by the pipeline followed by an another rate changed event with 
-          * the request rate when it handles the seek event to transition to the new requested play 
+          * rateBeforePause is sent by the pipeline followed by an another rate changed event with
+          * the request rate when it handles the seek event to transition to the new requested play
           * speed. So mask the unexpected rate changed event with rateBeforePause.
           */
          pSess->maskRateChangedEvent = TRUE;
@@ -1865,7 +1897,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
 
    pSess->steadyState = FALSE;
    pSess->steadyStateWindow = 0;
-   
+
    seek_event = gst_event_new_seek (rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
                                     GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
    if (seek_event)
@@ -1876,7 +1908,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
          GST_ERROR("gst_element_send_event() failed");
          return CGMI_ERROR_FAILED;
       }
-     
+
       // are we paused or playing and are we being asked to fast forward or rewind?
       // or
       // are we asked to pause or play when we are fast fowarding or rewinding?
@@ -1900,9 +1932,9 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
       GST_ERROR ("gst_event_new_seek() failed\n");
       return CGMI_ERROR_FAILED;
    }
-   
+
    pSess->rate = rate;
-   
+
    return stat;
 }
 
@@ -1930,8 +1962,8 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
          g_print("Pipeline not playing yet, delaying seek...\n");
          pSess->pendingSeekPosition = position;
          pSess->pendingSeek = TRUE;
-         //If the seek request came in when the pipeline was in ready state 
-         //(e.g., resume from an offset), set it to paused to complete the seek         
+         //If the seek request came in when the pipeline was in ready state
+         //(e.g., resume from an offset), set it to paused to complete the seek
          if ( 0.0 == pSess->rate )
             cisco_gst_setState( pSess, GST_STATE_PAUSED );
          return stat;
@@ -1952,7 +1984,7 @@ cgmi_Status cgmi_SetPosition (void *pSession, float position)
                GST_CLOCK_TIME_NONE ))
       {
          GST_ERROR("Seek Failed\n");
-         stat = CGMI_ERROR_FAILED; 
+         stat = CGMI_ERROR_FAILED;
       }
 
    } while (0);
@@ -2015,7 +2047,7 @@ cgmi_Status cgmi_GetDuration (void *pSession, float *pDuration, cgmi_SessionType
       GST_INFO("Stream: %s\n", pSess->playbackURI );
       GST_INFO("Position: %" G_GINT64_MODIFIER "d (seconds)\n", (Duration/GST_SECOND) );
       *pDuration = (float)(Duration/GST_SECOND);
-      
+
       if(TRUE == pSess->bisDLNAContent)
       {
          g_object_get(pSess->source, "is-live", &is_live, NULL);
@@ -2296,7 +2328,7 @@ cgmi_Status cgmi_GetVideoDecoderIndex(void *pSession, int *idx)
 
    if (videoDecoderIndex == 0)  // 0 is the uninitialized value.
    {
-      return CGMI_ERROR_NOT_ACTIVE; 
+      return CGMI_ERROR_NOT_ACTIVE;
    }
 
    *idx = videoDecoderIndex;
@@ -2765,7 +2797,7 @@ cgmi_Status cgmi_SetLogging(const char *gstDebugStr)
    {
       g_print("Invalid GST debug string!\n");
       return CGMI_ERROR_BAD_PARAM;
-   }   
+   }
 
    split = g_strsplit (gstDebugStr, ",", 0);
 
@@ -2802,7 +2834,7 @@ cgmi_Status cgmi_GetTsbSlide(void *pSession, unsigned long *pTsbSlide)
    gboolean is_live = FALSE;
    tSession *pSess = (tSession*)pSession;
 
-   do 
+   do
    {
       if ( cgmi_CheckSessionHandle(pSess) == FALSE )
       {
@@ -2816,7 +2848,7 @@ cgmi_Status cgmi_GetTsbSlide(void *pSession, unsigned long *pTsbSlide)
          g_print("%s: pTsbSlide param is NULL\n", __FUNCTION__);
          stat = CGMI_ERROR_BAD_PARAM;
          break;
-      }   
+      }
 
       if(TRUE == pSess->bisDLNAContent)
       {
@@ -2827,7 +2859,7 @@ cgmi_Status cgmi_GetTsbSlide(void *pSession, unsigned long *pTsbSlide)
             break;
          }
          g_object_get(pSess->source, "tsb-slide", pTsbSlide, NULL);
-      
+
          stat = CGMI_ERROR_SUCCESS;
       }
       else
