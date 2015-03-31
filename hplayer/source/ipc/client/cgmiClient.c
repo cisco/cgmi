@@ -17,7 +17,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
     USA
 
-    Contributing Authors: Matt Snoby, Kris Kersey, Zack Wine, Chris Foster, 
+    Contributing Authors: Matt Snoby, Kris Kersey, Zack Wine, Chris Foster,
                           Tankut Akgul, Saravanakumar Periyaswamy
 
 */
@@ -36,7 +36,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdio.h>
- 
+
 #include "dbusPtrCommon.h"
 #include "cgmiPlayerApi.h"
 #include "cgmi_dbus_client_generated.h"
@@ -150,7 +150,7 @@ static gboolean on_handle_notification (  OrgCiscoCgmi *proxy,
     {
         // Unmarshal session id pointer
         g_variant_get( sessionHandle, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             break;
         }
@@ -214,7 +214,7 @@ static gboolean on_handle_section_buffer_notify (  OrgCiscoCgmi *proxy,
     {
         // Unmarshal filter id pointer
         g_variant_get( filterId, "v", &filterIdVar );
-        if( filterIdVar == NULL ) 
+        if( filterIdVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -236,10 +236,10 @@ static gboolean on_handle_section_buffer_notify (  OrgCiscoCgmi *proxy,
         if( FALSE == filterCbs->running ) { break; }
 
         // Ask for a buffer from the app
-        retStat = filterCbs->bufferCB( filterCbs->pUserData, 
-            filterCbs->pFilterPriv, 
+        retStat = filterCbs->bufferCB( filterCbs->pUserData,
+            filterCbs->pFilterPriv,
             (void *)pFilterId,
-            &retBuffer, 
+            &retBuffer,
             &retBufferSize );
 
         if( CGMI_ERROR_SUCCESS != retStat )
@@ -273,7 +273,7 @@ static gboolean on_handle_section_buffer_notify (  OrgCiscoCgmi *proxy,
             filterCbs->pFilterPriv,
             (void *)pFilterId,
             sectionStatus,
-            retBuffer, 
+            retBuffer,
             sectionSize );
 
         if( CGMI_ERROR_SUCCESS != retStat )
@@ -295,7 +295,7 @@ static int cgmi_fifoCompleteRead(int fd, void *buffer, size_t count)
     int totalRead = 0;
     do
     {
-        bytesRead = read(fd, buffer + totalRead, count - totalRead); 
+        bytesRead = read(fd, buffer + totalRead, count - totalRead);
         if( 0 >= bytesRead )
         {
             return bytesRead;
@@ -347,7 +347,7 @@ static void *cgmi_UserDataCbThread(void *data)
         FD_ZERO(&selectFdSet);
         FD_SET(cbData->userDataFifoDesc, &selectFdSet);
 
-        // Timeout in 1 second.  Note this must be reset each loop, 
+        // Timeout in 1 second.  Note this must be reset each loop,
         // because select updates the struct to time left.
         selectTimeout.tv_sec = 1;
         selectTimeout.tv_usec = 0;
@@ -359,7 +359,7 @@ static void *cgmi_UserDataCbThread(void *data)
         if( readyFd == 0 ) { continue; }
 
         // Handle select error
-        if( readyFd == -1 ) 
+        if( readyFd == -1 )
         {
             g_print("Failed to call select on pipe with error (%d).\n", errno);
             continue;
@@ -421,14 +421,14 @@ static void *cgmi_UserDataCbThread(void *data)
             if( NULL == pGstBuff )
             {
                 g_print("Failed to create new gst buffer.\n");
-                continue; 
-            }        
+                continue;
+            }
 #else
             pGstBuff = gst_buffer_new( );
             if( NULL == pGstBuff )
             {
                 g_print("Failed to create new gst buffer.\n");
-                continue; 
+                continue;
             }
             gst_buffer_set_data( pGstBuff, dataBuf, bytesRead );
 #endif
@@ -501,7 +501,7 @@ static void on_name_appeared (GDBusConnection *connection,
 
     g_print ("Name %s on the session bus is owned by %s\n", name, name_owner);
 
-    // Connect proxy to the server 
+    // Connect proxy to the server
     gProxy = org_cisco_cgmi_proxy_new_for_bus_sync( G_BUS_TYPE_SESSION,
              G_DBUS_PROXY_FLAGS_NONE, "org.cisco.cgmi", "/org/cisco/cgmi", NULL, &error );
 
@@ -524,12 +524,12 @@ static void on_name_appeared (GDBusConnection *connection,
 
     // Create hash tables for tracking sessions and callbacks.
     // NOTE:  Tell the hash table to free each value on removal via g_free
-    gPlayerEventCallbacks = g_hash_table_new_full(g_direct_hash, 
+    gPlayerEventCallbacks = g_hash_table_new_full(g_direct_hash,
         g_direct_equal,
         NULL,
         g_free);
 
-    gSectionFilterCbs = g_hash_table_new_full(g_direct_hash, 
+    gSectionFilterCbs = g_hash_table_new_full(g_direct_hash,
         g_direct_equal,
         NULL,
         g_free);
@@ -623,7 +623,7 @@ static int verify_dbus_env()
     }
 
     g_print( "Warning: %s was not set in the env.  Looking for default.\n", DBUS_SESS_BUS_ADDR );
-    
+
     fp = fopen("/var/run/dbus/SessionBusAddress.txt", "r");
     if( fp == NULL )
     {
@@ -696,7 +696,7 @@ cgmi_Status cgmi_DbusInterfaceInit()
         // Timeout in 5 seconds
         ts.tv_sec += 5;
 
-        while ((semaResult = sem_timedwait(&gMainThreadStartSema, &ts)) == -1 && 
+        while ((semaResult = sem_timedwait(&gMainThreadStartSema, &ts)) == -1 &&
             errno == EINTR)
         {
             continue;       /* If semaphore is interupted, then restart */
@@ -762,7 +762,7 @@ void cgmi_DbusInterfaceTerm()
 ////////////////////////////////////////////////////////////////////////////////
 cgmi_Status cgmi_Init (void)
 {
-    cgmi_Status   retStat = CGMI_ERROR_SUCCESS; 
+    cgmi_Status   retStat = CGMI_ERROR_SUCCESS;
     int argc =0;
     char **argv = NULL;
     GError   *error      = NULL;
@@ -824,7 +824,7 @@ char* cgmi_ErrorString ( cgmi_Status retStat )
     {
         g_print("%s,%d: Failed in the client call: %s\n", __FUNCTION__, __LINE__, error->message);
         g_error_free (error);
-        return  NULL;   
+        return  NULL;
     }
 
     return statusString;
@@ -872,7 +872,7 @@ cgmi_Status cgmi_CreateSession ( cgmi_EventCallback eventCB,
         }
 
         g_variant_get( dbusVar, "v", &sessVar );
-        if( sessVar == NULL ) 
+        if( sessVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -1006,11 +1006,11 @@ cgmi_Status cgmi_canPlayType( const char *type, int *pbCanPlay )
 cgmi_Status cgmi_Load( void *pSession, const char *uri,cpBlobStruct * cpblob)
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
-	GVariantBuilder *dataBuilder = NULL;
+    GVariantBuilder *dataBuilder = NULL;
     GVariant        *cpBlobStruct_Variant = NULL;
-	uint32_t     ii = 0;
-	gchar        byte;
-	 guint64 cpBlobStruct_Variant_Size=0;
+    uint32_t     ii = 0;
+    gchar        byte;
+    guint64 cpBlobStruct_Variant_Size=0;
     GError *error = NULL;
     GVariant *sessVar = NULL, *dbusVar = NULL;
 
@@ -1025,56 +1025,56 @@ cgmi_Status cgmi_Load( void *pSession, const char *uri,cpBlobStruct * cpblob)
     enforce_dbus_preconditions();
 
     do{
-        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
-        if( sessVar == NULL )
-        {
-            g_print("Failed to create new variant\n");
-            retStat = CGMI_ERROR_OUT_OF_MEMORY;
-            break;
-        }
-        sessVar = g_variant_ref_sink(sessVar);
+       sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+       if( sessVar == NULL )
+       {
+          g_print("Failed to create new variant\n");
+          retStat = CGMI_ERROR_OUT_OF_MEMORY;
+          break;
+       }
+       sessVar = g_variant_ref_sink(sessVar);
 
-        dbusVar = g_variant_new ( "v", sessVar );
-        if( dbusVar == NULL )
-        {
-            g_print("Failed to create new variant\n");
-            retStat = CGMI_ERROR_OUT_OF_MEMORY;
-            break;
-        }
-        dbusVar = g_variant_ref_sink(dbusVar);
-		dataBuilder = g_variant_builder_new(G_VARIANT_TYPE("ay"));
-		if(NULL == dataBuilder)
-		{    
-			g_print("Failed to create  Variant builder\n");
-			retStat = CGMI_ERROR_OUT_OF_MEMORY;
-			break;
-		} 
+       dbusVar = g_variant_new ( "v", sessVar );
+       if( dbusVar == NULL )
+       {
+          g_print("Failed to create new variant\n");
+          retStat = CGMI_ERROR_OUT_OF_MEMORY;
+          break;
+       }
+       dbusVar = g_variant_ref_sink(dbusVar);
+       dataBuilder = g_variant_builder_new(G_VARIANT_TYPE("ay"));
+       if(NULL == dataBuilder)
+       {
+          g_print("Failed to create  Variant builder\n");
+          retStat = CGMI_ERROR_OUT_OF_MEMORY;
+          break;
+       }
 
-		if (cpblob)
-		{
-			for(ii = 0; ii < sizeof(cpBlobStruct); ii++)
-			{    
-				byte = ((gchar *)cpblob)[ii];
-				g_variant_builder_add(dataBuilder, "y", byte);
-			}
-			cpBlobStruct_Variant_Size=sizeof(cpBlobStruct);
-		}
-	
+       if (cpblob)
+       {
+          for(ii = 0; ii < sizeof(cpBlobStruct); ii++)
+          {
+             byte = ((gchar *)cpblob)[ii];
+             g_variant_builder_add(dataBuilder, "y", byte);
+          }
+          cpBlobStruct_Variant_Size=sizeof(cpBlobStruct);
+       }
 
-   cpBlobStruct_Variant = g_variant_builder_end(dataBuilder);
 
-   if(NULL != dataBuilder)
-   {    
-      g_variant_builder_unref(dataBuilder);
-   }    
-        org_cisco_cgmi_call_load_sync( gProxy,
-                                       dbusVar,
-                                       (const gchar *)uri,
-									   cpBlobStruct_Variant,
-									   cpBlobStruct_Variant_Size,
-                                       (gint *)&retStat,
-                                       NULL,
-                                       &error );
+       cpBlobStruct_Variant = g_variant_builder_end(dataBuilder);
+
+       if(NULL != dataBuilder)
+       {
+          g_variant_builder_unref(dataBuilder);
+       }
+       org_cisco_cgmi_call_load_sync( gProxy,
+             dbusVar,
+             (const gchar *)uri,
+             cpBlobStruct_Variant,
+             cpBlobStruct_Variant_Size,
+             (gint *)&retStat,
+             NULL,
+             &error );
 
     }while(0);
 
@@ -1435,7 +1435,7 @@ cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumR
        return CGMI_ERROR_BAD_PARAM;
     }
     inNumRates = *pNumRates;
-    //g_print("CGMI_CLIENT: inNumRates = %u\n", inNumRates); 
+    //g_print("CGMI_CLIENT: inNumRates = %u\n", inNumRates);
 
     enforce_session_preconditions(pSession);
 
@@ -1476,21 +1476,21 @@ cgmi_Status cgmi_GetRates (void *pSession,  float pRates[],  unsigned int *pNumR
 
     dbus_check_error(error);
 
-    g_variant_get(pOutRates, "ad", &iter); 
+    g_variant_get(pOutRates, "ad", &iter);
     if( NULL != iter )
     {
        *pNumRates = 0;
        while((*pNumRates < inNumRates) && (g_variant_iter_loop(iter, "d", &rate)))
        {
           pRates[(*pNumRates)++] = rate;
-          //g_print("CGMI_CLIENT: pRates[%u] = %f\n", *pNumRates - 1, pRates[*pNumRates - 1]); 
+          //g_print("CGMI_CLIENT: pRates[%u] = %f\n", *pNumRates - 1, pRates[*pNumRates - 1]);
        }
        g_variant_iter_free(iter);
-       //g_print("CGMI_CLIENT: Number of rates = %u\n", *pNumRates); 
+       //g_print("CGMI_CLIENT: Number of rates = %u\n", *pNumRates);
     }
     else
     {
-       g_print("CGMI_CLIENT: Getting iter by calling g_variant_get(pOutRates) failed\n"); 
+       g_print("CGMI_CLIENT: Getting iter by calling g_variant_get(pOutRates) failed\n");
     }
 
     return retStat;
@@ -1770,7 +1770,7 @@ cgmi_Status cgmi_GetAudioLangInfo( void *pSession, int index,
 
     if( NULL == buffer )
     {
-        return CGMI_ERROR_FAILED;      
+        return CGMI_ERROR_FAILED;
     }
 
     strncpy( buf, buffer, bufSize );
@@ -2064,7 +2064,7 @@ cgmi_Status cgmi_CreateSectionFilter( void *pSession, int pid, void *pFilterPriv
         }
 
         g_variant_get( filterDbusVar, "v", &filterIdVar );
-        if( filterIdVar == NULL ) 
+        if( filterIdVar == NULL )
         {
             retStat = CGMI_ERROR_FAILED;
             break;
@@ -2117,7 +2117,7 @@ cgmi_Status cgmi_CreateSectionFilter( void *pSession, int pid, void *pFilterPriv
         g_hash_table_insert( gSectionFilterCbs, (gpointer)*pFilterId,
                              (gpointer)sectionFilterData );
 
-        if( NULL == g_hash_table_lookup( gSectionFilterCbs, 
+        if( NULL == g_hash_table_lookup( gSectionFilterCbs,
             (gpointer)*pFilterId ) )
         {
             g_print("Can't find the new filter in the hash!!!\n");
@@ -2350,7 +2350,7 @@ cgmi_Status cgmi_StartSectionFilter(void *pSession,
     }
 
     // Find section filter callback instance
-    filterCb = g_hash_table_lookup( gSectionFilterCbs, 
+    filterCb = g_hash_table_lookup( gSectionFilterCbs,
         (gpointer)pFilterId );
     if( NULL == filterCb )
     {
@@ -2444,7 +2444,7 @@ cgmi_Status cgmi_StopSectionFilter(void *pSession, void *pFilterId )
     enforce_dbus_preconditions();
 
     // Find section filter callback instance
-    filterCb = g_hash_table_lookup( gSectionFilterCbs, 
+    filterCb = g_hash_table_lookup( gSectionFilterCbs,
         (gpointer)pFilterId );
     if( NULL == filterCb )
     {
@@ -2618,7 +2618,7 @@ cgmi_Status _cgmi_stopUserDataFilterHelper(void *pSession, userDataBufferCB buff
     GError *error = NULL;
     GVariant *sessVar = NULL, *dbusVar = NULL;
     tcgmi_PlayerEventCallbackData *cbData;
-    
+
     // Preconditions
     if( pSession == NULL )
     {

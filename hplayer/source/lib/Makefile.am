@@ -4,9 +4,6 @@ lib_LTLIBRARIES = libcgmiPlayer-@GST_API_VERSION@.la
 libcgmiPlayer_@GST_API_VERSION@_la_SOURCES= cgmi-player.c cgmi-section-filter.c cgmi-uti.c cgmi-diags.c
 libcgmiPlayer_@GST_API_VERSION@_la_CPPFLAGS = $(CFLAGS) -I$(top_srcdir)/source/include
 libcgmiPlayer_@GST_API_VERSION@_la_LDFLAGS= $(LDFLAGS) -lgstapp-@GST_API_VERSION@
-if USE_DRMPROXY
-libcgmiPlayer_@GST_API_VERSION@_la_LDFLAGS+= -ldrm-proxy
-endif
 
 if TMET_ENABLED
 libcgmiPlayer_@GST_API_VERSION@_la_CPPFLAGS += -DTMET_ENABLED

@@ -8,22 +8,11 @@
 *
 *    \brief Cisco Gstreamer Media Player interface API.
 *
-*   System: RDK 1.3
-*   Component Name : CGMI (Cisco Gstreamer Media Interface)
-*   Status         : Version 1.0 Release 1
-*   Language       : C
-*
-*
-*   (c) Copyright Cisco Systems 2015
-*
-*
-
-   Description: This header file contains the Media Player prototypes
+*   Description: This header file contains the Media Player prototypes
 *
 *    Thread Safe: Yes
 *
 *    \authors : Matt Snoby, Kris Kersey, Zack Wine, Chris Foster, Tankut Akgul, Saravanakumar Periyaswamy
-*     \Platform Dependencies: Gstreamer 0.10/1.0.
 *  \ingroup CGMI
 */
 
@@ -51,12 +40,12 @@ extern "C"
 /** Indicates maximum copy protection blob length
  */
 #define MAX_CP_BLOB_LENGTH 64000
+/** Indicates maximum length of the string for the drm type name
+ */
+#define MAX_DRM_TYPE_LENGTH 128
 
 #include <stdint.h>
 #include <glib.h>
-#ifdef USE_DRMPROXY
-#include <drmProxy.h>
-#endif
 /** Function return status values
  */
 typedef enum
@@ -152,25 +141,19 @@ typedef struct
    int streamType;                        ///<Type of the selected stream (see Table 2-29 of ISO/IEC 13818-1)
 }tcgmi_PidData;
 
-#ifdef USE_DRMPROXY
 /** Structure that holds DRM copy protection data passed to CGMI
 
     bloblength holds the actual size of data in the cpblob array
-    (the rest of cpBlob array will be unused).
+    (the rest of cpBlob array will be unused),
     bloblength can be equal to MAX_CP_BLOB_LENGTH at max which is
     the size of the cpBlob array.
  */
 typedef struct
 {
-    uint8_t  cpBlob[MAX_CP_BLOB_LENGTH];
-    uint32_t bloblength;
-    tDRM_TYPE drmType;
+    uint8_t  cpBlob[MAX_CP_BLOB_LENGTH];   ///<This is the structure that will hold the Content Protection Blob data
+    uint32_t bloblength;                   ///<The length of the Content Protection Blob
+    uint8_t  drmType[MAX_DRM_TYPE_LENGTH]; ///<This string will indicate what DRM Type this CPBLOB is associated too.
 }cpBlobStruct;
-#else
-/** Opaque pointer that is used in place when DRM copy protection is disabled
- */
-typedef void* cpBlobStruct;
-#endif
 
 /** Function pointer type for event callback that CGMI uses to report async events
  */
