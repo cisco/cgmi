@@ -2066,6 +2066,18 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
             }
          }
       }
+      /* This has been added for rtp live stream - it could add issues with rtsp/rtp vod playing */
+      else if(GST_STATE_CHANGE_NO_PREROLL== sret)
+      {
+         if(FALSE == pSess->suppressLoadDone)
+         {
+            pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_LOAD_DONE, 0);
+         }
+         else
+         {
+            pSess->suppressLoadDone = FALSE;
+         }
+      }
 
    }while(0);
 
