@@ -124,6 +124,7 @@ typedef struct
    /* used when we reconstruct the pipeline for discrete<->muxed audio language switch */
    gchar              newAudioLanguage[4];
    gboolean           suppressLoadDone;
+   gboolean           isPlaying;
 
 }tSession;
 

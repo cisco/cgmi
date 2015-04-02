@@ -1709,6 +1709,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    pSess->maskRateChangedEvent = FALSE;
    pSess->noVideo = FALSE;
    pSess->bQueryDiscreteAudioInfo = TRUE;
+   pSess->isPlaying = FALSE;
 
    // 
    // check to see if this is a DLNA url.
@@ -2187,7 +2188,7 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
       g_print("%s:Invalid session handle\n", __FUNCTION__);
       return CGMI_ERROR_INVALID_HANDLE;
    }
-
+   pSess->isPlaying = TRUE;
    cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PLAY, pSess->diagIndex, pSess->playbackURI, 0);
 
    pSess->autoPlay = autoPlay;
@@ -2231,7 +2232,12 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
       return CGMI_ERROR_BAD_PARAM;
    }
 #endif
-
+   if ((!pSess->isPlaying)&&(rate==1.0))
+   {
+       pSess->rate = 1.0;
+       g_print("%s: cgmi_SetRate was called with rate %f before cgmi_Play was called.No need to proceed in this function.Returning now.\n",__FUNCTION__,rate);
+       return stat;
+   }
    gst_element_get_state(pSess->pipeline, &curState, NULL, GST_CLOCK_TIME_NONE);
    
    /* Obtain the current position, needed for the seek event before a flush.
@@ -2292,7 +2298,7 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
          //pause (such as HLS plugin element which resets its internal rate to 0x on pause) and
          //we want to restore internal rate state of such elements to the rate we had before pause
          //by executing the seek below
-         else if ((1.0 == rate) && (FALSE == pSess->pendingSeek))
+         else if (1.0 == rate)
          {
             cisco_gst_setState( pSess, GST_STATE_PLAYING );
             pSess->rate = rate;
@@ -2313,14 +2319,6 @@ cgmi_Status cgmi_SetRate (void *pSession, float rate)
       /* Go to playing state for non 0x speed */
       cisco_gst_setState( pSess, GST_STATE_PLAYING );
    }
-
-   if (pSess->pendingSeek)
-   {
-      GST_INFO("Executing pending seek in setRate...\n");
-      pSess->pendingSeek = FALSE;
-      position = pSess->pendingSeekPosition * GST_SECOND;
-   }
-
    pSess->steadyState = FALSE;
    pSess->steadyStateWindow = 0;
    
