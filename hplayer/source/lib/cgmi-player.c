@@ -1837,7 +1837,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
                   GST_ERROR("DRMPROXY_Activate() failed\n");
                   if (proxy_err.errCode != 0)
                   {
-                     GST_ERROR ("DRMPROXY_Activate error: %lu - %s \n", proxy_err.errCode,proxy_err.errString);
+                      GST_ERROR ("DRMPROXY_Activate error: %016llX - %s \n", proxy_err.errCode, proxy_err.errString);
                   }
                   drmStatus = 0;
                   break;
