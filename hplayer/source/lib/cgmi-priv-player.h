@@ -125,6 +125,7 @@ typedef struct
    gchar              newAudioLanguage[4];
    gboolean           suppressLoadDone;
    gboolean           isPlaying;
+   GRecMutex          psiMutex;
 
 }tSession;
 

@@ -783,6 +783,10 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
    g_print("Enabling server side trick mode...\n");
    g_object_set( obj, "server-side-trick-mode", TRUE, NULL );
 
+   g_rec_mutex_lock(&pSess->psiMutex);
+   pSess->bQueryDiscreteAudioInfo = TRUE;
+   pSess->numAudioLanguages = 0;
+
    /* Get PAT Info */
    g_object_get( obj, "pat-info", &patInfo, NULL );
 
@@ -974,6 +978,8 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
       }
       g_print ("------------------------------------------------------------------------- \n");
    }
+
+   g_rec_mutex_unlock(&pSess->psiMutex);
 
    if ( pSess->audioLanguageIndex != INVALID_INDEX )
    {
@@ -1408,6 +1414,8 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->autoPlayMutex = g_mutex_new ();
    pSess->autoPlayCond = g_cond_new ();
 
+   g_rec_mutex_init(&pSess->psiMutex);
+
    pSess->runMonitor = TRUE;
    pSess->monitor = g_thread_new("monitoring_thread", cgmi_monitor, pSess);
    if (!pSess->monitor)
@@ -1496,6 +1504,7 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    if (pSess->autoPlayCond) {g_cond_free(pSess->autoPlayCond);}
    if (pSess->autoPlayMutex) {g_mutex_free(pSess->autoPlayMutex);}
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
+   g_rec_mutex_clear(&pSess->psiMutex);
 #ifdef USE_DRMPROXY
    if (0 != pSess->drmProxyHandle) 
    {
@@ -2763,15 +2772,17 @@ cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
    cgmi_Status  stat = CGMI_ERROR_FAILED;
    tSession     *pSess = (tSession*)pSession;
 
-   do 
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
-      if ( cgmi_CheckSessionHandle(pSess) == FALSE )
-      {
-         GST_ERROR("%s:Invalid session handle\n", __FUNCTION__);
-         stat = CGMI_ERROR_INVALID_HANDLE;
-         break;
-      }
+      GST_ERROR("%s:Invalid session handle\n", __FUNCTION__);
+      stat = CGMI_ERROR_INVALID_HANDLE;
+      return stat;
+   }
 
+   g_rec_mutex_lock(&pSess->psiMutex);
+
+   do
+   {
       if ( NULL == count )
       {
          GST_ERROR("Null count pointer passed for audio language!\n");
@@ -2787,9 +2798,12 @@ cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
       }
 
       *count = pSess->numAudioLanguages;
+
       stat = CGMI_ERROR_SUCCESS;
    }while(0);
-   
+
+   g_rec_mutex_unlock(&pSess->psiMutex);
+
    return stat;
 }
 
@@ -2801,53 +2815,18 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
    if ( cgmi_CheckSessionHandle(pSess) == FALSE )
    {
       g_print("%s:Invalid session handle\n", __FUNCTION__);
-      return CGMI_ERROR_INVALID_HANDLE;
-   }
-
-   if ( NULL == buf )
-   {
-      g_print("Null buffer pointer passed for audio language!\n");
-      return CGMI_ERROR_BAD_PARAM;
-   }
-
-   stat = cgmi_queryDiscreteAudioInfo(pSess);
-   if(CGMI_ERROR_SUCCESS != stat)
-   {
-      GST_ERROR("Discrete audio stream(s) info query failed\n");
+      stat = CGMI_ERROR_INVALID_HANDLE;
       return stat;
    }
 
-   if ( index > pSess->numAudioLanguages - 1 || index < 0 )
-   {
-      g_print("Bad index value passed for audio language!\n");
-      return CGMI_ERROR_BAD_PARAM;
-   }
-
-   strncpy( buf, pSess->audioLanguages[index].isoCode, bufSize );
-   buf[bufSize - 1] = 0;
-
-   return CGMI_ERROR_SUCCESS;
-}
-
-cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
-{
-   cgmi_Status stat;
-   tSession    *pSess = (tSession*)pSession;
-   gint        ii = 0;
-   gchar       audioLanguage[4] = "";
-   gchar       *pAudioLanguage = NULL;
-   gint        autoPlay;
-   gchar       *uri = NULL;
-   void        *cpblob = NULL;
-   float       position = 0.0;
-   gint        currAudioLangArrIdx = INVALID_INDEX;
+   g_rec_mutex_lock(&pSess->psiMutex);
 
    do
    {
-      if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+      if ( NULL == buf )
       {
-         GST_ERROR("%s:Invalid session handle\n", __FUNCTION__);
-         stat = CGMI_ERROR_INVALID_HANDLE;
+         g_print("Null buffer pointer passed for audio language!\n");
+         stat = CGMI_ERROR_BAD_PARAM;
          break;
       }
 
@@ -2860,15 +2839,58 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
 
       if ( index > pSess->numAudioLanguages - 1 || index < 0 )
       {
-         GST_ERROR("Bad index value passed for audio language!\n");
+         g_print("Bad index value passed for audio language!\n");
          stat = CGMI_ERROR_BAD_PARAM;
          break;
       }
 
-      if ( NULL == pSess->demux )
+      strncpy( buf, pSess->audioLanguages[index].isoCode, bufSize );
+      buf[bufSize - 1] = 0;
+
+      stat = CGMI_ERROR_SUCCESS;
+
+   }while(0);
+
+   g_rec_mutex_unlock(&pSess->psiMutex);
+
+   return stat;
+}
+
+cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
+{
+   cgmi_Status stat = CGMI_ERROR_FAILED;
+   tSession    *pSess = (tSession*)pSession;
+   gint        ii = 0;
+   gchar       audioLanguage[4] = "";
+   gchar       *pAudioLanguage = NULL;
+   gint        autoPlay;
+   gchar       *uri = NULL;
+   void        *cpblob = NULL;
+   float       position = 0.0;
+   gint        currAudioLangArrIdx = INVALID_INDEX;
+
+   if ( cgmi_CheckSessionHandle(pSess) == FALSE )
+   {
+      GST_ERROR("%s:Invalid session handle\n", __FUNCTION__);
+      stat = CGMI_ERROR_INVALID_HANDLE;
+      return stat;
+   }
+
+   g_rec_mutex_lock(&pSess->psiMutex);
+
+   do
+   {
+      stat = cgmi_queryDiscreteAudioInfo(pSess);
+      if(CGMI_ERROR_SUCCESS != stat)
       {
-         GST_ERROR("Demux is not ready yet, cannot set audio stream!\n");
-         stat = CGMI_ERROR_NOT_READY;
+         GST_ERROR("Discrete audio stream(s) info query failed\n");
+         break;
+      }
+
+      if ( index > pSess->numAudioLanguages - 1 || index < 0 )
+      {
+         GST_ERROR("Bad index value passed for audio language!\n");
+         stat = CGMI_ERROR_BAD_PARAM;
          break;
       }
 
@@ -2924,10 +2946,13 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
          g_strlcpy(pSess->newAudioLanguage, audioLanguage, sizeof(pSess->newAudioLanguage));
          pSess->suppressLoadDone = TRUE;
 
+         g_rec_mutex_unlock(&pSess->psiMutex);
+
          stat = cgmi_Load(pSess, uri, cpblob);
          if(CGMI_ERROR_SUCCESS != stat)
          {
             GST_ERROR("cgmi_Load() failed\n");
+            g_rec_mutex_lock(&pSess->psiMutex);
             break;
          }
 
@@ -2935,6 +2960,7 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
          if(CGMI_ERROR_SUCCESS != stat)
          {
             GST_ERROR("cgmi_SetPosition() failed\n");
+            g_rec_mutex_lock(&pSess->psiMutex);
             break;
          }
 
@@ -2942,10 +2968,14 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
          if(CGMI_ERROR_SUCCESS != stat)
          {
             GST_ERROR("cgmi_Play() failed\n");
+            g_rec_mutex_lock(&pSess->psiMutex);
             break;
          }
 
+         g_rec_mutex_lock(&pSess->psiMutex);
+
          g_strlcpy(pSess->currAudioLanguage, pSess->newAudioLanguage, sizeof(pSess->currAudioLanguage));
+         stat = CGMI_ERROR_SUCCESS;
       }
       else if((INVALID_INDEX != currAudioLangArrIdx) &&
               (TRUE == pSess->audioLanguages[index].bDiscrete) &&
@@ -2956,6 +2986,7 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
          {
             g_object_set( G_OBJECT(pSess->hlsDemux), "audio-language", pSess->audioLanguages[index].isoCode, NULL);
             g_strlcpy(pSess->currAudioLanguage, pSess->audioLanguages[index].isoCode, sizeof(pSess->currAudioLanguage));
+            stat = CGMI_ERROR_SUCCESS;
          }
       }
       else if(FALSE == pSess->audioLanguages[index].bDiscrete)
@@ -2967,8 +2998,16 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
 
             pSess->audioLanguageIndex = pSess->audioLanguages[index].index;
 
+            if ( NULL == pSess->demux )
+            {
+               GST_ERROR("Demux is not ready yet, cannot set audio stream!\n");
+               stat = CGMI_ERROR_NOT_READY;
+               break;
+            }
+
             g_object_set( G_OBJECT(pSess->demux), "audio-stream", pSess->audioLanguageIndex, NULL );
             g_strlcpy(pSess->currAudioLanguage, pSess->audioLanguages[index].isoCode, sizeof(pSess->currAudioLanguage));
+            stat = CGMI_ERROR_SUCCESS;
          }
          else
          {
@@ -2979,6 +3018,8 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
       }
 
    }while(0);
+
+   g_rec_mutex_unlock(&pSess->psiMutex);
 
    if(NULL != uri)
    {
