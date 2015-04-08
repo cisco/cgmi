@@ -780,6 +780,8 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
       return;
    }
 
+   cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_PAT_PMT_ACQUIRED, pSess->diagIndex, pSess->playbackURI, 0);
+
    g_print("Enabling server side trick mode...\n");
    g_object_set( obj, "server-side-trick-mode", TRUE, NULL );
 
@@ -1726,6 +1728,8 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    pSess->bQueryDiscreteAudioInfo = TRUE;
    pSess->isPlaying = FALSE;
 
+   cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_LOAD, pSess->diagIndex, uri, 0);
+
    // 
    // check to see if this is a DLNA url.
    //
@@ -1758,8 +1762,6 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
       return CGMI_ERROR_OUT_OF_MEMORY;
    }
 
-   cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_LOAD, pSess->diagIndex, pSess->playbackURI, 0);
-   
    g_print("URI: %s\n", pSess->playbackURI);
    /* Create playback pipeline */
 

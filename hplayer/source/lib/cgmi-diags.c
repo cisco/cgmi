@@ -311,11 +311,20 @@ cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned 
                 */ 
                 case DIAG_TIMING_METRIC_LOAD:
                 {
-                    tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
-                                          pSessionUriTemp, 
-                                          markTime, 
-                                          "CGMID_LOAD", 
-                                          NULL);
+                    const char searchStr[5] = "/dms";
+                    char *ret;
+
+                    ret = strstr(pSessionUriTemp, searchStr);
+
+                    if(ret)
+                    {
+                        tMets_cacheMilestoneExt( TMETS_OPERATION_CHANELCHANGE,
+                                                 pSessionUriTemp,
+                                                 markTime,
+                                                 "CGMID_LOAD",
+                                                 NULL,
+                                                 ret);
+                    }
                 }
                 break;
                 case DIAG_TIMING_METRIC_PLAY:
@@ -338,6 +347,16 @@ cgmi_Status cgmiDiag_addTimingEntry(tCgmiDiag_timingEvent timingEvent, unsigned 
                     tMets_postAllCachedMilestone(gDefaultPostUrl);
                 }
                 break;
+                case DIAG_TIMING_METRIC_PAT_PMT_ACQUIRED:
+                {
+                    tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                                          pSessionUriTemp,
+                                          markTime,
+                                          "CGMID_ACQUIRED_PATPMT",
+                                          NULL);
+
+                    tMets_postAllCachedMilestone(gDefaultPostUrl);
+                }
                 default:
                     /* unhandled message */
                 break;

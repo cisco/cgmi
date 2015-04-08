@@ -176,14 +176,19 @@ static cgmi_Status load(void *pSessionId, char *src, cpBlobStruct * cpblob)
 #ifdef TMET_ENABLED
     {
         unsigned long long curTime;
+        const char searchStr[5] = "/dms";
+        char *ret;
+
+        ret = strstr(gCurrentPlaySrcUrl, searchStr);
 
         pthread_mutex_lock(&cgmiCliMutex);
         tMets_getMsSinceEpoch(&curTime);
-        tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+        tMets_cacheMilestoneExt( TMETS_OPERATION_CHANELCHANGE,
                               gCurrentPlaySrcUrl, 
                               curTime, 
                               "CGMICLI_LOAD", 
-                              NULL);
+                              NULL,
+                              ret);
         pthread_mutex_unlock(&cgmiCliMutex);
     }
 #endif // TMET_ENABLED
@@ -561,6 +566,22 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
         case NOTIFY_PSI_READY:
             {
                printf("NOTIFY_PSI_READY");
+#ifdef TMET_ENABLED
+               {
+                unsigned long long curTime;
+
+                pthread_mutex_lock(&cgmiCliMutex);
+                tMets_getMsSinceEpoch(&curTime);
+                tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                                      gCurrentPlaySrcUrl,
+                                      curTime,
+                                      "CGMICLI_ACQUIRED_PATPMT",
+                                      NULL);
+                pthread_mutex_unlock(&cgmiCliMutex);
+
+                tMets_postAllCachedMilestone(gDefaultPostUrl);
+               }
+#endif // TMET_ENABLED
                gint i, count = 0;
                tcgmi_PidData pidData;
                cgmi_Status retCode;
