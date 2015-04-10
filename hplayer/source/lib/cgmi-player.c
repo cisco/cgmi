@@ -1505,6 +1505,12 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    if (pSess->autoPlayMutex) {g_mutex_free(pSess->autoPlayMutex);}
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
    g_rec_mutex_clear(&pSess->psiMutex);
+   if(NULL != pSess->thread_ctx)
+   {
+      g_main_context_unref(pSess->thread_ctx);
+      pSess->thread_ctx = NULL;
+   }
+
 #ifdef USE_DRMPROXY
    if (0 != pSess->drmProxyHandle) 
    {
