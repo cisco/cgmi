@@ -126,6 +126,8 @@ typedef struct
    gboolean           suppressLoadDone;
    gboolean           isPlaying;
    GRecMutex          psiMutex;
+   GMutex             monThreadMutex;
+   GCond              monThreadCond; 
 
 }tSession;
 

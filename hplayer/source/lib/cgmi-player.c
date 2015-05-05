@@ -313,7 +313,7 @@ void debug_cisco_gst_streamDurPos( tSession *pSess )
 
 gpointer cgmi_monitor( gpointer data )
 {
-   gint64 videoPts, audioPts;
+   gint64 videoPts, audioPts, endTime;
    guint videoPtsErrors;
    guint videoDecodeDrops;
    guint videoDecodeErrors;
@@ -457,7 +457,20 @@ gpointer cgmi_monitor( gpointer data )
             pSess->steadyStateWindow++;
          }
       }
-      g_usleep(1000000);
+
+      // Wait until either cond is signalled or end_time has passed. For handling a spurious wakeup, 
+      // retry g_cond_wait_until() until runMonitor becomes false or break if end_time expires
+      g_mutex_lock(&pSess->monThreadMutex);
+      endTime = g_get_monotonic_time () + G_TIME_SPAN_SECOND;
+      while ( pSess->runMonitor )
+      {
+         if ( FALSE == g_cond_wait_until(&pSess->monThreadCond, &pSess->monThreadMutex, endTime) )
+         {
+            // timeout occurred
+            break;
+         }
+      }
+      g_mutex_unlock(&pSess->monThreadMutex);
    }
 }
 
@@ -1416,6 +1429,8 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    pSess->autoPlayMutex = g_mutex_new ();
    pSess->autoPlayCond = g_cond_new ();
 
+   g_mutex_init(&pSess->monThreadMutex);
+   g_cond_init(&pSess->monThreadCond);
    g_rec_mutex_init(&pSess->psiMutex);
 
    pSess->runMonitor = TRUE;
@@ -1483,6 +1498,8 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    pSess->runMonitor = FALSE;
    if (pSess->monitor)
    {
+      g_cond_signal(&pSess->monThreadCond);
+
       GST_INFO("about to join monitoring thread\n");
       g_thread_join (pSess->monitor);
    }
@@ -1507,6 +1524,8 @@ cgmi_Status cgmi_DestroySession (void *pSession)
    if (pSess->autoPlayMutex) {g_mutex_free(pSess->autoPlayMutex);}
    if (pSess->loop) {g_main_loop_unref(pSess->loop);}
    g_rec_mutex_clear(&pSess->psiMutex);
+   g_cond_clear(&pSess->monThreadCond);
+   g_mutex_clear(&pSess->monThreadMutex);
    if(NULL != pSess->thread_ctx)
    {
       g_main_context_unref(pSess->thread_ctx);
