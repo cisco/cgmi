@@ -58,6 +58,11 @@ typedef struct
 
 typedef struct
 {
+   gchar audioLanguage[4];
+}tSessionSettings;
+
+typedef struct
+{
    void*              cookie;
    GMainContext       *thread_ctx; 
    GThread            *thread;
@@ -127,8 +132,9 @@ typedef struct
    gboolean           isPlaying;
    GRecMutex          psiMutex;
    GMutex             monThreadMutex;
-   GCond              monThreadCond; 
-
+   GCond              monThreadCond;
+   gchar              *sessionSettingsStr;
+   tSessionSettings   sessionSettings;
 }tSession;
 
 gboolean cisco_gst_init( int argc, char *argv[] );
@@ -144,6 +150,7 @@ gint cisco_gst_pause(tSession *pSession  );
 cgmi_Status cgmi_utils_init(void);
 cgmi_Status cgmi_utils_finalize(void);
 cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, uint32_t *bisDLNAContent);
+cgmi_Status cgmi_utils_get_json_value(gchar *output, const gchar *json, const gchar *name);
 #ifdef __cplusplus
 }
 #endif

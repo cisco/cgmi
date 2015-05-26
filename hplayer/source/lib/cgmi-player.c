@@ -833,6 +833,8 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
       g_object_get( pmtInfo, "stream-info", &streamInfos, NULL );
       g_object_get( pmtInfo, "descriptors", &descriptors, NULL );
 
+      g_print("Default Audio Language: %s\n", pSess->defaultAudioLanguage);
+
       g_print("PMT: Program: %04x Version: %d pcr: %04x Streams: %d " "Descriptors: %d\n",
               (guint16)program, version, (guint16)pcrPid, streamInfos->n_values, descriptors->n_values);
 
@@ -890,7 +892,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
                         if ( pSess->audioLanguageIndex == INVALID_INDEX && strlen(pSess->newAudioLanguage) == 0 &&
                               strlen(pSess->defaultAudioLanguage) > 0 )
                         {
-                           if ( strncmp(pSess->audioLanguages[pSess->numAudioLanguages].isoCode, pSess->defaultAudioLanguage, 3) == 0 )
+                           if ( strncasecmp(pSess->audioLanguages[pSess->numAudioLanguages].isoCode, pSess->defaultAudioLanguage, 3) == 0 )
                            {
                               g_print("Stream (%d) audio language matched to default audio lang %s\n", j, pSess->defaultAudioLanguage);
                               pSess->audioLanguageIndex = j;
@@ -998,7 +1000,7 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
 
    if ( pSess->audioLanguageIndex != INVALID_INDEX )
    {
-      g_print("Selecting audio language index %d...\n");
+      g_print("Selecting audio language index %d...\n", pSess->audioLanguageIndex);
       g_object_set( obj, "audio-stream", pSess->audioLanguageIndex, NULL );
    }
 
@@ -1494,8 +1496,10 @@ cgmi_Status cgmi_DestroySession (void *pSession)
       g_main_loop_quit (pSess->loop);
    }
 
-
+   g_mutex_lock(&pSess->monThreadMutex);
    pSess->runMonitor = FALSE;
+   g_mutex_unlock(&pSess->monThreadMutex);
+
    if (pSess->monitor)
    {
       g_cond_signal(&pSess->monThreadCond);
@@ -1682,7 +1686,7 @@ static void cgmi_gst_no_more_pads(GstElement *element, gpointer data)
    }
 }
 
-cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
+cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, const char *sessionSettings)
 {
    GError               *g_error_str =NULL;
    GstParseContext      *ctx;
@@ -1715,8 +1719,6 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
    }
 
    cgmiDiags_GetNextSessionIndex(&pSess->diagIndex);
-
-   pSess->cpblob = (void *)cpblob;
 
    pPipeline = g_strnfill(1024, '\0');
    if (pPipeline == NULL)
@@ -1927,6 +1929,36 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
 
    do
    {
+      if (NULL != cpblob)
+      {
+         pSess->cpblob = g_malloc0(sizeof(cpBlobStruct));
+         if (NULL != pSess->cpblob)
+            memcpy(pSess->cpblob, cpblob, sizeof(cpBlobStruct));
+         else
+            GST_WARNING("Could not allocate memory for copying cpblob!\n");
+      }
+      else
+         pSess->cpblob = NULL;
+
+      memset(&pSess->sessionSettings, 0, sizeof(pSess->sessionSettings));
+
+      if (NULL != sessionSettings)
+      {
+         pSess->sessionSettingsStr = g_strdup(sessionSettings);
+         if (NULL == pSess->sessionSettingsStr)
+            GST_WARNING("Could not allocate memory for copying session settings!\n");
+
+         if (cgmi_utils_get_json_value(pSess->sessionSettings.audioLanguage, sessionSettings, "AudioLanguage") == CGMI_ERROR_SUCCESS)
+         {
+            g_print("cgmiPlayer: audioLanguage: %s\n", pSess->sessionSettings.audioLanguage);
+            strncpy( gDefaultAudioLanguage, pSess->sessionSettings.audioLanguage, sizeof(gDefaultAudioLanguage) );
+            gDefaultAudioLanguage[sizeof(gDefaultAudioLanguage) - 1] = 0;
+            strncpy( pSess->defaultAudioLanguage, pSess->sessionSettings.audioLanguage, sizeof(pSess->defaultAudioLanguage) );
+            pSess->defaultAudioLanguage[sizeof(pSess->defaultAudioLanguage) - 1] = 0;
+         }
+      }
+      else
+         pSess->sessionSettingsStr = NULL;
 
       ctx = gst_parse_context_new ();
 
@@ -2137,6 +2169,16 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob)
          g_free(pSess->playbackURI);
          pSess->playbackURI = NULL;   
       }
+      if ( NULL != pSess->cpblob )
+      {
+         g_free(pSess->cpblob);
+         pSess->cpblob = NULL;
+      }
+      if ( NULL != pSess->sessionSettingsStr )
+      {
+         g_free(pSess->sessionSettingsStr);
+         pSess->sessionSettingsStr = NULL;
+      }
    }
 
    return stat;
@@ -2196,6 +2238,18 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       {
          g_free(pSess->playbackURI);
          pSess->playbackURI = NULL;
+      }
+
+      if ( NULL != pSess->cpblob )
+      {
+         g_free(pSess->cpblob);
+         pSess->cpblob = NULL;
+      }
+
+      if ( NULL != pSess->sessionSettingsStr )
+      {
+         g_free(pSess->sessionSettingsStr);
+         pSess->sessionSettingsStr = NULL;
       }
 
       pSess->demux = NULL;
@@ -2883,7 +2937,7 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
    return stat;
 }
 
-cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
+cgmi_Status cgmi_SetAudioStream ( void *pSession, int index )
 {
    cgmi_Status stat = CGMI_ERROR_FAILED;
    tSession    *pSess = (tSession*)pSession;
@@ -2975,7 +3029,7 @@ cgmi_Status cgmi_SetAudioStream (void *pSession, int index )
 
          g_rec_mutex_unlock(&pSess->psiMutex);
 
-         stat = cgmi_Load(pSess, uri, cpblob);
+         stat = cgmi_Load(pSess, uri, cpblob, pSess->sessionSettingsStr);
          if(CGMI_ERROR_SUCCESS != stat)
          {
             GST_ERROR("cgmi_Load() failed\n");

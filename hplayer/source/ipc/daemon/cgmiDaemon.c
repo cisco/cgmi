@@ -726,71 +726,79 @@ on_handle_cgmi_can_play_type (
 
 static gboolean
 on_handle_cgmi_load (
-    OrgCiscoCgmi *object,
-    GDBusMethodInvocation *invocation,
-    GVariant *arg_sessionId,
-    const gchar *uri,
-	GVariant *arg_cpBlobStruct,
-    guint64 arg_cpBlobStructSize
-	)
+                     OrgCiscoCgmi *object,
+                     GDBusMethodInvocation *invocation,
+                     GVariant *arg_sessionId,
+                     const gchar *uri,
+                     GVariant *arg_cpBlobStruct,
+                     guint64 arg_cpBlobStructSize,
+                     const gchar *sessionSettings
+                     )
 {
-    cgmi_Status retStat = CGMI_ERROR_FAILED;
-	gchar * cpBlob=NULL;
-	 GVariantIter *iter = NULL;
-	 gchar        byte;
-	 uint32_t     ii = 0;
-    GVariant *sessVar = NULL;
-    tCgmiDbusPointer pSession;
+   cgmi_Status      retStat = CGMI_ERROR_FAILED;
+   gchar            *cpBlob = NULL;
+   GVariantIter     *iter = NULL;
+   gchar            byte;
+   uint32_t         ii = 0;
+   GVariant         *sessVar = NULL;
+   tCgmiDbusPointer pSession;
+   gchar            *audioLanguage;
+   gchar            *subtitleLanguage;
+   gboolean         subtitleEnable;
 
-    CGMID_ENTER();
+   CGMID_ENTER();
 
-    do{
-        g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL ) 
-        {
+   do{
+      g_variant_get( arg_sessionId, "v", &sessVar );
+      if( sessVar == NULL )
+      {
+         retStat = CGMI_ERROR_FAILED;
+         break;
+      }
+
+      g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+      g_variant_unref( sessVar );
+      if (arg_cpBlobStructSize>0)
+      {
+         cpBlob = (gchar *)g_malloc0(arg_cpBlobStructSize);
+         if(NULL == cpBlob)
+         {
             retStat = CGMI_ERROR_FAILED;
             break;
-        }
+         }
 
-        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
-        g_variant_unref( sessVar );
-		if (arg_cpBlobStructSize>0)
-		{
-			cpBlob = (gchar *)malloc(arg_cpBlobStructSize);
-			if(NULL == cpBlob)
-			{
-				retStat = CGMI_ERROR_FAILED;
-				break;
-			}
-
-		   g_variant_get(arg_cpBlobStruct, "ay", &iter); 
-		   if(NULL != iter)
-		   {    
-			  while(g_variant_iter_loop(iter, "y", &byte) && (ii < arg_cpBlobStructSize))
-			  {    
-				 cpBlob[ii++] = byte;
-			  }    
-			  g_variant_iter_free(iter);
-		   }
-		  else
-		  {
-			retStat = CGMI_ERROR_FAILED;
-			free(cpBlob);
+         g_variant_get(arg_cpBlobStruct, "ay", &iter);
+         if(NULL != iter)
+         {
+            while(g_variant_iter_loop(iter, "y", &byte) && (ii < arg_cpBlobStructSize))
+            {
+               cpBlob[ii++] = byte;
+            }
+            g_variant_iter_free(iter);
+            iter = NULL;
+         }
+         else
+         {
+            retStat = CGMI_ERROR_FAILED;
             break;
-		  }
-		}	
-        retStat = cgmi_Load( (void *)pSession, uri,(cpBlobStruct *)cpBlob );
-        if (NULL != cpBlob)
-        {
-            free(cpBlob);
-        }
-    }while(0);
+         }
+      }
 
-    org_cisco_cgmi_complete_load (object,
-                                  invocation,
-                                  retStat);
+      retStat = cgmi_Load( (void *)pSession, uri, (cpBlobStruct *)cpBlob, sessionSettings );
+      g_print("CALLED cgmi_Load");
 
-    return TRUE;
+   }while(0);
+
+   org_cisco_cgmi_complete_load (object,
+      invocation,
+      retStat);
+
+   if (NULL != cpBlob)
+   {
+      g_free(cpBlob);
+   }
+
+   return TRUE;
 }
 
 static gboolean

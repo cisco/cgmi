@@ -154,11 +154,10 @@ typedef struct
 
 typedef struct 
 {
-    uint8_t  cpBlob[MAX_CP_BLOB_LENGTH]; 
-    uint32_t bloblength; // The actual size of data in the cpblob array (the rest of cpBlob array will be unused).bloblength can be maximum equal to MAX_CP_BLOB_LENGTH which is the size of the cpBlob array. 
-    tDRM_TYPE drmType; 
+   uint8_t  cpBlob[MAX_CP_BLOB_LENGTH];
+   uint32_t bloblength; // The actual size of data in the cpblob array (the rest of cpBlob array will be unused).bloblength can be maximum equal to MAX_CP_BLOB_LENGTH which is the size of the cpBlob array.
+   tDRM_TYPE drmType;
 }cpBlobStruct;
-
 
 typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event, uint64_t code );
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );
@@ -279,6 +278,7 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
  *
  *  \param[in]  cpblob - a pointer to a cpBlobStruct. This struct contains  data which  is needed 
  *  for encrypted HLS streaming.For all other types of sessions(clear HLS/Live/Playback etc') NULL should be passed to the cpblob var.
+ *  \param[in] sessionSettings - a pointer to session settings JSON string
  *  \post    On success the user can now play the uri pointed to. The user has to wait for NOTIFY_LOAD_DONE message before querying
  *           the duration or other metadata info of the asset pointed by the URI. 
  *
@@ -291,7 +291,7 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_Load (void *pSession, const char *uri,cpBlobStruct * cpblob );
+cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, const char *sessionSettings );
 
 /**
  *  \brief \b cgmi_Unload 

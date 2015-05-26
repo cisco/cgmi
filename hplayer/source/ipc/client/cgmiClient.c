@@ -975,88 +975,91 @@ cgmi_Status cgmi_canPlayType( const char *type, int *pbCanPlay )
     return retStat;
 }
 
-cgmi_Status cgmi_Load( void *pSession, const char *uri,cpBlobStruct * cpblob)
+cgmi_Status cgmi_Load( void *pSession, const char *uri, cpBlobStruct * cpblob, const char *sessionSettings)
 {
-    cgmi_Status retStat = CGMI_ERROR_SUCCESS;
-	GVariantBuilder *dataBuilder = NULL;
-    GVariant        *cpBlobStruct_Variant = NULL;
-	uint32_t     ii = 0;
-	gchar        byte;
-	 guint64 cpBlobStruct_Variant_Size=0;
-    GError *error = NULL;
-    GVariant *sessVar = NULL, *dbusVar = NULL;
+   cgmi_Status     retStat = CGMI_ERROR_SUCCESS;
+   GVariantBuilder *dataBuilder = NULL;
+   GVariant        *cpBlobStruct_Variant = NULL;
+   uint32_t        ii = 0;
+   gchar           byte;
+   guint64         cpBlobStruct_Variant_Size=0;
+   GError          *error = NULL;
+   GVariant        *sessVar = NULL, *dbusVar = NULL;
 
-    // Preconditions
-    if( pSession == NULL || uri == NULL)
-    {
-        return CGMI_ERROR_BAD_PARAM;
-    }
+   // Preconditions
+   if( pSession == NULL || uri == NULL)
+   {
+      return CGMI_ERROR_BAD_PARAM;
+   }
 
-    enforce_session_preconditions(pSession);
+   enforce_session_preconditions(pSession);
 
-    enforce_dbus_preconditions();
+   enforce_dbus_preconditions();
 
-    do{
-        sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
-        if( sessVar == NULL )
-        {
-            g_print("Failed to create new variant\n");
-            retStat = CGMI_ERROR_OUT_OF_MEMORY;
-            break;
-        }
-        sessVar = g_variant_ref_sink(sessVar);
+   do{
+      sessVar = g_variant_new ( DBUS_POINTER_TYPE, (tCgmiDbusPointer)pSession );
+      if( sessVar == NULL )
+      {
+         g_print("Failed to create new variant\n");
+         retStat = CGMI_ERROR_OUT_OF_MEMORY;
+         break;
+      }
+      sessVar = g_variant_ref_sink(sessVar);
 
-        dbusVar = g_variant_new ( "v", sessVar );
-        if( dbusVar == NULL )
-        {
-            g_print("Failed to create new variant\n");
-            retStat = CGMI_ERROR_OUT_OF_MEMORY;
-            break;
-        }
-        dbusVar = g_variant_ref_sink(dbusVar);
-		dataBuilder = g_variant_builder_new(G_VARIANT_TYPE("ay"));
-		if(NULL == dataBuilder)
-		{    
-			g_print("Failed to create  Variant builder\n");
-			retStat = CGMI_ERROR_OUT_OF_MEMORY;
-			break;
-		} 
+      dbusVar = g_variant_new ( "v", sessVar );
+      if( dbusVar == NULL )
+      {
+         g_print("Failed to create new variant\n");
+         retStat = CGMI_ERROR_OUT_OF_MEMORY;
+         break;
+      }
+      dbusVar = g_variant_ref_sink(dbusVar);
 
-		if (cpblob)
-		{
-			for(ii = 0; ii < sizeof(cpBlobStruct); ii++)
-			{    
-				byte = ((gchar *)cpblob)[ii];
-				g_variant_builder_add(dataBuilder, "y", byte);
-			}
-			cpBlobStruct_Variant_Size=sizeof(cpBlobStruct);
-		}
-	
+      dataBuilder = g_variant_builder_new(G_VARIANT_TYPE("ay"));
+      if(NULL == dataBuilder)
+      {
+         g_print("Failed to create Variant builder\n");
+         retStat = CGMI_ERROR_OUT_OF_MEMORY;
+         break;
+      }
 
-   cpBlobStruct_Variant = g_variant_builder_end(dataBuilder);
+      if (cpblob)
+      {
+         for(ii = 0; ii < sizeof(cpBlobStruct); ii++)
+         {
+            byte = ((gchar *)cpblob)[ii];
+            g_variant_builder_add(dataBuilder, "y", byte);
+         }
+         cpBlobStruct_Variant_Size = sizeof(cpBlobStruct);
+      }
 
+
+      cpBlobStruct_Variant = g_variant_builder_end(dataBuilder);
+
+      org_cisco_cgmi_call_load_sync( gProxy,
+         dbusVar,
+         (const gchar *)uri,
+         cpBlobStruct_Variant,
+         cpBlobStruct_Variant_Size,
+         sessionSettings,
+         (gint *)&retStat,
+         NULL,
+         &error );
+
+   }while(0);
+
+   //Clean up
    if(NULL != dataBuilder)
-   {    
+   {
       g_variant_builder_unref(dataBuilder);
-   }    
-        org_cisco_cgmi_call_load_sync( gProxy,
-                                       dbusVar,
-                                       (const gchar *)uri,
-									   cpBlobStruct_Variant,
-									   cpBlobStruct_Variant_Size,
-                                       (gint *)&retStat,
-                                       NULL,
-                                       &error );
+   }
 
-    }while(0);
+   if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
+   if( sessVar != NULL ) { g_variant_unref(sessVar); }
 
-    //Clean up
-    if( dbusVar != NULL ) { g_variant_unref(dbusVar); }
-    if( sessVar != NULL ) { g_variant_unref(sessVar); }
+   dbus_check_error(error);
 
-    dbus_check_error(error);
-
-    return retStat;
+   return retStat;
 }
 
 cgmi_Status cgmi_Unload( void *pSession )
