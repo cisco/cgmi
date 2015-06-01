@@ -1559,7 +1559,8 @@ int main(int argc, char **argv)
             printf("--------------------------\n");
             for ( i = 0; i < count; i++ )
             {
-                retCode = cgmi_GetAudioLangInfo( pSessionId, i, lang, sizeof(lang) );
+                char isEnabled;
+                retCode = cgmi_GetAudioLangInfo( pSessionId, i, lang, sizeof(lang), &isEnabled );
                 if ( retCode != CGMI_ERROR_SUCCESS )
                     break;
                 printf("%d: %s\n", i, lang);

@@ -1204,8 +1204,9 @@ static int sanity( const char *url )
 
 
     char langInfoBuf[1024];
+    char isEnabled;
     g_print("Calling cgmi_GetAudioLangInfo...\n");
-    retStat = cgmi_GetAudioLangInfo( pSessionId, 0, langInfoBuf, 1024 );
+    retStat = cgmi_GetAudioLangInfo( pSessionId, 0, langInfoBuf, 1024, &isEnabled );
     CHECK_ERROR(retStat);
 
 

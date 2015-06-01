@@ -150,7 +150,7 @@ gint cisco_gst_pause(tSession *pSession  );
 cgmi_Status cgmi_utils_init(void);
 cgmi_Status cgmi_utils_finalize(void);
 cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, uint32_t *bisDLNAContent);
-cgmi_Status cgmi_utils_get_json_value(gchar *output, const gchar *json, const gchar *name);
+cgmi_Status cgmi_utils_get_json_value(gchar *output, gint outsize, const gchar *json, const gchar *name);
 #ifdef __cplusplus
 }
 #endif

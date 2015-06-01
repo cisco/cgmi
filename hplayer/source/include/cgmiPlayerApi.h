@@ -518,9 +518,11 @@ cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count);
  *
  *  \param[in] index  Index of the audio stream in the returned number of available languages
  *
- *  \param[in] buf    Buffer to write the ISO-639 code in
+ *  \param[out] buf    Buffer to write the ISO-639 code in
  *
  *  \param[in] bufSize Size of the buffer passed in
+ *
+ *  \param[out] isEnabled Indicates whether the language at the provided index is currently enabled
  *
  *  \pre    The Session must be open the the url must be loaded.
  *
@@ -529,7 +531,7 @@ cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count);
  *
  *  \image html audio_language_selection.png "How to do Audio Language Selection"
  */
-cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize);
+cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize, char *isEnabled);
 
 /**
  *  \brief \b cgmi_SetAudioStream

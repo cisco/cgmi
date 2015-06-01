@@ -1251,6 +1251,7 @@ on_handle_cgmi_get_audio_lang_info (
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     char *buffer = NULL;
+    char isEnabled;
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSession;
 
@@ -1281,13 +1282,14 @@ on_handle_cgmi_get_audio_lang_info (
         g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
         g_variant_unref( sessVar );
 
-        retStat = cgmi_GetAudioLangInfo( (void *)pSession, index, buffer, bufSize );
+        retStat = cgmi_GetAudioLangInfo( (void *)pSession, index, buffer, bufSize, &isEnabled );
 
     }while(0);
        
     org_cisco_cgmi_complete_get_audio_lang_info (object,
             invocation,
             buffer,
+            isEnabled,
             retStat);
 
     if ( NULL != buffer )

@@ -204,7 +204,7 @@ cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, uint32_t *bisDLNAConten
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_utils_get_json_value(gchar *output, const gchar *json, const gchar *name)
+cgmi_Status cgmi_utils_get_json_value(gchar *output, gint outsize, const gchar *json, const gchar *name)
 {
    char *start;
    char *end;
@@ -231,8 +231,9 @@ cgmi_Status cgmi_utils_get_json_value(gchar *output, const gchar *json, const gc
             end = strchr(start, '"');
             if (NULL != end)
             {
-               strncpy(output, start, end-start);
-               output[end-start] = 0;
+               gint maxlen = ((outsize - 1) < (end - start))?(outsize - 1):(end - start);
+               strncpy(output, start, maxlen);
+               output[maxlen] = 0;
                return CGMI_ERROR_SUCCESS;
             }
          }

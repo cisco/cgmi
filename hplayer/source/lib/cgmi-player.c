@@ -1784,6 +1784,8 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
    }
 
    g_print("URI: %s\n", pSess->playbackURI);
+   if (sessionSettings != NULL)
+      g_print("Settings: %s\n", sessionSettings);
    /* Create playback pipeline */
 
 #if GST_CHECK_VERSION(1,0,0)
@@ -1948,7 +1950,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
          if (NULL == pSess->sessionSettingsStr)
             GST_WARNING("Could not allocate memory for copying session settings!\n");
 
-         if (cgmi_utils_get_json_value(pSess->sessionSettings.audioLanguage, sessionSettings, "AudioLanguage") == CGMI_ERROR_SUCCESS)
+         if (cgmi_utils_get_json_value(pSess->sessionSettings.audioLanguage, sizeof(pSess->sessionSettings.audioLanguage), sessionSettings, "AudioLanguage") == CGMI_ERROR_SUCCESS)
          {
             g_print("cgmiPlayer: audioLanguage: %s\n", pSess->sessionSettings.audioLanguage);
             strncpy( gDefaultAudioLanguage, pSess->sessionSettings.audioLanguage, sizeof(gDefaultAudioLanguage) );
@@ -2888,7 +2890,7 @@ cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count)
    return stat;
 }
 
-cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize)
+cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize, char *isEnabled)
 {
    cgmi_Status  stat = CGMI_ERROR_FAILED;
    tSession *pSess = (tSession*)pSession;
@@ -2911,6 +2913,13 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
          break;
       }
 
+      if ( NULL == isEnabled )
+      {
+         g_print("Null pointer passed for enabled status!\n");
+         stat = CGMI_ERROR_BAD_PARAM;
+         break;
+      }
+
       stat = cgmi_queryDiscreteAudioInfo(pSess);
       if(CGMI_ERROR_SUCCESS != stat)
       {
@@ -2923,6 +2932,16 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
          g_print("Bad index value passed for audio language!\n");
          stat = CGMI_ERROR_BAD_PARAM;
          break;
+      }
+
+      if (pSess->audioLanguageIndex != INVALID_INDEX &&
+          pSess->audioLanguages[index].index == pSess->audioLanguageIndex)
+      {
+         *isEnabled = TRUE;
+      }
+      else
+      {
+         *isEnabled = FALSE;
       }
 
       strncpy( buf, pSess->audioLanguages[index].isoCode, bufSize );
@@ -3067,6 +3086,7 @@ cgmi_Status cgmi_SetAudioStream ( void *pSession, int index )
          {
             g_object_set( G_OBJECT(pSess->hlsDemux), "audio-language", pSess->audioLanguages[index].isoCode, NULL);
             g_strlcpy(pSess->currAudioLanguage, pSess->audioLanguages[index].isoCode, sizeof(pSess->currAudioLanguage));
+            pSess->audioLanguageIndex = pSess->audioLanguages[index].index;
             stat = CGMI_ERROR_SUCCESS;
          }
       }

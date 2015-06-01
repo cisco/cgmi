@@ -1692,7 +1692,7 @@ cgmi_Status cgmi_GetNumAudioLanguages( void *pSession, int *count )
 }
 
 cgmi_Status cgmi_GetAudioLangInfo( void *pSession, int index,
-                                   char *buf, int bufSize )
+                                   char *buf, int bufSize, char *isEnabled )
 {
     cgmi_Status retStat = CGMI_ERROR_SUCCESS;
     GError *error = NULL;
@@ -1733,6 +1733,7 @@ cgmi_Status cgmi_GetAudioLangInfo( void *pSession, int index,
                 index,
                 bufSize,
                 (gchar **)&buffer,
+                (gboolean *)isEnabled,
                 (gint *)&retStat,
                 NULL,
                 &error );
