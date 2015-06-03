@@ -1041,7 +1041,7 @@ cgmi_Status cgmi_Load( void *pSession, const char *uri, cpBlobStruct * cpblob, c
          (const gchar *)uri,
          cpBlobStruct_Variant,
          cpBlobStruct_Variant_Size,
-         sessionSettings,
+         (sessionSettings != NULL)?sessionSettings:"",
          (gint *)&retStat,
          NULL,
          &error );

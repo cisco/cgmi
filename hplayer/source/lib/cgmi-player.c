@@ -1003,6 +1003,8 @@ static void cgmi_gst_psi_info( GObject *obj, guint size, void *context, gpointer
       g_print("Selecting audio language index %d...\n", pSess->audioLanguageIndex);
       g_object_set( obj, "audio-stream", pSess->audioLanguageIndex, NULL );
    }
+   else
+     g_object_get( obj, "audio-stream", &pSess->audioLanguageIndex, NULL );
 
    if ( NULL != pSess->eventCB )
       pSess->eventCB(pSess->usrParam, (void*)pSess, NOTIFY_PSI_READY, 0);
