@@ -2046,6 +2046,10 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
          }
 
          g_object_set( G_OBJECT (pSess->source), "uri", pSess->playbackURI, NULL );
+#ifdef USE_INFINITE_SOUP_TIMEOUT
+         g_print("Setting timeout property of dlnasrc element to 0\n");
+         g_object_set( G_OBJECT (pSess->source), "timeout", 0, NULL );
+#endif
          g_print("Muting video decoder...\n");
          g_object_set( G_OBJECT(pSess->videoDecoder), "decoder_mute", TRUE, NULL );
          g_print("Muting audio decoder...\n");

@@ -137,7 +137,17 @@ AC_ARG_ENABLE([use-drmproxy],
                              ],
                              [AC_MSG_RESULT(no)])
 AM_CONDITIONAL(USE_DRMPROXY,test x$enable_use_drmproxy = xyes)
-
+AC_ARG_ENABLE([infinite-soup-timeout],
+              AS_HELP_STRING([--enable-infinite-soup-timeout],[enable infinite-soup-timeout (default is no)]),
+              [
+                case "${enableval}" in
+                 yes) AC_DEFINE([USE_INFINITE_SOUP_TIMEOUT], [1], [infinite-soup-timeout is enabled])
+                      echo "infinite-soup-timeout is enabled";;
+                 no)  AC_MSG_ERROR([infinite-soup-timeout is disabled]);;
+                 *) AC_MSG_ERROR([bad value ${enableval} for --enable-infinite-soup-timeout]) ;;
+                esac
+              ],
+              [echo "infinite-soup-timeout is disabled"])
 #
 # The following is to enable or disable timing metrics
 #
