@@ -749,6 +749,8 @@ void help(void)
            "\t(Settings: CONTRAST, SATURATION, HUE, BRIGHTNESS, COLORTEMP, SHARPNESS)\n"
            "\t(-32768 <= value <= 32767)\n"
            "\n"
+           "\tgetactivesessionsinfo\n"
+           "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)> [<1><drmType for url #1><cpBlob for url #1>] [<2><drmType for url #2><cpBlob for url #2>]\n"
            "\t\tChannel Change Test - Change channels between <url #1> and\n"
@@ -2342,6 +2344,32 @@ int main(int argc, char **argv)
             printf("Error returned %d\n", retCode);
          }
       }
+        else if ( strncmp(command, "getactivesessionsinfo", strlen("getactivesessionsinfo")) == 0 )
+        {
+           sessionInfo *sessInfoArr = NULL;
+           int numSess = 0;
+           int ii = 0;
+           retCode = cgmi_GetActiveSessionsInfo(&sessInfoArr, &numSess);
+           if ( retCode != CGMI_ERROR_SUCCESS )
+           {
+              printf("Error returned %d\n", retCode);
+           }
+           else
+           {
+              printf("Total active CGMI sessions: %d\n", numSess);
+              if(NULL != sessInfoArr)
+              {
+                 for(ii = 0; ii < numSess; ii++)
+                 {
+                    printf("uri:%s, hwVideoDecoderHandle: %llu, hwAudioDecoderHandle: %llu\n",
+                          sessInfoArr[ii].uri, sessInfoArr[ii].hwVideoDecHandle, sessInfoArr[ii].hwAudioDecHandle);
+
+                 }
+                 free(sessInfoArr);
+                 sessInfoArr = NULL;
+              }
+           }
+        }
         /* unknown */
         else
         {

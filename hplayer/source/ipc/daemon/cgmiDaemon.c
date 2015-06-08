@@ -2463,6 +2463,48 @@ on_handle_cgmi_get_picture_setting (
     return TRUE;
 }
 
+static gboolean
+on_handle_cgmi_get_active_sessions_info (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation)
+{
+   cgmi_Status     retStat = CGMI_ERROR_FAILED;
+   sessionInfo     *sessInfoArr = NULL;
+   GVariantBuilder *sessInfoArr_builder = NULL;
+   GVariant        *sessInfoArr_variant = NULL;
+   gint            numSess = 0;
+   gint            ii = 0;
+
+   CGMID_ENTER();
+
+   retStat = cgmi_GetActiveSessionsInfo(&sessInfoArr, &numSess);
+
+   sessInfoArr_builder = g_variant_builder_new(G_VARIANT_TYPE("a(stt)"));
+
+   for(ii = 0; ii < numSess; ii++)
+   {
+      g_variant_builder_add(sessInfoArr_builder, "(stt)", sessInfoArr[ii].uri,
+            sessInfoArr[ii].hwVideoDecHandle, sessInfoArr[ii].hwAudioDecHandle);
+   }
+
+   sessInfoArr_variant = g_variant_builder_end(sessInfoArr_builder);
+
+   org_cisco_cgmi_complete_get_active_sessions_info (object,
+         invocation,
+         sessInfoArr_variant,
+         numSess,
+         retStat);
+
+   g_variant_builder_unref(sessInfoArr_builder);
+
+   if(NULL != sessInfoArr)
+   {
+      free(sessInfoArr);
+   }
+
+   return TRUE;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS setup callbacks
 ////////////////////////////////////////////////////////////////////////////////
@@ -2723,6 +2765,11 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-get-picture-setting",
                       G_CALLBACK (on_handle_cgmi_get_picture_setting),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-active-sessions-info",
+                      G_CALLBACK (on_handle_cgmi_get_active_sessions_info),
                       NULL);
 
     if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (interface),

@@ -3485,3 +3485,73 @@ cgmi_Status cgmi_GetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int 
 
     return retStat;
 }
+
+cgmi_Status cgmi_GetActiveSessionsInfo(sessionInfo *sessInfoArr[], int *numSessOut)
+{
+   cgmi_Status  retStat = CGMI_ERROR_SUCCESS;
+   GError       *error = NULL;
+   GVariant     *sessInfoArr_variant = NULL;
+   GVariantIter *iter = NULL;
+   gint         ii = 0;
+   gchar        *uri = NULL;
+   guint64      videoHandle = 0;
+   guint64      audioHandle = 0;
+
+   if((sessInfoArr == NULL) || (numSessOut == NULL))
+   {
+      return CGMI_ERROR_BAD_PARAM;
+   }
+
+   *sessInfoArr = NULL;
+   *numSessOut = 0;
+
+   enforce_dbus_preconditions();
+
+   do
+   {
+      org_cisco_cgmi_call_get_active_sessions_info_sync(gProxy,
+            &sessInfoArr_variant,
+            numSessOut,
+            (gint *)&retStat,
+            NULL,
+            &error );
+
+      if(0 == *numSessOut)
+      {
+         break;
+      }
+
+      if(NULL == sessInfoArr_variant)
+      {
+         g_print("sessInfoArr is NULL for non zero session count\n");
+         retStat = CGMI_ERROR_FAILED;
+         break;
+      }
+
+      *sessInfoArr = (sessionInfo *)g_malloc0(sizeof(sessionInfo) * *numSessOut);
+      if(NULL == sessInfoArr)
+      {
+         g_print("Failed to alloc sessInfoArr");
+         retStat = CGMI_ERROR_FAILED;
+         break;
+      }
+
+      g_variant_get(sessInfoArr_variant, "a(stt)", &iter);
+      while(g_variant_iter_loop(iter, "(stt)", &uri, &videoHandle, &audioHandle))
+      {
+         g_strlcpy((*sessInfoArr)[ii].uri, uri, sizeof((*sessInfoArr)[ii].uri));
+         (*sessInfoArr)[ii].hwVideoDecHandle = videoHandle;
+         (*sessInfoArr)[ii].hwAudioDecHandle = audioHandle;
+
+         ii++;
+      }
+
+   }while(0);
+
+   if(NULL != sessInfoArr_variant)
+   {
+      g_variant_unref(sessInfoArr_variant);
+   }
+
+   return retStat;
+}

@@ -46,6 +46,7 @@ extern "C"
 #define SECTION_FILTER_EMPTY_PID 0x1FFF // Indicates filter shouldn't match PID
 #define AUTO_SELECT_STREAM       -1     // Indicates the first stream of specified type in the PMT will be auto selected
 #define MAX_CP_BLOB_LENGTH 64000
+#define MAX_URI_SIZE (1024)
 
 #include <stdint.h>
 #include <glib.h>
@@ -158,6 +159,13 @@ typedef struct
    uint32_t bloblength; // The actual size of data in the cpblob array (the rest of cpBlob array will be unused).bloblength can be maximum equal to MAX_CP_BLOB_LENGTH which is the size of the cpBlob array.
    tDRM_TYPE drmType;
 }cpBlobStruct;
+
+typedef struct
+{
+   char uri[MAX_URI_SIZE];
+   uint64_t hwVideoDecHandle;
+   uint64_t hwAudioDecHandle;
+}sessionInfo;
 
 typedef void (*cgmi_EventCallback)(void *pUserData, void* pSession, tcgmi_Event event, uint64_t code );
 typedef cgmi_Status (*queryBufferCB)(void *pUserData, void *pFilterPriv, void* pFilterId, char **ppBuffer, int* pBufferSize );
@@ -1193,6 +1201,23 @@ cgmi_Status cgmi_SetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int 
  *
  */
 cgmi_Status cgmi_GetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int *pvalue );
+
+/**
+ *  \brief \b cgmi_GetActiveSessionsInfo
+ *
+ *  Get a list of active CGMI session info
+ *
+ *  \param[out] sessionInfo  Array of active session info. The caller should free this array.
+ *
+ *  \param[out] numSessOut   Number of active CGMI sessions.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when the list of active CGMI session info has been successfully obtained.
+ *
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetActiveSessionsInfo(sessionInfo *sessInfoArr[], int *numSessOut);
 
 
 /**

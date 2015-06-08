@@ -50,6 +50,9 @@ static GstElement *cgmi_gst_find_element( GstBin *bin, gchar *ename );
 static gchar gDefaultAudioLanguage[4];
 static gchar gDefaultSubtitleLanguage[4];
 
+static GList *gSessionList = NULL;
+static GMutex gSessionListMutex;
+
 static int  cgmi_CheckSessionHandle(tSession *pSess)
 {
    if (NULL == pSess || (int)pSess->cookie != MAGIC_COOKIE)
@@ -289,6 +292,24 @@ static cgmi_Status cgmi_queryDiscreteAudioInfo(tSession *pSess)
    }
 
    return stat;
+}
+
+static void cgmi_GetHwDecHandles(tSession *pSess)
+{
+   if(NULL != pSess->videoDecoder)
+   {
+      g_object_get(pSess->videoDecoder, "videodecoder", &pSess->hwVideoDecHandle, NULL);
+   }
+
+   if(NULL != pSess->audioDecoder)
+   {
+      g_object_get(pSess->audioDecoder, "audiodecoder", &pSess->hwAudioDecHandle, NULL);
+   }
+
+   GST_INFO("hwVideoDecHandle = %p, hwAudioDecHandle = %p\n", pSess->hwVideoDecHandle,
+         pSess->hwAudioDecHandle);
+
+   return;
 }
 
 void debug_cisco_gst_streamDurPos( tSession *pSess )
@@ -750,6 +771,12 @@ static gboolean cgmi_gst_handle_msg( GstBus *bus, GstMessage *msg, gpointer data
                             pSess->vidDestRect.x, pSess->vidDestRect.y, pSess->vidDestRect.w, pSess->vidDestRect.h);
                   g_object_set( G_OBJECT(pSess->videoSink), "window_set", dim, NULL );
                }
+               if((NULL == pSess->hwVideoDecHandle) && (NULL == pSess->hwAudioDecHandle))
+               {
+                  cgmi_GetHwDecHandles(pSess);
+               }
+               /* For RTP live content, the full gst pipeline is only created when set to playing state */
+               pSess->hasFullGstPipeline = TRUE;
             }
          }
       }
@@ -1309,6 +1336,7 @@ char* cgmi_ErrorString(cgmi_Status stat)
    }
    return errorString[stat];
 }
+
 cgmi_Status cgmi_Init(void)
 {
    cgmi_Status   stat = CGMI_ERROR_SUCCESS;
@@ -1396,10 +1424,10 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    {
       return CGMI_ERROR_OUT_OF_MEMORY;
    }
+
    *pSession = pSess;
    pSess->cookie = (void*)MAGIC_COOKIE;
    pSess->usrParam = pUserData;
-   pSess->playbackURI = NULL;
    pSess->eventCB = eventCB;
    pSess->demux = NULL;
    pSess->udpsrc = NULL;
@@ -1465,6 +1493,10 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    }
    GST_INFO("ok the gmainloop for the thread ctx is running\n");
 
+   g_mutex_lock(&gSessionListMutex);
+   gSessionList = g_list_append(gSessionList, pSess);
+   g_mutex_unlock(&gSessionListMutex);
+
    return CGMI_ERROR_SUCCESS;
 }
 
@@ -1524,7 +1556,6 @@ cgmi_Status cgmi_DestroySession (void *pSession)
       g_print("No thread to free... odd\n");
    }
 
-   if (pSess->playbackURI) {g_free(pSess->playbackURI);}
    if (pSess->pipeline) {gst_object_unref (GST_OBJECT (pSess->pipeline));}
    if (pSess->autoPlayCond) {g_cond_free(pSess->autoPlayCond);}
    if (pSess->autoPlayMutex) {g_mutex_free(pSess->autoPlayMutex);}
@@ -1552,6 +1583,9 @@ cgmi_Status cgmi_DestroySession (void *pSession)
        }
    }
 #endif
+   g_mutex_lock(&gSessionListMutex);
+   gSessionList = g_list_remove(gSessionList, pSess);
+   g_mutex_unlock(&gSessionListMutex);
    g_free(pSess);
 
    return stat;
@@ -1668,9 +1702,9 @@ static void cgmi_gst_pad_added( GstElement *element, GstPad *pad, gpointer data 
 static void cgmi_gst_no_more_pads(GstElement *element, gpointer data)
 {
    tSession *pSess = (tSession*)data;
-   
+
    GST_WARNING("Received NO_MORE_PADS signal\n");
-   
+
    if (NULL != pSess)
    {
       if(FALSE == pSess->suppressLoadDone)
@@ -1681,6 +1715,8 @@ static void cgmi_gst_no_more_pads(GstElement *element, gpointer data)
       {
          pSess->suppressLoadDone = FALSE;
       }
+      cgmi_GetHwDecHandles(pSess);
+      pSess->hasFullGstPipeline = TRUE;
    }
    else
    {
@@ -1722,7 +1758,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
 
    cgmiDiags_GetNextSessionIndex(&pSess->diagIndex);
 
-   pPipeline = g_strnfill(1024, '\0');
+   pPipeline = g_strnfill(MAX_PIPELINE_SIZE, '\0');
    if (pPipeline == NULL)
    {
       GST_WARNING("Error allocating memory\n");
@@ -1750,6 +1786,9 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
    pSess->noVideo = FALSE;
    pSess->bQueryDiscreteAudioInfo = TRUE;
    pSess->isPlaying = FALSE;
+   pSess->hasFullGstPipeline = FALSE;
+   pSess->hwVideoDecHandle = NULL;
+   pSess->hwAudioDecHandle = NULL;
 
    cgmiDiag_addTimingEntry(DIAG_TIMING_METRIC_LOAD, pSess->diagIndex, uri, 0);
 
@@ -1766,23 +1805,16 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
          return stat;
       }
    }
-   
+
    if (pSess->bisDLNAContent == TRUE)
    {
       //for the gstreamer pipeline to autoplug we have to add
       //dlna+ to the protocol.
-      pSess->playbackURI = g_strdup_printf("%s%s","dlna+", uri);
+      g_snprintf(pSess->playbackURI, MAX_URI_SIZE, "%s%s","dlna+", uri);
    }
-   else 
+   else
    {
-      pSess->playbackURI = g_strdup_printf("%s", uri);
-   }
-
-   if(NULL == pSess->playbackURI)
-   {
-      g_free(pPipeline);
-      printf("Not able to allocate memory\n");
-      return CGMI_ERROR_OUT_OF_MEMORY;
+      g_strlcpy(pSess->playbackURI, uri, MAX_URI_SIZE);
    }
 
    g_print("URI: %s\n", pSess->playbackURI);
@@ -1791,9 +1823,9 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
    /* Create playback pipeline */
 
 #if GST_CHECK_VERSION(1,0,0)
-   g_strlcpy(pPipeline, "playbin uri=", 1024);
+   g_strlcpy(pPipeline, "playbin uri=", MAX_PIPELINE_SIZE);
 #else
-   g_strlcpy(pPipeline, "playbin2 uri=", 1024);
+   g_strlcpy(pPipeline, "playbin2 uri=", MAX_PIPELINE_SIZE);
 #endif
 
 #ifdef USE_DRMPROXY
@@ -1822,15 +1854,15 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
           }
           if (drmType == CLEAR || drmType == UNKNOWN)
           {
-             g_strlcat(pPipeline, pSess->playbackURI, 1024);
+             g_strlcat(pPipeline, pSess->playbackURI, MAX_PIPELINE_SIZE);
           }
           else
           {
-             array = g_strsplit(pSess->playbackURI, "?",  1024);
-             g_strlcat(pPipeline, array[0], 1024 );
+             array = g_strsplit(pSess->playbackURI, "?",  MAX_URI_SIZE);
+             g_strlcat(pPipeline, array[0], MAX_PIPELINE_SIZE );
              g_strfreev (array);
 
-             DRMPROXY_Activate(pSess->drmProxyHandle, pSess->playbackURI, strnlen(pSess->playbackURI,1024), NULL, 0, &licenseId, &proxy_err );
+             DRMPROXY_Activate(pSess->drmProxyHandle, pSess->playbackURI, strnlen(pSess->playbackURI, MAX_URI_SIZE), NULL, 0, &licenseId, &proxy_err );
              if (proxy_err.errCode != 0)
              {
                 GST_ERROR ("DRMPROXY_Activate error %lu \n", proxy_err.errCode);
@@ -1840,21 +1872,21 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
              }
              if ( drmType == VERIMATRIX)
              {
-                g_strlcat(pPipeline,"?drmType=verimatrix", 1024);
-                g_strlcat(pPipeline, "&LicenseID=",1024);
+                g_strlcat(pPipeline,"?drmType=verimatrix", MAX_PIPELINE_SIZE);
+                g_strlcat(pPipeline, "&LicenseID=",MAX_PIPELINE_SIZE);
                 licenseId = 0;
                 // LicenseID going to verimatrix plugin is 0 so don't bother with what comes back
                 sprintf(buffer, "%" PRIu64, licenseId);
-                g_strlcat(pPipeline, buffer, 1024);
+                g_strlcat(pPipeline, buffer, MAX_PIPELINE_SIZE);
              }
              else if (drmType == VGDRM)
              {
 
                 //  FIXME: missing VGDRM specifics, may need to tweak the uri before sending it downstream
-                g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
-                g_strlcat(pPipeline, "&LicenseID=", 1024);
+                g_strlcat(pPipeline,"?drmType=vgdrm", MAX_PIPELINE_SIZE);
+                g_strlcat(pPipeline, "&LicenseID=", MAX_PIPELINE_SIZE);
                 sprintf(buffer,"%08llX" , licenseId);
-                g_strlcat(pPipeline, buffer, 1024);
+                g_strlcat(pPipeline, buffer, MAX_PIPELINE_SIZE);
              }
           }
       }
@@ -1889,19 +1921,17 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
               g_print("DRMPROXY_Activate() Passed."
                       "returned licenseID  : %" PRIu64"\n", 
                       licenseId);
-              g_strlcat(pPipeline, pSess->playbackURI, 1024);
-              g_strlcat(pPipeline,"?drmType=vgdrm", 1024);
-              g_strlcat(pPipeline, "&LicenseID=", 1024);
+              g_strlcat(pPipeline, pSess->playbackURI, MAX_PIPELINE_SIZE);
+              g_strlcat(pPipeline,"?drmType=vgdrm", MAX_PIPELINE_SIZE);
+              g_strlcat(pPipeline, "&LicenseID=", MAX_PIPELINE_SIZE);
               sprintf(buffer,"%08llX" , licenseId);
-              g_strlcat(pPipeline, buffer, 1024);
+              g_strlcat(pPipeline, buffer, MAX_PIPELINE_SIZE);
             } while (0);
           }
           else
           { 
                g_print("drmType is not VGDRM -not supported!" );
                g_free(pPipeline);
-               g_free(pSess->playbackURI);
-               pSess->playbackURI = NULL;
                return CGMI_ERROR_NOT_IMPLEMENTED;
           }
        }
@@ -1909,10 +1939,10 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
    }
    else
    {
-      g_strlcat(pPipeline, pSess->playbackURI, 1024);
+      g_strlcat(pPipeline, pSess->playbackURI, MAX_PIPELINE_SIZE);
    }
 #else
-   g_strlcat(pPipeline, pSess->playbackURI, 1024);
+   g_strlcat(pPipeline, pSess->playbackURI, MAX_PIPELINE_SIZE);
 #endif
 
    // let's see if we are running on broadcom hardware if we are let's see if we can find there
@@ -1927,7 +1957,7 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
    {
       bisBroadcomHw = TRUE;
       g_print("Autoplugging on real broadcom hardware\n");
-      g_strlcat(pPipeline, " flags= 0x63", 1024);
+      g_strlcat(pPipeline, " flags= 0x63", MAX_PIPELINE_SIZE);
       gst_object_unref( plugin );
    }
 
@@ -2137,6 +2167,9 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
             {
                pSess->suppressLoadDone = FALSE;
             }
+
+            cgmi_GetHwDecHandles(pSess);
+            pSess->hasFullGstPipeline = TRUE;
          }
       }
       /* This has been added for rtp live stream - it could add issues with rtsp/rtp vod playing */
@@ -2167,11 +2200,6 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, c
       {
          g_free(pPipeline);
          pPipeline = NULL;
-      }
-      if ( NULL != pSess->playbackURI )
-      {
-         g_free(pSess->playbackURI);
-         pSess->playbackURI = NULL;   
       }
       if ( NULL != pSess->cpblob )
       {
@@ -2238,12 +2266,6 @@ cgmi_Status cgmi_Unload  ( void *pSession )
          pSess->bus = NULL;
       }
 
-      if (pSess->playbackURI)
-      {
-         g_free(pSess->playbackURI);
-         pSess->playbackURI = NULL;
-      }
-
       if ( NULL != pSess->cpblob )
       {
          g_free(pSess->cpblob);
@@ -2266,6 +2288,10 @@ cgmi_Status cgmi_Unload  ( void *pSession )
       pSess->numAudioLanguages = 0;
       pSess->newAudioLanguage[0] = '\0';
       pSess->currAudioLanguage[0] = '\0';
+      pSess->hasFullGstPipeline = FALSE;
+      pSess->playbackURI[0] = '\0';
+      pSess->hwAudioDecHandle = NULL;
+      pSess->hwVideoDecHandle = NULL;
 
    }while (0);
    g_print("Exiting %s pipeline is now null\n",__FUNCTION__);
@@ -2298,7 +2324,7 @@ cgmi_Status cgmi_Play (void *pSession, int autoPlay)
    pSess->rate = 1.0;
 
    cisco_gst_setState( pSess, GST_STATE_PLAYING );
-   
+
    return stat;
 }
 
@@ -2954,6 +2980,81 @@ cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int buf
    }while(0);
 
    g_rec_mutex_unlock(&pSess->psiMutex);
+
+   return stat;
+}
+
+cgmi_Status cgmi_GetActiveSessionsInfo(sessionInfo *sessInfoArr[], int *numSessOut)
+{
+   cgmi_Status stat = CGMI_ERROR_FAILED;
+   tSession    *pSess = NULL;
+   GList       *list = NULL;
+   guint       listLen = 0;
+
+   g_mutex_lock(&gSessionListMutex);
+   do
+   {
+      if(NULL == sessInfoArr)
+      {
+         GST_ERROR("sessInfoArr param is NULL\n");
+         break;
+      }
+
+      if(NULL == numSessOut)
+      {
+         GST_ERROR("numSessOut param is NULL\n");
+         break;
+      }
+      *sessInfoArr = NULL;
+      *numSessOut = 0;
+
+      if(NULL == gSessionList)
+      {
+         GST_WARNING("No Active CGMI sessions\n");
+         stat = CGMI_ERROR_SUCCESS;
+         break;
+      }
+
+      listLen = g_list_length(gSessionList);
+      GST_WARNING("Total CGMI sessions: %d\n", listLen);
+
+      *sessInfoArr = g_malloc0(sizeof(sessionInfo) * listLen);
+      if(NULL == *sessInfoArr)
+      {
+         GST_ERROR("Failed to alloc sessInfoArr array\n");
+         break;
+      }
+
+      for(list = gSessionList; list != NULL; list = list->next)
+      {
+         pSess = (tSession *)list->data;
+
+         if(FALSE == pSess->hasFullGstPipeline)
+         {
+            continue;
+         }
+         if(strncmp("dlna+", pSess->playbackURI, strlen("dlna+")))
+         {
+            g_strlcpy((*sessInfoArr)[*numSessOut].uri, pSess->playbackURI,
+                  sizeof((*sessInfoArr)[*numSessOut].uri));
+         }
+         else
+         {
+            g_strlcpy((*sessInfoArr)[*numSessOut].uri, &(pSess->playbackURI[strlen("dlna+")]),
+                  sizeof((*sessInfoArr)[*numSessOut].uri));
+         }
+         (*sessInfoArr)[*numSessOut].hwAudioDecHandle = pSess->hwAudioDecHandle;
+         (*sessInfoArr)[*numSessOut].hwVideoDecHandle = pSess->hwVideoDecHandle;
+
+         (*numSessOut)++;
+      }
+
+      GST_WARNING("Total active CGMI sessions: %d\n", *numSessOut);
+
+      stat = CGMI_ERROR_SUCCESS;
+   }while(0);
+
+   g_mutex_unlock(&gSessionListMutex);
 
    return stat;
 }
