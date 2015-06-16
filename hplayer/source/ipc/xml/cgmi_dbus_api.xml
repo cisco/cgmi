@@ -108,6 +108,26 @@
             <arg name="status" direction="out" type="i"/>
         </method>
 
+        <method name="getStc">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="stc" direction="out" type="t"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="setPictureSetting">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="pctl" direction="in" type="i"/>
+            <arg name="value" direction="in" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getPictureSetting">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="pctl" direction="in" type="i"/>
+            <arg name="value" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
         <!-- Audio APIs -->
         <method name="getNumAudioLanguages">
             <arg name="sessionId" direction="in" type="v"/>
@@ -275,6 +295,41 @@
             <arg name="position" direction="out" type="u"/>
             <arg name="status" direction="out" type="i"/>
         </method>
+
+        <!-- Subtitle APIs -->
+        <method name="getNumSubtitleLanguages">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="count" direction="out" type="i"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="getSubtitleInfo">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="index" direction="in" type="i"/>
+            <arg name="bufSize" direction="in" type="i"/>
+            <arg name="buffer" direction="out" type="s"/>
+            <arg name="pid" direction="out" type="q"/>
+            <arg name="type" direction="out" type="y"/>
+            <arg name="compPageId" direction="out" type="q"/>
+            <arg name="ancPageId" direction="out" type="q"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <method name="setDefaultSubtitleLang">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="language" direction="in" type="s"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- Filter APIs -->
+        <method name="createFilter">
+            <arg name="sessionId" direction="in" type="v"/>
+            <arg name="filterPid" direction="in" type="i"/>
+            <arg name="filterFormat" direction="in" type="i"/>
+            <arg name="filterId" direction="out" type="v"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
 
 	<property name="Verbose" type="b" access="readwrite"/>
     </interface>

@@ -26,6 +26,8 @@ typedef enum
     FILTER_SET   = 16
 } ciscoGstFilterAction;
 
+typedef tcgmi_FilterFormat ciscoGstFilterFormat;
+
 typedef struct
 {
    int                   pid;
@@ -40,6 +42,7 @@ typedef struct
    sectionBufferCB       sectionCB;
    GstElement            *appsink;
    ciscoGstFilterAction  lastAction;
+   ciscoGstFilterFormat  format;
 
 }tSectionFilter;
 

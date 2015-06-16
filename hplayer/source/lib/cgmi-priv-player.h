@@ -9,6 +9,7 @@ extern "C"
 #endif
 
 #define MAX_AUDIO_LANGUAGE_DESCRIPTORS 32
+#define MAX_SUBTITLE_LANGUAGES         16
 #define MAX_CLOSED_CAPTION_SERVICES    71
 #define MAX_STREAMS                    32
 #define SOCKET_RECEIVE_BUFFER_SIZE     1000000
@@ -22,6 +23,7 @@ typedef struct
    guint index;
    guint streamType;
    gchar isoCode[4];
+   gboolean bDiscrete;
 }tAudioLang;
 
 typedef struct
@@ -30,6 +32,15 @@ typedef struct
    gint serviceNum;
    gchar isoCode[4];
 }tCCLang;
+
+typedef struct
+{
+   guint    pid;
+   guchar   type;
+   gushort  compPageId;
+   gushort  ancPageId;
+   gchar    isoCode[4];
+}tSubtitleInfo;
 
 typedef struct
 {
@@ -62,6 +73,7 @@ typedef struct
    GstElement         *audioDecoder;
    GstElement         *demux;
    GstElement         *udpsrc;   
+   GstElement         *hlsDemux;
    GstBus             *bus;
    GstMessage         *msg;
    void*              usrParam;
@@ -69,11 +81,15 @@ typedef struct
    tCgmiRect          vidDestRect;
    tAudioLang         audioLanguages[MAX_AUDIO_LANGUAGE_DESCRIPTORS];
    tCCLang            closedCaptionServices[MAX_CLOSED_CAPTION_SERVICES];
+   tSubtitleInfo      subtitleInfo[MAX_SUBTITLE_LANGUAGES];
    gchar              defaultAudioLanguage[4];
+   gchar              defaultSubtitleLanguage[4];
    gint               numAudioLanguages;
    gint               audioLanguageIndex;
    gint               numClosedCaptionServices;
    gint               numStreams;
+   gint               numSubtitleLanguages;
+   gint               subtitleLanguageIndex;
    tCgmiStream        streams[MAX_STREAMS];
    /* user registered data */ 
    cgmi_EventCallback eventCB;
@@ -101,6 +117,12 @@ typedef struct
    guint              steadyStateWindow;
    gboolean           maskRateChangedEvent;
    gboolean           noVideo;
+   gboolean           bQueryDiscreteAudioInfo;
+   void               *cpblob;
+   gchar              currAudioLanguage[4];
+   /* used when we reconstruct the pipeline for discrete<->muxed audio language switch */
+   gchar              newAudioLanguage[4];
+   gboolean           suppressLoadDone;
 
 }tSession;
 

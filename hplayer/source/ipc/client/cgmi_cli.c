@@ -724,6 +724,9 @@ void help(void)
            "\tgetaudiolanginfo\n"
            "\tsetaudiolang <index>\n"
            "\tsetdefaudiolang <lang>\n"
+          "\n"
+          "\tgetsubtitleinfo\n"
+          "\tsetdefsubtitlelang <lang>\n"
            "\n"
            "\tgetccinfo\n"
            "\n"
@@ -745,6 +748,11 @@ void help(void)
            "\tresettimingentry\n"
            "\n"
            "\tgettsbslide\n"
+           "\n"
+           "\tgetpicturesetting <setting>\n"
+           "\tsetpicturesetting <setting> <value>\n"
+           "\t(Settings: CONTRAST, SATURATION, HUE, BRIGHTNESS, COLORTEMP, SHARPNESS)\n"
+           "\t(-32768 <= value <= 32767)\n"
            "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)> [<1><drmType for url #1><cpBlob for url #1>] [<2><drmType for url #2><cpBlob for url #2>]\n"
@@ -2152,6 +2160,182 @@ int main(int argc, char **argv)
                printf("CGMI GetTsbSlide Failed\n");
             }
         }
+        /* get picture settings */
+        else if (strncmp(command, "getpicturesetting", 17) == 0)
+        {
+            tcgmi_PictureCtrl pctl = -1;
+            gint value = 0;
+            if ( strlen( command ) <= 18 )
+            {
+                printf( "\tgetpicturesetting <setting>\n" );
+                continue;
+            }
+            strncpy( arg, command + 18, strlen(command) - 18 );
+            arg[strlen(command) - 18] = '\0';
+
+            if ( !strncasecmp( arg, "CONTRAST", 8 ) )
+            {
+                pctl = PICTURE_CTRL_CONTRAST;
+            }
+            else if ( !strncasecmp( arg, "SATURATION", 10 ) )
+            {
+                pctl = PICTURE_CTRL_SATURATION;
+            }
+            else if ( !strncasecmp( arg, "HUE", 3 ) )
+            {
+                pctl = PICTURE_CTRL_HUE;
+            }
+            else if ( !strncasecmp( arg, "BRIGHTNESS", 10 ) )
+            {
+                pctl = PICTURE_CTRL_BRIGHTNESS;
+            }
+            else if ( !strncasecmp( arg, "COLORTEMP", 9 ) )
+            {
+                pctl = PICTURE_CTRL_COLORTEMP;
+            }
+            else if ( !strncasecmp( arg, "SHARPNESS", 9 ) )
+            {
+                pctl = PICTURE_CTRL_SHARPNESS;
+            }
+
+            retCode = cgmi_GetPictureSetting( pSessionId, pctl, &value );
+            if ( retCode == CGMI_ERROR_BAD_PARAM )
+            {
+                printf("Invalid control %d\n", retCode);                
+            }
+            else if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);                
+            }
+            else
+            {
+                printf("%s: %d\n", arg, value);
+            }
+        }
+
+        /* set picture settings */
+        else if (strncmp(command, "setpicturesetting", 17) == 0)
+        {
+            tcgmi_PictureCtrl pctl = -1;
+            gint value;
+            if ( strlen( command ) <= 18 )
+            {
+                printf( "\tsetpicturesetting <setting> <value>\n" );
+                continue;
+            }
+
+            /* command */
+            str = strtok( command, " " );
+            if ( str == NULL )
+            {
+                printf( "Invalid command:\n"
+                        "\tsetpicturesetting <setting> <value>n"
+                      );
+                continue;
+            }
+
+            /* arg1 */
+            str = strtok( NULL, " " );
+            if ( str == NULL )
+            {
+                printf( "Invalid command:\n"
+                        "\tsetpicturesetting <setting> <value>\n"
+                      );
+                continue;
+            } else {
+                strncpy( arg1, str, 256 );
+            }
+
+            /* arg2 */
+            str = strtok( NULL, " " );
+            if ( str == NULL )
+            {
+                printf( "Invalid command:\n"
+                        "\tsetpicturesetting <setting> <value>\n"
+                      );
+                continue;
+            } else {
+                strncpy( arg2, str, 256 );
+            }
+
+            if ( !strncasecmp( arg1, "CONTRAST", 8 ) )
+            {
+                pctl = PICTURE_CTRL_CONTRAST;
+            }
+            else if ( !strncasecmp( arg1, "SATURATION", 10 ) )
+            {
+                pctl = PICTURE_CTRL_SATURATION;
+            }
+            else if ( !strncasecmp( arg1, "HUE", 3 ) )
+            {
+                pctl = PICTURE_CTRL_HUE;
+            }
+            else if ( !strncasecmp( arg1, "BRIGHTNESS", 10 ) )
+            {
+                pctl = PICTURE_CTRL_BRIGHTNESS;
+            }
+            else if ( !strncasecmp( arg1, "COLORTEMP", 9 ) )
+            {
+                pctl = PICTURE_CTRL_COLORTEMP;
+            }
+            else if ( !strncasecmp( arg1, "SHARPNESS", 9 ) )
+            {
+                pctl = PICTURE_CTRL_SHARPNESS;
+            }
+
+            value = atoi( arg2 );
+
+            retCode = cgmi_SetPictureSetting( pSessionId, pctl, value );
+            if ( retCode == CGMI_ERROR_BAD_PARAM )
+            {
+                printf("Invalid control or value %d\n", retCode);                
+            }
+            else if ( retCode != CGMI_ERROR_SUCCESS )
+            {
+                printf("Error returned %d\n", retCode);                
+            }
+        }
+      /* get subtitle languages available */
+      else if ( strncmp(command, "getsubtitleinfo", 19) == 0 )
+      {
+         gint count;
+         gint i;
+         gushort compPageId, ancPageId, pid;
+         guchar type;
+
+         gchar lang[4] = { 0 };
+         retCode = cgmi_GetNumSubtitleLanguages(pSessionId, &count);
+         if ( retCode != CGMI_ERROR_SUCCESS )
+         {
+            printf("Error returned %d\n", retCode);
+            continue;
+         }
+         printf("\nAvailable Subtitle Languages:\n");
+         printf("--------------------------\n");
+         for ( i = 0; i < count; i++ )
+         {
+            retCode = cgmi_GetSubtitleInfo(pSessionId, i, lang, sizeof(lang), &pid, &type, &compPageId, &ancPageId);
+            if ( retCode != CGMI_ERROR_SUCCESS ) break;
+            printf("%d: %s pid (%04x) type (%02x) compPageId (%04x) ancPageId (%04x)\n", i, lang, pid, type, compPageId, ancPageId);
+         }
+      }
+      /* set default subtitle language */
+      else if ( strncmp(command, "setdefsubtitlelang", 18) == 0 )
+      {
+         if ( strlen(command) <= 19 )
+         {
+            printf("\tsetdefsubtitlelang <lang>\n");
+            continue;
+         }
+         strncpy(arg, command + 19, strlen(command) - 19);
+         arg[strlen(command) - 19] = '\0';
+
+         retCode = cgmi_SetDefaultSubtitleLang(pSessionId, arg);
+         if ( retCode != CGMI_ERROR_SUCCESS )
+         {
+            printf("Error returned %d\n", retCode);
+         }
+      }
         /* unknown */
         else
         {
