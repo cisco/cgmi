@@ -215,7 +215,60 @@ cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, gboolean *bisDLNAConten
    curl_easy_cleanup(ctx);
 #endif
    return status;
+}
 
+/**
+ *  \brief \b cgmi_utils_get_json_value
+ *
+ *  Parses json string and extract value for a key
+ *
+ *  \param[out] pointer to hold the output string value for the json object
+ *
+ *  \param[in] json   json input string
+ *
+ *  \param[in] name   json object name
+ *
+ * \return  CGMI_ERROR_SUCCESS when everything function succeeds
+ * \return  CGMI_ERROR_FAILED when parsing failed
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_utils_get_json_value(gchar *output, gint outsize, const gchar *json, const gchar *name)
+{
+   char *start;
+   char *end;
 
+   if (json == NULL || strlen(json) == 0)
+      return CGMI_ERROR_FAILED;
+
+   if (name == NULL || strlen(name) == 0)
+      return CGMI_ERROR_FAILED;
+
+   if (output == NULL)
+      return CGMI_ERROR_FAILED;
+
+   start = strstr(json, name);
+   if (NULL != start)
+   {
+      start = strchr(start, ':');
+      if (NULL != start)
+      {
+         start = strchr(start, '"');
+         if (NULL != start)
+         {
+            start++;
+            end = strchr(start, '"');
+            if (NULL != end)
+            {
+               gint maxlen = ((outsize - 1) < (end - start))?(outsize - 1):(end - start);
+               strncpy(output, start, maxlen);
+               output[maxlen] = 0;
+               return CGMI_ERROR_SUCCESS;
+            }
+         }
+      }
+   }
+   return CGMI_ERROR_FAILED;
 }
 

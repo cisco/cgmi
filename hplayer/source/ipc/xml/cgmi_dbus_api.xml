@@ -33,9 +33,10 @@
         <method name="load">
             <arg name="sessionId" direction="in" type="v"/>
             <arg name="uri" direction="in" type="s"/>
-			<arg name="cpBlobStruct" direction="in" type="ay">
-               <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/></arg>
+            <arg name="cpBlobStruct" direction="in" type="ay">
+                 <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/></arg>
             <arg name="cpBlobStructSize" direction="in" type="t"/>
+            <arg name="sessionSettings" direction="in" type="s"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
@@ -140,6 +141,7 @@
             <arg name="index" direction="in" type="i"/>
             <arg name="bufSize" direction="in" type="i"/>
             <arg name="buffer" direction="out" type="s"/>
+            <arg name="isEnabled" direction="out" type="b"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 
@@ -327,6 +329,13 @@
             <arg name="filterPid" direction="in" type="i"/>
             <arg name="filterFormat" direction="in" type="i"/>
             <arg name="filterId" direction="out" type="v"/>
+            <arg name="status" direction="out" type="i"/>
+        </method>
+
+        <!-- Non session specific APIs -->
+        <method name="getActiveSessionsInfo">
+            <arg name="sessInfoArr" direction="out" type="a(stt)"/>
+            <arg name="numSessOut" direction="out" type="i"/>
             <arg name="status" direction="out" type="i"/>
         </method>
 

@@ -665,7 +665,7 @@ static cgmi_Status startPlayback(const char *url, void **ppSessionId)
     *ppSessionId = pSessionId;
 
     g_print("Calling cgmi_Load...\n");
-    retStat = cgmi_Load( pSessionId, url,NULL);
+    retStat = cgmi_Load( pSessionId, url, NULL, NULL);
     CHECK_ERROR_RETURN_STAT(retStat);
 
     g_print("Calling cgmi_Play...\n");
@@ -1206,8 +1206,9 @@ static int sanity( const char *url )
 
 
     char langInfoBuf[1024];
+    char isEnabled;
     g_print("Calling cgmi_GetAudioLangInfo...\n");
-    retStat = cgmi_GetAudioLangInfo( pSessionId, 0, langInfoBuf, 1024 );
+    retStat = cgmi_GetAudioLangInfo( pSessionId, 0, langInfoBuf, 1024, &isEnabled );
     CHECK_ERROR(retStat);
 
 

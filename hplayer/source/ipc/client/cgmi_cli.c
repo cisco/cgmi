@@ -195,27 +195,32 @@ static void updateCurrentPlaySrcUrl(char *src)
 }
 
 /* Load Command */
-static cgmi_Status load(void *pSessionId, char *src, cpBlobStruct * cpblob)
-{
+static cgmi_Status load(void *pSessionId, char *src, cpBlobStruct * cpblob, const char *sessionSettings)
+{   
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
     updateCurrentPlaySrcUrl(src);
 #ifdef TMET_ENABLED
     {
         unsigned long long curTime;
+        const char searchStr[5] = "/dms";
+        char *ret;
+
+        ret = strstr(gCurrentPlaySrcUrl, searchStr);
 
         pthread_mutex_lock(&cgmiCliMutex);
         tMets_getMsSinceEpoch(&curTime);
-        tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
-                              gCurrentPlaySrcUrl,
-                              curTime,
-                              "CGMICLI_LOAD",
-                              NULL);
+        tMets_cacheMilestoneExt( TMETS_OPERATION_CHANELCHANGE,
+                              gCurrentPlaySrcUrl, 
+                              curTime, 
+                              "CGMICLI_LOAD", 
+                              NULL,
+                              ret);
         pthread_mutex_unlock(&cgmiCliMutex);
     }
 #endif // TMET_ENABLED
     /* First load the URL. */
-    retCode = cgmi_Load( pSessionId, src, cpblob );
+    retCode = cgmi_Load( pSessionId, src, cpblob, sessionSettings );
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI Load failed: %s\n", cgmi_ErrorString(retCode) );
@@ -245,7 +250,7 @@ static cgmi_Status play(void *pSessionId, char *src, int autoPlay, cpBlobStruct 
 {
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
-    retCode = load(pSessionId, src, cpblob);
+    retCode = load(pSessionId, src, cpblob, NULL);
     if ( retCode != CGMI_ERROR_SUCCESS )
     {
         return retCode;
@@ -262,7 +267,7 @@ static cgmi_Status resume(void *pSessionId, char *src, float resumePosition, int
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
     /* First load the URL. */
-    retCode = load(pSessionId, src, cpblob);
+    retCode = load(pSessionId, src, cpblob, NULL);
     if (retCode != CGMI_ERROR_SUCCESS)
     {
         printf("CGMI Load failed\n");
@@ -587,6 +592,22 @@ static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, ui
         case NOTIFY_PSI_READY:
             {
                printf("NOTIFY_PSI_READY");
+#ifdef TMET_ENABLED
+               {
+                unsigned long long curTime;
+
+                pthread_mutex_lock(&cgmiCliMutex);
+                tMets_getMsSinceEpoch(&curTime);
+                tMets_cacheMilestone( TMETS_OPERATION_CHANELCHANGE,
+                                      gCurrentPlaySrcUrl,
+                                      curTime,
+                                      "CGMICLI_ACQUIRED_PATPMT",
+                                      NULL);
+                pthread_mutex_unlock(&cgmiCliMutex);
+
+                tMets_postAllCachedMilestone(gDefaultPostUrl);
+               }
+#endif // TMET_ENABLED
                gint i, count = 0;
                tcgmi_PidData pidData;
                cgmi_Status retCode;
@@ -753,6 +774,8 @@ void help(void)
            "\tsetpicturesetting <setting> <value>\n"
            "\t(Settings: CONTRAST, SATURATION, HUE, BRIGHTNESS, COLORTEMP, SHARPNESS)\n"
            "\t(-32768 <= value <= 32767)\n"
+           "\n"
+           "\tgetactivesessionsinfo\n"
            "\n"
            "Tests:\n"
            "\tcct <url #1> <url #2> <interval (seconds)> <duration(seconds)> [<1><drmType for url #1><cpBlob for url #1>] [<2><drmType for url #2><cpBlob for url #2>]\n"
@@ -1038,7 +1061,7 @@ int main(int argc, char **argv)
             {
                 printf( "cgmi_canPlayType Not Implemented\n" );
                 printf( "Playing \"%s\"...\n", arg );
-                retCode = load(pSessionId, arg, p_Cp_Blob_Struct);
+                retCode = load(pSessionId, arg, p_Cp_Blob_Struct, NULL);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     playing = 1;
@@ -1047,7 +1070,7 @@ int main(int argc, char **argv)
             {
                 printf( "Yes\n" );
                 printf( "Playing \"%s\"...\n", arg );
-                retCode = load(pSessionId, arg, p_Cp_Blob_Struct);
+                retCode = load(pSessionId, arg, p_Cp_Blob_Struct, NULL);
                 if ( retCode == CGMI_ERROR_SUCCESS )
                 {
                     playing = 1;
@@ -1552,7 +1575,8 @@ int main(int argc, char **argv)
             printf("--------------------------\n");
             for ( i = 0; i < count; i++ )
             {
-                retCode = cgmi_GetAudioLangInfo( pSessionId, i, lang, sizeof(lang) );
+                char isEnabled;
+                retCode = cgmi_GetAudioLangInfo( pSessionId, i, lang, sizeof(lang), &isEnabled );
                 if ( retCode != CGMI_ERROR_SUCCESS )
                     break;
                 printf("%d: %s\n", i, lang);
@@ -2336,6 +2360,32 @@ int main(int argc, char **argv)
             printf("Error returned %d\n", retCode);
          }
       }
+        else if ( strncmp(command, "getactivesessionsinfo", strlen("getactivesessionsinfo")) == 0 )
+        {
+           sessionInfo *sessInfoArr = NULL;
+           int numSess = 0;
+           int ii = 0;
+           retCode = cgmi_GetActiveSessionsInfo(&sessInfoArr, &numSess);
+           if ( retCode != CGMI_ERROR_SUCCESS )
+           {
+              printf("Error returned %d\n", retCode);
+           }
+           else
+           {
+              printf("Total active CGMI sessions: %d\n", numSess);
+              if(NULL != sessInfoArr)
+              {
+                 for(ii = 0; ii < numSess; ii++)
+                 {
+                    printf("uri:%s, hwVideoDecoderHandle: %llu, hwAudioDecoderHandle: %llu\n",
+                          sessInfoArr[ii].uri, sessInfoArr[ii].hwVideoDecHandle, sessInfoArr[ii].hwAudioDecHandle);
+
+                 }
+                 free(sessInfoArr);
+                 sessInfoArr = NULL;
+              }
+           }
+        }
         /* unknown */
         else
         {

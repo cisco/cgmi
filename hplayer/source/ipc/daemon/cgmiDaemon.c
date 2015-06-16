@@ -742,71 +742,78 @@ on_handle_cgmi_can_play_type (
 
 static gboolean
 on_handle_cgmi_load (
-    OrgCiscoCgmi *object,
-    GDBusMethodInvocation *invocation,
-    GVariant *arg_sessionId,
-    const gchar *uri,
-	GVariant *arg_cpBlobStruct,
-    guint64 arg_cpBlobStructSize
-	)
+                     OrgCiscoCgmi *object,
+                     GDBusMethodInvocation *invocation,
+                     GVariant *arg_sessionId,
+                     const gchar *uri,
+                     GVariant *arg_cpBlobStruct,
+                     guint64 arg_cpBlobStructSize,
+                     const gchar *sessionSettings
+                     )
 {
-    cgmi_Status retStat = CGMI_ERROR_FAILED;
-	gchar * cpBlob=NULL;
-	 GVariantIter *iter = NULL;
-	 gchar        byte;
-	 uint32_t     ii = 0;
-    GVariant *sessVar = NULL;
-    tCgmiDbusPointer pSession;
+   cgmi_Status      retStat = CGMI_ERROR_FAILED;
+   gchar            *cpBlob = NULL;
+   GVariantIter     *iter = NULL;
+   gchar            byte;
+   uint32_t         ii = 0;
+   GVariant         *sessVar = NULL;
+   tCgmiDbusPointer pSession;
+   gchar            *audioLanguage;
+   gchar            *subtitleLanguage;
+   gboolean         subtitleEnable;
 
-    CGMID_ENTER();
+   CGMID_ENTER();
 
-    do{
-        g_variant_get( arg_sessionId, "v", &sessVar );
-        if( sessVar == NULL )
-        {
+   do{
+      g_variant_get( arg_sessionId, "v", &sessVar );
+      if( sessVar == NULL )
+      {
+         retStat = CGMI_ERROR_FAILED;
+         break;
+      }
+
+      g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
+      g_variant_unref( sessVar );
+      if (arg_cpBlobStructSize>0)
+      {
+         cpBlob = (gchar *)g_malloc0(arg_cpBlobStructSize);
+         if(NULL == cpBlob)
+         {
             retStat = CGMI_ERROR_FAILED;
             break;
-        }
+         }
 
-        g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
-        g_variant_unref( sessVar );
-		if (arg_cpBlobStructSize>0)
-		{
-			cpBlob = (gchar *)malloc(arg_cpBlobStructSize);
-			if(NULL == cpBlob)
-			{
-				retStat = CGMI_ERROR_FAILED;
-				break;
-			}
-
-		   g_variant_get(arg_cpBlobStruct, "ay", &iter);
-		   if(NULL != iter)
-		   {
-			  while(g_variant_iter_loop(iter, "y", &byte) && (ii < arg_cpBlobStructSize))
-			  {
-				 cpBlob[ii++] = byte;
-			  }
-			  g_variant_iter_free(iter);
-		   }
-		  else
-		  {
-			retStat = CGMI_ERROR_FAILED;
-			free(cpBlob);
+         g_variant_get(arg_cpBlobStruct, "ay", &iter);
+         if(NULL != iter)
+         {
+            while(g_variant_iter_loop(iter, "y", &byte) && (ii < arg_cpBlobStructSize))
+            {
+               cpBlob[ii++] = byte;
+            }
+            g_variant_iter_free(iter);
+            iter = NULL;
+         }
+         else
+         {
+            retStat = CGMI_ERROR_FAILED;
             break;
-		  }
-		}
-        retStat = cgmi_Load( (void *)pSession, uri,(cpBlobStruct *)cpBlob );
-        if (NULL != cpBlob)
-        {
-            free(cpBlob);
-        }
-    }while(0);
+         }
+      }
+      retStat = cgmi_Load( (void *)pSession, uri, (cpBlobStruct *)cpBlob, sessionSettings );
+      g_print("CALLED cgmi_Load");
 
-    org_cisco_cgmi_complete_load (object,
-                                  invocation,
-                                  retStat);
+   }while(0);
 
-    return TRUE;
+   org_cisco_cgmi_complete_load (object,
+      invocation,
+      retStat);
+
+   if (NULL != cpBlob)
+   {
+      g_free(cpBlob);
+   }
+
+   return TRUE;
 }
 
 static gboolean
@@ -1259,6 +1266,7 @@ on_handle_cgmi_get_audio_lang_info (
 {
     cgmi_Status retStat = CGMI_ERROR_FAILED;
     char *buffer = NULL;
+    char isEnabled;
     GVariant *sessVar = NULL;
     tCgmiDbusPointer pSession;
 
@@ -1289,13 +1297,14 @@ on_handle_cgmi_get_audio_lang_info (
         g_variant_get( sessVar, DBUS_POINTER_TYPE, &pSession );
         g_variant_unref( sessVar );
 
-        retStat = cgmi_GetAudioLangInfo( (void *)pSession, index, buffer, bufSize );
+        retStat = cgmi_GetAudioLangInfo( (void *)pSession, index, buffer, bufSize, &isEnabled );
 
     }while(0);
 
     org_cisco_cgmi_complete_get_audio_lang_info (object,
             invocation,
             buffer,
+            isEnabled,
             retStat);
 
     if ( NULL != buffer )
@@ -2469,6 +2478,48 @@ on_handle_cgmi_get_picture_setting (
     return TRUE;
 }
 
+static gboolean
+on_handle_cgmi_get_active_sessions_info (
+    OrgCiscoCgmi *object,
+    GDBusMethodInvocation *invocation)
+{
+   cgmi_Status     retStat = CGMI_ERROR_FAILED;
+   sessionInfo     *sessInfoArr = NULL;
+   GVariantBuilder *sessInfoArr_builder = NULL;
+   GVariant        *sessInfoArr_variant = NULL;
+   gint            numSess = 0;
+   gint            ii = 0;
+
+   CGMID_ENTER();
+
+   retStat = cgmi_GetActiveSessionsInfo(&sessInfoArr, &numSess);
+
+   sessInfoArr_builder = g_variant_builder_new(G_VARIANT_TYPE("a(stt)"));
+
+   for(ii = 0; ii < numSess; ii++)
+   {
+      g_variant_builder_add(sessInfoArr_builder, "(stt)", sessInfoArr[ii].uri,
+            sessInfoArr[ii].hwVideoDecHandle, sessInfoArr[ii].hwAudioDecHandle);
+   }
+
+   sessInfoArr_variant = g_variant_builder_end(sessInfoArr_builder);
+
+   org_cisco_cgmi_complete_get_active_sessions_info (object,
+         invocation,
+         sessInfoArr_variant,
+         numSess,
+         retStat);
+
+   g_variant_builder_unref(sessInfoArr_builder);
+
+   if(NULL != sessInfoArr)
+   {
+      free(sessInfoArr);
+   }
+
+   return TRUE;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // DBUS setup callbacks
 ////////////////////////////////////////////////////////////////////////////////
@@ -2729,6 +2780,11 @@ on_bus_acquired (GDBusConnection *connection,
     g_signal_connect (interface,
                       "handle-get-picture-setting",
                       G_CALLBACK (on_handle_cgmi_get_picture_setting),
+                      NULL);
+
+    g_signal_connect (interface,
+                      "handle-get-active-sessions-info",
+                      G_CALLBACK (on_handle_cgmi_get_active_sessions_info),
                       NULL);
 
     if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (interface),

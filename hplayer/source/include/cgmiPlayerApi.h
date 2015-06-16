@@ -43,6 +43,7 @@ extern "C"
 /** Indicates maximum length of the string for the drm type name
  */
 #define MAX_DRM_TYPE_LENGTH 128
+#define MAX_URI_SIZE (1024)
 
 #include <stdint.h>
 #include <glib.h>
@@ -171,6 +172,14 @@ typedef struct
     uint32_t bloblength;                   ///<The length of the Content Protection Blob
     uint8_t  drmType[MAX_DRM_TYPE_LENGTH]; ///<This string will indicate what DRM Type this CPBLOB is associated too.
 }cpBlobStruct;
+
+
+typedef struct
+{
+   char uri[MAX_URI_SIZE];
+   uint64_t hwVideoDecHandle;
+   uint64_t hwAudioDecHandle;
+}sessionInfo;
 
 /** Function pointer type for event callback that CGMI uses to report async events
  */
@@ -308,6 +317,7 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
  *
  *  \param[in]  cpblob - a pointer to a cpBlobStruct. This struct contains  data which  is needed
  *  for encrypted HLS streaming.For all other types of sessions(clear HLS/Live/Playback etc') NULL should be passed to the cpblob var.
+ *  \param[in] sessionSettings - a pointer to session settings JSON string
  *  \post    On success the user can now play the uri pointed to. The user has to wait for NOTIFY_LOAD_DONE message before querying
  *           the duration or other metadata info of the asset pointed by the URI.
  *
@@ -320,7 +330,7 @@ cgmi_Status cgmi_canPlayType(const char *type, int *pbCanPlay );
  *  \ingroup CGMI
  *
  */
-cgmi_Status cgmi_Load ( void *pSession, const char *uri, cpBlobStruct * cpblob );
+cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct * cpblob, const char *sessionSettings );
 
 /**
  *  \brief \b cgmi_Unload
@@ -547,9 +557,11 @@ cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count);
  *
  *  \param[in] index  Index of the audio stream in the returned number of available languages
  *
- *  \param[in] buf    Buffer to write the ISO-639 code in
+ *  \param[out] buf    Buffer to write the ISO-639 code in
  *
  *  \param[in] bufSize Size of the buffer passed in
+ *
+ *  \param[out] isEnabled Indicates whether the language at the provided index is currently enabled
  *
  *  \pre    The Session must be open the the url must be loaded.
  *
@@ -558,7 +570,7 @@ cgmi_Status cgmi_GetNumAudioLanguages (void *pSession,  int *count);
  *
  *  \image html audio_language_selection.png "How to do Audio Language Selection"
  */
-cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize);
+cgmi_Status cgmi_GetAudioLangInfo (void *pSession, int index, char* buf, int bufSize, char *isEnabled);
 
 /**
  *  \brief \b cgmi_SetAudioStream
@@ -1220,6 +1232,23 @@ cgmi_Status cgmi_SetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int 
  *
  */
 cgmi_Status cgmi_GetPictureSetting( void *pSession, tcgmi_PictureCtrl pctl, int *pvalue );
+
+/**
+ *  \brief \b cgmi_GetActiveSessionsInfo
+ *
+ *  Get a list of active CGMI session info
+ *
+ *  \param[out] sessionInfo  Array of active session info. The caller should free this array.
+ *
+ *  \param[out] numSessOut   Number of active CGMI sessions.
+ *
+ *  \return  CGMI_ERROR_SUCCESS when the list of active CGMI session info has been successfully obtained.
+ *
+ *
+ *  \ingroup CGMI
+ *
+ */
+cgmi_Status cgmi_GetActiveSessionsInfo(sessionInfo *sessInfoArr[], int *numSessOut);
 
 
 /**

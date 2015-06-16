@@ -16,6 +16,7 @@ extern "C"
 #define UDP_CHUNK_SIZE                 (1316*32)
 #define VIDEO_MAX_WIDTH                1920
 #define VIDEO_MAX_HEIGHT               1080
+#define MAX_PIPELINE_SIZE              (MAX_URI_SIZE + 128)
 
 typedef struct
 {
@@ -58,12 +59,17 @@ typedef struct
 
 typedef struct
 {
+   gchar audioLanguage[4];
+}tSessionSettings;
+
+typedef struct
+{
    void*              cookie;
    GMainContext       *thread_ctx; 
    GThread            *thread;
    GSource            *sourceWatch;
    GThread            *monitor;
-   gchar              *playbackURI; /* URI to playback */
+   gchar              playbackURI[MAX_URI_SIZE]; /* URI to playback */
    GMainLoop          *loop;
    GstElement         *pipeline;
    GstElement         *source;
@@ -123,7 +129,15 @@ typedef struct
    /* used when we reconstruct the pipeline for discrete<->muxed audio language switch */
    gchar              newAudioLanguage[4];
    gboolean           suppressLoadDone;
-
+   gboolean           isPlaying;
+   GRecMutex          psiMutex;
+   GMutex             monThreadMutex;
+   GCond              monThreadCond;
+   gchar              *sessionSettingsStr;
+   tSessionSettings   sessionSettings;
+   gboolean           hasFullGstPipeline;
+   void               *hwVideoDecHandle;
+   void               *hwAudioDecHandle;
 }tSession;
 
 gboolean cisco_gst_init( int argc, char *argv[] );
@@ -139,6 +153,7 @@ gint cisco_gst_pause(tSession *pSession  );
 cgmi_Status cgmi_utils_init(void);
 cgmi_Status cgmi_utils_finalize(void);
 cgmi_Status cgmi_utils_is_content_dlna(const gchar* url, gboolean *bisDLNAContent);
+cgmi_Status cgmi_utils_get_json_value(gchar *output, gint outsize, const gchar *json, const gchar *name);
 #ifdef __cplusplus
 }
 #endif
