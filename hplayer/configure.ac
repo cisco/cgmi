@@ -127,6 +127,22 @@ AC_ARG_ENABLE([cli-noipc],
                              [AC_MSG_RESULT(no)])
 AM_CONDITIONAL(CLI_NO_IPC,test x$enable_cli_noipc = xyes)
 
+#
+# The RDK emulator does NOT have the priorities set for the video sinks for some reason,
+# this means that standard playbin can not autoplug we can enable the flag to automatically
+# set fbdevsink as the video sink on the emulator.
+#
+AC_MSG_CHECKING(Set the video sink manually for the RDK emulator... )
+AC_ARG_ENABLE([rdk-emulator],
+              [AS_HELP_STRING([--enable-rdk-emulator],
+                             [If set to =yes  the video-sink will be set to fbdevsink for playbin, otherwise it will be autoplugged]) ],
+                             [AC_MSG_RESULT(yes)
+                             AC_DEFINE([RDK_EMULATOR], [1], [RDK Emulator customizations enabled] )
+                              ],
+                             [AC_MSG_RESULT(no)])
+AM_CONDITIONAL(RDK_EMULATOR,test x$enable_rdk_emulator = xyes)
+
+
 AC_MSG_CHECKING(Build with DRMProxy...)
 AC_ARG_ENABLE([use-drmproxy],
               [AS_HELP_STRING([--enable-use-drmproxy],

@@ -1398,10 +1398,14 @@ cgmi_Status cgmi_Load (void *pSession, const char *uri, cpBlobStruct *cpblob)
 
    g_strlcat(pPipeline, pSess->playbackURI, 1024);
 
-   // TODO for COMCAST EMULATOR ONLY
+#if RDK_EMULATOR
+
+   // The  comcast emulator doesn't set priority correctly for the video sink to autoplug
+   // until a patch is put in for this, just set the command line for the video-sink to be
+   // the below
    // RMS
    g_strlcat(pPipeline, " video-sink=fbdevsink", 1024);
-
+#endif
    // let's see if we are running on broadcom hardware if we are let's see if we can find there
    // video sink.  If it's there we need to set the flags variable so the pipeline knows to do
    // color transformation and scaling in hardware

@@ -1,0 +1,10 @@
+prefix=/opt/test
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libcgmiClient
+Description: Cisco Gstreamer Media Interface Client Library
+Version: 1.00.00.0
+Cflags: -I${includedir}/cgmi-0.10
+Libs: -L${libdir} -lcgmi-client-0.10
