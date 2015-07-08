@@ -309,6 +309,7 @@ void debug_cisco_gst_streamDurPos( tSession *pSess )
    GST_INFO("Duration: %" G_GINT64_MODIFIER "d (seconds)\n", (curDur/GST_SECOND));
 
 }
+#if !defined (DISABLE_MONITORING)
 //TODO need to document this thread, when does it get shutdown.
 gpointer cgmi_monitor( gpointer data )
 {
@@ -473,7 +474,7 @@ gpointer cgmi_monitor( gpointer data )
    }
    return NULL;
 }
-
+#endif
 static void cgmi_gst_delayed_seek( tSession *pSess )
 {
    GST_INFO("Executing delayed seek...\n");
@@ -1430,6 +1431,7 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    g_mutex_init(&pSess->monThreadMutex);
    g_cond_init(&pSess->monThreadCond);
    g_rec_mutex_init(&pSess->psiMutex);
+#if !defined (DISABLE_MONITORING)
 
    pSess->runMonitor = TRUE;
    pSess->monitor = g_thread_new("monitoring_thread", cgmi_monitor, pSess);
@@ -1437,6 +1439,8 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    {
       GST_WARNING("Error launching thread for monitoring timestamp errors\n");
    }
+#endif
+
    pSess->loop = g_main_loop_new (pSess->thread_ctx, FALSE);
    if (pSess->loop == NULL)
    {

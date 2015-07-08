@@ -143,6 +143,16 @@ AC_ARG_ENABLE([rdk-emulator],
 AM_CONDITIONAL(RDK_EMULATOR,test x$enable_rdk_emulator = xyes)
 
 
+AC_MSG_CHECKING(Enable bypassing hardware monitoring of discontinuities... )
+AC_ARG_ENABLE([bypass-monitoring],
+              [AS_HELP_STRING([--enable-bypass-monitoring],
+                             [If set to =yes  the thread that monitors for discontinuites will be disabled, this is only needed on HW not on software platforms.]) ],
+                             [AC_MSG_RESULT(yes)
+                             AC_DEFINE([DISABLE_MONITORING], [1], [bypassing monitoring of discontinuities ] )
+                              ],
+                             [AC_MSG_RESULT(no)])
+AM_CONDITIONAL(DISABLE_MONITORING,test x$enable_bypass_monitoring = xyes)
+
 AC_MSG_CHECKING(Build with DRMProxy...)
 AC_ARG_ENABLE([use-drmproxy],
               [AS_HELP_STRING([--enable-use-drmproxy],
