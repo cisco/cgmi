@@ -1392,6 +1392,7 @@ cgmi_Status cgmi_CreateSession (cgmi_EventCallback eventCB, void* pUserData, voi
    {
       return CGMI_ERROR_OUT_OF_MEMORY;
    }
+   memset(pSess, 0, sizeof(tSession));
 
    *pSession = pSess;
    pSess->cookie = (void*)MAGIC_COOKIE;

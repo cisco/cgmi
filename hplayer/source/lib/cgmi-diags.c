@@ -65,6 +65,11 @@
 #include "http-timing-metrics.h"
 #endif // TMET_ENABLED
 
+#include <execinfo.h>
+#include <signal.h>
+#include <unistd.h>
+
+
 static tCgmiDiags_timingMetric *gTimingBuf = NULL;
 static int timingBufIndex = 0;
 static bool timingBufWrapped = false;
@@ -74,6 +79,51 @@ static pthread_mutex_t cgmiDiagMutex = PTHREAD_MUTEX_INITIALIZER;
 static char *gDefaultPostUrl = NULL;
 #endif // TMET_ENABLED
 
+
+
+/**
+ *  \brief \b cgmi_crash_signal_handler
+ *
+ *  This function will be called when a specific signal is caught by the system
+ *  hopefully it will print the backtrace to stderr
+ *
+ *
+ *  \post    signal handler will exit as if it was never called, core dumps
+ *           should still occur
+ *
+ *  \return  void
+ *
+ *
+ *   \ingroup CGMI-diags-priv
+ *
+ */
+static void cgmi_crash_signal_handler(int sig, siginfo_t *siginfo, void *context)
+{
+
+   void *array [10];
+   size_t size;
+   // associate each signal with a signal name string.
+   const char* name = NULL;
+   switch( sig )
+   {
+      case SIGABRT: name = "SIGABRT";  break;
+      case SIGSEGV: name = "SIGSEGV";  break;
+      case SIGBUS:  name = "SIGBUS";   break;
+      case SIGILL:  name = "SIGILL";   break;
+      case SIGFPE:  name = "SIGFPE";   break;
+   }
+   if ( name )
+      fprintf( stderr, "Caught signal %d (%s)\n", sig, name );
+   else
+      fprintf( stderr, "Caught signal %d\n", sig );
+
+   size = backtrace(array, 10);
+   backtrace_symbols_fd(array, size, STDERR_FILENO);
+   //ok now that we have dumped the backtrace to the console
+   //we need to let the system handle this error and do a core dump
+   //
+     signal(sig, SIG_DFL);
+}
 /**
  *  \brief \b cgmiDiags_Init
  *
@@ -91,33 +141,49 @@ static char *gDefaultPostUrl = NULL;
  */
 cgmi_Status cgmiDiags_Init (void)
 {
-    cgmi_Status retStatus = CGMI_ERROR_SUCCESS;
+   cgmi_Status retStatus = CGMI_ERROR_SUCCESS;
+   struct sigaction act;
 
-    g_print("%s: Enter\n", __FUNCTION__);
+   g_print("%s: Enter\n", __FUNCTION__);
 
-    pthread_mutex_lock(&cgmiDiagMutex);
+   pthread_mutex_lock(&cgmiDiagMutex);
 
-    if(false == cgmiDiagInitialized)
-    {
-        gTimingBuf = (tCgmiDiags_timingMetric *) calloc(sizeof(tCgmiDiags_timingMetric) * CGMI_DIAGS_TIMING_METRIC_MAX_ENTRY, sizeof(char));
+   if(false == cgmiDiagInitialized)
+   {
+      gTimingBuf = (tCgmiDiags_timingMetric *) calloc(sizeof(tCgmiDiags_timingMetric) * CGMI_DIAGS_TIMING_METRIC_MAX_ENTRY, sizeof(char));
 
-        if(NULL == gTimingBuf)
-        {
-            retStatus = CGMI_ERROR_NOT_INITIALIZED;
-        }
-        else
-        {
-            cgmiDiagInitialized = true;
+      if(NULL == gTimingBuf)
+      {
+         retStatus = CGMI_ERROR_NOT_INITIALIZED;
+      }
+      else
+      {
+         cgmiDiagInitialized = true;
 #ifdef TMET_ENABLED
-        tMets_Init();
-        tMets_getDefaultUrl(&gDefaultPostUrl);
+         tMets_Init();
+         tMets_getDefaultUrl(&gDefaultPostUrl);
 #endif // TMET_ENABLED
-        }
-    }
+      }
+   }
 
-    pthread_mutex_unlock(&cgmiDiagMutex);
 
-    return retStatus;
+   //
+   // Enable a signal handler incase of bad errors to dump to
+   // the screen
+   //
+
+   act.sa_sigaction = &cgmi_crash_signal_handler;
+   act.sa_flags = SA_RESTART;
+
+   sigaction(SIGSEGV, &act, NULL);
+   sigaction(SIGABRT, &act, NULL);
+   sigaction(SIGILL, &act, NULL);
+   sigaction(SIGFPE, &act, NULL);
+
+
+   pthread_mutex_unlock(&cgmiDiagMutex);
+
+   return retStatus;
 }
 
 
@@ -472,3 +538,5 @@ cgmi_Status cgmiDiags_GetNextSessionIndex(unsigned int *pIndex)
 
     return CGMI_ERROR_SUCCESS;
 }
+
+

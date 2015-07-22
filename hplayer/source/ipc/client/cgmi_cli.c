@@ -51,6 +51,8 @@
 #define MAX_PMT_COUNT 20
 
 #define MAX_COMMAND_LENGTH 1024
+#define MAX_FILTER_LENGTH 256
+#define MAX_VALUE_LENGTH 208
 #define MAX_HISTORY 50
 
 static void *filterid = NULL;
@@ -62,7 +64,11 @@ static char *gCurrentPlaySrcUrl = NULL;
 static char *gDefaultPostUrl = NULL;
 #endif // TMET_ENABLED
 static pthread_mutex_t cgmiCliMutex = PTHREAD_MUTEX_INITIALIZER;
-
+void crash (void)
+{
+   volatile int *a = (int*)(NULL);
+   *a = 1;
+}
 /* Prototypes */
 static void cgmiCallback( void *pUserData, void *pSession, tcgmi_Event event, uint64_t code );
 static cgmi_Status destroyfilter( void *pSessionId );
@@ -76,6 +82,7 @@ void sig_handler(int signum)
     printf("\n\nNext time you may want to use Ctrl+D to exit correctly. :-)\n");
     exit(1);
 }
+
 
 /*Dumping timing entry*/
 static void dumpTimingEntry(void)
@@ -196,7 +203,7 @@ static void updateCurrentPlaySrcUrl(char *src)
 
 /* Load Command */
 static cgmi_Status load(void *pSessionId, char *src, cpBlobStruct * cpblob, const char *sessionSettings)
-{   
+{
     cgmi_Status retCode = CGMI_ERROR_SUCCESS;
 
     updateCurrentPlaySrcUrl(src);
@@ -211,9 +218,9 @@ static cgmi_Status load(void *pSessionId, char *src, cpBlobStruct * cpblob, cons
         pthread_mutex_lock(&cgmiCliMutex);
         tMets_getMsSinceEpoch(&curTime);
         tMets_cacheMilestoneExt( TMETS_OPERATION_CHANELCHANGE,
-                              gCurrentPlaySrcUrl, 
-                              curTime, 
-                              "CGMICLI_LOAD", 
+                              gCurrentPlaySrcUrl,
+                              curTime,
+                              "CGMICLI_LOAD",
                               NULL,
                               ret);
         pthread_mutex_unlock(&cgmiCliMutex);
@@ -801,7 +808,7 @@ int main(int argc, char **argv)
     void *pEasSessionId = NULL;                 /* CGMI Secondary (EAS) Audio Session Handle */
 
     gchar command[MAX_COMMAND_LENGTH];          /* Command buffer */
-    gchar arg[MAX_COMMAND_LENGTH];              /* Command args buffer for
+    gchar arg [MAX_COMMAND_LENGTH];              /* Command args buffer for
                                                    parsing. */
     gchar history[MAX_HISTORY][MAX_COMMAND_LENGTH]; /* History buffers */
     gint cur_history = 0;                       /* Current position in up/down
@@ -841,19 +848,37 @@ int main(int argc, char **argv)
     struct timeval start, current;
     int i = 0, j = 0;
 
+
+
     /* createfilter parameters */
-    gchar arg1[256], arg2[256], arg3[256], arg4[256], tmp[256];
+    gchar arg1[MAX_FILTER_LENGTH], arg2[MAX_FILTER_LENGTH], arg3[MAX_FILTER_LENGTH], arg4[MAX_FILTER_LENGTH], tmp[MAX_FILTER_LENGTH];
     gint pid = 0;
-    guchar value[208], mask[208];
+    guchar value[MAX_VALUE_LENGTH], mask[MAX_VALUE_LENGTH];
     gint vlength = 0, mlength = 0;
     gchar *ptmpchar;
     gchar tmpstr[3];
     int len = 0;
     int err = 0;
-
     cpBlobStruct cp_Blob_Struct, cp_Blob_Struct_2;
+
+    memset(url1, 0, MAX_COMMAND_LENGTH);
+    memset(url2, 0, MAX_COMMAND_LENGTH);
+    memset(arg, 0, MAX_FILTER_LENGTH);
+    memset(arg1, 0, MAX_FILTER_LENGTH);
+    memset(arg2, 0, MAX_FILTER_LENGTH);
+    memset(arg3, 0, MAX_FILTER_LENGTH);
+    memset(arg4, 0, MAX_FILTER_LENGTH);
+    memset(tmp, 0, MAX_FILTER_LENGTH);
+    memset(value, 0, MAX_VALUE_LENGTH);
+    memset(mask, 0, MAX_VALUE_LENGTH);
+
+
+
+    memset(&cp_Blob_Struct, 0, sizeof(cp_Blob_Struct));
+    memset(&cp_Blob_Struct_2, 0, sizeof(cp_Blob_Struct));
     cpBlobStruct * p_Cp_Blob_Struct = NULL;
     cpBlobStruct * p_Cp_Blob_Struct_2 = NULL;
+
 
     // need to put this in a define diagInit (DIAGTYPE_DEFAULT, NULL, 0);
 
@@ -987,6 +1012,8 @@ int main(int argc, char **argv)
                             " arrive in 20-30 minutes or it's FREE!!!\n" );
                     command[0] = '\0';
                     a = 0;
+                    // cause a crash on purpose
+                    crash ();
                     retcom = 1;
                     break;
                 default:
@@ -2225,11 +2252,11 @@ int main(int argc, char **argv)
             retCode = cgmi_GetPictureSetting( pSessionId, pctl, &value );
             if ( retCode == CGMI_ERROR_BAD_PARAM )
             {
-                printf("Invalid control %d\n", retCode);                
+                printf("Invalid control %d\n", retCode);
             }
             else if ( retCode != CGMI_ERROR_SUCCESS )
             {
-                printf("Error returned %d\n", retCode);                
+                printf("Error returned %d\n", retCode);
             }
             else
             {
@@ -2312,11 +2339,11 @@ int main(int argc, char **argv)
             retCode = cgmi_SetPictureSetting( pSessionId, pctl, value );
             if ( retCode == CGMI_ERROR_BAD_PARAM )
             {
-                printf("Invalid control or value %d\n", retCode);                
+                printf("Invalid control or value %d\n", retCode);
             }
             else if ( retCode != CGMI_ERROR_SUCCESS )
             {
-                printf("Error returned %d\n", retCode);                
+                printf("Error returned %d\n", retCode);
             }
         }
       /* get subtitle languages available */
